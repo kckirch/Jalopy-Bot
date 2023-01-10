@@ -1,5 +1,6 @@
 import requests
 import datetime
+import time
 
 from selenium import webdriver
 from bs4 import BeautifulSoup
@@ -30,7 +31,7 @@ def get_response(message: str) -> str:
             args = message.split(' ')
             location = args[1].upper().strip(' ')
             car_make = args[2].upper().strip()
-            car_model = ' '.join(args[3:]) if len(args) > 3 else 'Select Model'
+            car_model = ' '.join(args[3:])
 
             #testing
             print(location)
@@ -52,11 +53,26 @@ def get_response(message: str) -> str:
             # Execute the JavaScript code
             driver.execute_script(f"$('#yard-id').val('{yard_id}');")
             driver.execute_script(f"$('#car-make').val('{car_make}');")
-
-            driver.execute_script("$('#car-make').change();")
-            
             driver.execute_script(f"$('#car-model').val('{car_model}');")
+
+
+            
+            driver.execute_script("$('#car-make').change();")
+            time.sleep(5)
+
+            
+            
+            driver.execute_script(f"$('#car-model').val('{car_model}').change();")
+
+            #after running .change() it seems to set the defaul model to Select Model and not the specified model
+            #will probably need to look at how it is submitting the form data requests
+            #it probably is because after the model gets loaded in we still need to rehit the submit button. I think were just refreshing the make over and over
+            
+            #driver.execute_script(f"alert('no change yet');")
+            time.sleep(5)
+
             driver.execute_script("$('#car-model').change();")
+            time.sleep(5)
 
 
             # Get the response from the website
@@ -93,6 +109,8 @@ def get_response(message: str) -> str:
             # Generate the formatted table
             formatted_table = tabulate(table_data, headers=row_names, tablefmt='rounded_outline', stralign= 'right' , numalign= ['left','right'])
 
+
+            
             # Close the web driver
             driver.close()
 
