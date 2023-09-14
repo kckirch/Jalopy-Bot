@@ -1,41 +1,37 @@
 
 import datetime
+import time
 
 
 from selenium import webdriver
 from bs4 import BeautifulSoup
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.by import By
 
 def web_scrape(yard_id, car_make, car_model):
-
-    # Set up the web driver
+    car_model = car_model.upper()
     driver = webdriver.Chrome()
-
-    # Navigate to the website
     driver.get("http://inventory.pickapartjalopyjungle.com/")
+    
+    # Interact with dropdowns using Selenium
+    yard_dropdown = Select(driver.find_element(By.ID, 'yard-id'))
+    yard_dropdown.select_by_value(str(yard_id))
+    
+    make_dropdown = Select(driver.find_element(By.ID, 'car-make'))
+    make_dropdown.select_by_value(str(car_make))
+    
+    # Wait for the model dropdown to update (This might need more fine-tuning, e.g., WebDriverWait)
+    # time.sleep(5)
+    
+    model_dropdown = Select(driver.find_element(By.ID, 'car-model'))
+    model_dropdown.select_by_value(str(car_model))
+    
+    # Click the search button
+    driver.find_element(By.CSS_SELECTOR, "input[type='submit']").click()
+    
+    # Wait for the results page to load (This might need fine-tuning)
+    # time.sleep(5)
 
-    # Execute the JavaScript code
-    driver.execute_script(f"$('#yard-id').val('{yard_id}');")
-    driver.execute_script(f"$('#car-make').val('{car_make}');")
-    driver.execute_script(f"$('#car-model').val('{car_model}');")
-
-
-
-    driver.execute_script("$('#car-make').change();")
-    #time.sleep(5)
-
-
-
-    driver.execute_script(f"$('#car-model').val('{car_model}').change();")
-
-    #after running .change() it seems to set the defaul model to Select Model and not the specified model
-    #will probably need to look at how it is submitting the form data requests
-    #it probably is because after the model gets loaded in we still need to rehit the submit button. I think were just refreshing the make over and over
-
-    #driver.execute_script(f"alert('no change yet');")
-    #time.sleep(5)
-
-    driver.execute_script("$('#car-model').change();")
-    #time.sleep(5)
 
 
     # Get the response from the website
