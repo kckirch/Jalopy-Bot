@@ -7,24 +7,36 @@ from selenium import webdriver
 from bs4 import BeautifulSoup
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 
 def web_scrape(yard_id, car_make, car_model):
-    car_model = car_model.upper()
     driver = webdriver.Chrome()
     driver.get("http://inventory.pickapartjalopyjungle.com/")
     
     # Interact with dropdowns using Selenium
     yard_dropdown = Select(driver.find_element(By.ID, 'yard-id'))
     yard_dropdown.select_by_value(str(yard_id))
-    
+
     make_dropdown = Select(driver.find_element(By.ID, 'car-make'))
-    make_dropdown.select_by_value(str(car_make))
-    
+    try:
+        make_dropdown.select_by_value(str(car_make))
+    except NoSuchElementException:
+        available_makes = [option.text for option in make_dropdown.options]
+        error_message = ("**Error:** The provided car make **" + car_make + "** was not found.\n\n"
+                 "**Available Makes:**\n```\n" + '\n'.join(available_makes) + "\n\n```")
+        raise ValueError(error_message) 
+
     # Wait for the model dropdown to update (This might need more fine-tuning, e.g., WebDriverWait)
-    # time.sleep(5)
+    time.sleep(2)
     
     model_dropdown = Select(driver.find_element(By.ID, 'car-model'))
-    model_dropdown.select_by_value(str(car_model))
+    try:
+        model_dropdown.select_by_value(str(car_model))
+    except NoSuchElementException:
+        available_models = [option.text for option in model_dropdown.options]
+        error_message = ("**Error:** The provided car model **" + car_model + "** was not found for make **" + car_make + "**.\n\n"
+                 "**Available Models for " + car_make + ":**\n```\n" + '\n'.join(available_models) + "\n```")
+        raise ValueError(error_message)
     
     # Click the search button
     driver.find_element(By.CSS_SELECTOR, "input[type='submit']").click()

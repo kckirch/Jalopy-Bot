@@ -32,9 +32,9 @@ def get_response(message: str) -> str:
             args = message.split(' ')
             location = args[1].upper().strip(' ')
             car_make = args[2].upper().strip()
-            car_model = ' '.join(args[3:])
+            car_model = ' '.join(args[3:]).upper()
 
-            #testing
+            #testing on terminal
             print(location)
             print(car_make)
             print(car_model)
