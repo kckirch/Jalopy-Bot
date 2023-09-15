@@ -12,7 +12,9 @@ def get_response(message: str) -> str:
     p_message = message.lower()
 
     if p_message == '!help':
-        return '`Welcome to the Jalopy Jungle Bot \n \nI am being built to help notify users for new car inventory. \n`'
+
+
+        return '`!s location car_make [optional car_model]` - Search for a car at a specific location. For example: `!s BOISE HONDA ACCORD` \n\n' + 'location options: \n\n BOISE, CALDWELL, GARDENCITY, NAMPA, TWINFALLS'
 
 
 
@@ -28,10 +30,17 @@ def get_response(message: str) -> str:
 
     if p_message.startswith('!s'):
         try:
-            # Split the message by ',' and extract the arguments
+            # Split the message by ' ' and extract the arguments
             args = message.split(' ')
+            
+            # Check if at least location and car_make are provided
+            if len(args) < 3:
+                return "Expected format: `!s location car_make [optional car_model]`. For example: `!s BOISE HONDA ACCORD`."
+
             location = args[1].upper().strip(' ')
             car_make = args[2].upper().strip()
+            
+            # Set car_model to None (or an empty string) if not provided
             car_model = ' '.join(args[3:]).upper()
 
             #testing on terminal
@@ -43,7 +52,7 @@ def get_response(message: str) -> str:
             try:
                 yard_id = location_to_yard_id[location]
             except KeyError:
-                return f"I'm sorry, I don't recognize the location '{location}'. Please try again with a valid location."
+                return f"I'm sorry, I don't recognize the location '{location}'. Please try again with a valid location. The options are " '\n' + "**BOISE**" + '\n' + "**CALDWELL**" + '\n' + "**GARDENCITY**" + '\n' + "**NAMPA**" + '\n' + "**TWINFALLS**" + '\n' + "Example: !s BOISE HONDA ACCORD"
             
             result = web_scrape.web_scrape(yard_id, car_make, car_model)
 
