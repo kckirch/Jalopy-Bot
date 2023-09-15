@@ -1,53 +1,79 @@
 
-import datetime
+from datetime import datetime
 import time
 
-
+from database.db_inserts import insert_car_entry, car_entry_exists
 from selenium import webdriver
 from bs4 import BeautifulSoup
-from selenium.webdriver.support.ui import Select
+from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 
 def web_scrape(yard_id, car_make, car_model):
     driver = webdriver.Chrome()
-    driver.get("http://inventory.pickapartjalopyjungle.com/")
-    
-    # Interact with dropdowns using Selenium
-    yard_dropdown = Select(driver.find_element(By.ID, 'yard-id'))
-    yard_dropdown.select_by_value(str(yard_id))
 
-    make_dropdown = Select(driver.find_element(By.ID, 'car-make'))
+
     try:
-        make_dropdown.select_by_value(str(car_make))
-    except NoSuchElementException:
+        driver.get("http://inventory.pickapartjalopyjungle.com/")
+        
+        # Interact with dropdowns using Selenium
+        yard_dropdown = Select(driver.find_element(By.ID, 'yard-id'))
+        yard_dropdown.select_by_value(str(yard_id))
+
+         # Wait for the model dropdown to load (This might need fine-tuning)
+        #add back sleep for testing
+        time.sleep(2)
+
+        make_dropdown = Select(driver.find_element(By.ID, 'car-make'))
+
+        # Initialize available makes here
         available_makes = [option.text for option in make_dropdown.options]
-        error_message = ("**Error:** The provided car make **" + car_make + "** was not found.\n\n"
-                 "**Available Makes:**\n```\n" + '\n'.join(available_makes) + "\n\n```")
-        raise ValueError(error_message) 
 
-    # Wait for the model dropdown to update (This might need more fine-tuning, e.g., WebDriverWait)
-    time.sleep(2)
-    
-    model_dropdown = Select(driver.find_element(By.ID, 'car-model'))
-    try:
-        model_dropdown.select_by_value(str(car_model))
-    except NoSuchElementException:
+        try:
+            make_dropdown.select_by_value(str(car_make))
+        except NoSuchElementException:
+            error_message = ("**Error:** The provided car make **" + car_make + "** was not found.\n\n"
+                    "**Available Makes:**\n```\n" + '\n'.join(available_makes) + "\n\n```")
+            raise ValueError(error_message)
+
+
+
+
+        # Wait for the model dropdown to load (This might need fine-tuning)
+        #add back sleep for testing
+        time.sleep(2)
+        # wait = WebDriverWait(driver, 10)
+        # wait.until(EC.element_to_be_clickable((By.ID, 'car-model')))
+
+
+
+        
+        model_dropdown = Select(driver.find_element(By.ID, 'car-model'))
+
+        # Initialize available models here
         available_models = [option.text for option in model_dropdown.options]
-        error_message = ("**Error:** The provided car model **" + car_model + "** was not found for make **" + car_make + "**.\n\n"
-                 "**Available Models for " + car_make + ":**\n```\n" + '\n'.join(available_models) + "\n```")
-        raise ValueError(error_message)
-    
-    # Click the search button
-    driver.find_element(By.CSS_SELECTOR, "input[type='submit']").click()
-    
-    # Wait for the results page to load (This might need fine-tuning)
-    # time.sleep(5)
+
+        try:
+            model_dropdown.select_by_value(str(car_model))
+        except NoSuchElementException:
+            error_message = ("**Error:** The provided car model **" + car_model + "** was not found for make **" + car_make + "**.\n\n"
+                    "**Available Models for " + car_make + ":**\n```\n" + '\n'.join(available_models) + "\n```")
+            raise ValueError(error_message)
+        
+        # Click the search button
+        driver.find_element(By.CSS_SELECTOR, "input[type='submit']").click()
 
 
 
-    # Get the response from the website
-    response = driver.page_source
+
+        # Get the response from the website
+        response = driver.page_source
+
+    # Close the browser
+    finally:
+        driver.quit()
+
 
     # Parse the HTML response
     soup = BeautifulSoup(response, 'html.parser')
@@ -58,8 +84,11 @@ def web_scrape(yard_id, car_make, car_model):
     # Find all the rows in the table
     rows = table.find_all('tr')
 
-    # Initialize a list of lists to store the table data
-    table_data = []
+    # Initialize a list to store the table data
+    table_data = [["Year", "Make", "Model", "Row Number", "Date First Seen"]]  # This initializes with column names
+
+    # Initialize a list to store the new entries
+    new_entries = []
 
     # Iterate over the rows
     for row in rows:
@@ -68,41 +97,49 @@ def web_scrape(yard_id, car_make, car_model):
 
         # Check if the row has at least 4 cells
         if len(cells) >= 4:
-            # Add the row data to the table data list
-            table_data.append([cells[0].text, cells[1].text, cells[2].text, cells[3].text])
+            # Extract the required data from the cells
+            year = cells[0].text
+            make = cells[1].text
+            model = cells[2].text
+            row_number = cells[3].text
 
-    # Find the row names
-    row_names = [row.text for row in rows[0].find_all('th')]
+            date_first_seen = car_entry_exists(yard_id, make, model, year, row_number)
+
+            if date_first_seen is None:
+                insert_car_entry(yard_id, make, model, year, row_number)
+                new_entries.append([year, make, model, row_number])
+                date_first_seen = datetime.now().strftime('%Y-%m-%d')
+            
+            # Add the row data along with date_first_seen to the table data list
+            table_data.append([year, make, model, row_number, date_first_seen])
+
+
+
+        
+        
+
+
+
+    # # Find the row names
+    # row_names = [row.text for row in rows[0].find_all('th')]
+    # row_names.append('Date First Seen')
 
     # Import the tabulate library
     from tabulate import tabulate
 
     # Generate the formatted table
-    formatted_table = tabulate(table_data, headers=row_names, tablefmt='rounded_outline', stralign= 'right' , numalign= ['left','right'])
+    formatted_table = tabulate(table_data, tablefmt='rounded_outline', stralign='right', numalign=['left','right'])
 
 
 
     # Close the web driver
-    driver.close()
-
-
-
-    # Create the file name
-    file_name = str(yard_id) + '_' + car_make + '_' + car_model + '.txt'
-
-    # Open the file in write mode
-    with open('Search_Backup/' + file_name, 'w') as f:
-        # Write the timestamp to the file
-        f.write(datetime.datetime.now().strftime("%A, %b-%d, %I:%M %p") + '\n')
-
-        # Write the table data to the file
-        for data in table_data:
-            f.write(', '.join(data) + '\n')
+    driver.quit()
 
 
 
 
+    # Construct the "other models to explore" message
+    other_models_msg = "**Other " + car_make + " models to explore:**\n```\n" + '\n'.join(available_models) + "\n```"
 
-    # Return the formatted table
-    return "`" + formatted_table + "`\n" + datetime.datetime.now().strftime("%A, %b-%d, %I:%M %p")
-
+    # Return the formatted table and other models message back to discord
+    return "`" + formatted_table + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p") + "\n\n" + other_models_msg
