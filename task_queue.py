@@ -14,6 +14,7 @@ def start_worker(main_loop, send_message_func):
     global send_msg_coroutine
     send_msg_coroutine = send_message_func
     worker_thread = threading.Thread(target=worker, args=(main_loop,))
+    worker_thread.daemon = True
     worker_thread.start()
 
 
