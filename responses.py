@@ -31,6 +31,7 @@ def get_response(message: str) -> list:
             location = args[1].upper().strip(' ')
             car_make = args[2].upper().strip()
             car_model = ' '.join(args[3:]).upper()
+            
 
             # For the "ALL" scenario
             if location == "ALL":
@@ -43,6 +44,7 @@ def get_response(message: str) -> list:
                     except Exception as e:
                         responses.append(f'An error occurred for {loc}: {e}')
                 return responses
+            
             
             # Handle a specific location
             try:

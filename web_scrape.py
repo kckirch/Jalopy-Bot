@@ -2,6 +2,8 @@
 from datetime import datetime
 import time
 
+from tabulate import tabulate
+
 from database.db_inserts import insert_car_entry, car_entry_exists
 from selenium import webdriver
 from bs4 import BeautifulSoup
@@ -123,19 +125,7 @@ def web_scrape(yard_id, car_make, car_model, yard_name):
             table_data.append([year, make, model, row_number, date_first_seen])
 
 
-
-        
-        
-
-
-
-    # # Find the row names
-    # row_names = [row.text for row in rows[0].find_all('th')]
-    # row_names.append('Date First Seen')
-
-    # Import the tabulate library
-    from tabulate import tabulate
-
+    
     # Generate the formatted table
     formatted_table = tabulate(table_data, tablefmt='rounded_outline', stralign='right', numalign=['left','right'])
 
@@ -148,7 +138,7 @@ def web_scrape(yard_id, car_make, car_model, yard_name):
 
 
     # Construct the "other models to explore" message
-    other_models_msg = "**Other " + car_make + " models to explore:**\n```\n" + '\n'.join(available_models) + "\n```"
+    other_models_msg = "**Other " + car_make + " models to explore from " + yard_name + ":**\n```\n" + '\n'.join(available_models) + "\n```"
 
     # Return the formatted table and other models message back to discord
     return "`" + formatted_table + "\n" + yard_name + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p")  + "\n\n" + other_models_msg

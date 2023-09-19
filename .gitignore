@@ -1,0 +1,6 @@
+config.py
+TODO.mkd
+.env
+__pycache__/
+database/jalopy_database.db
+database/__pycache__
