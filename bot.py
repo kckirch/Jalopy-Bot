@@ -54,7 +54,12 @@ def run_discord_bot():
         # Add task to queue
         task_queue.put((message, user_message, is_private))
 
+
+        print(f"Received message from {message.author}: {user_message}")
         if user_message.startswith('!s'):
+
+            print("Processing !s command...")
+
             args = user_message.split(' ')
             
             # Extract location, car_make, and optionally car_model.
@@ -63,6 +68,7 @@ def run_discord_bot():
             car_model = ' '.join(args[3:]).upper() if len(args) > 3 else "All Models"
             
             await message.channel.send(f"🔍 Starting search in `{location}` for `{car_make} {car_model}`. Please wait...")
+            print(f"Sent response for {message.author}")
 
 
 
