@@ -1,14 +1,19 @@
+import asyncio
 import discord
 import responses
 
 
 async def send_message(message, user_message, is_private):
     try:
-        response = responses.get_response(user_message)
-        await message.author.send(response) if is_private else await message.channel.send(response)
+        response_messages = responses.get_response(user_message)
+        
+        for response in response_messages:
+            await message.author.send(response) if is_private else await message.channel.send(response)
+            await asyncio.sleep(1)  # Optional: To introduce a short delay between messages
 
     except Exception as e:
         print(e)
+
 
 
 def run_discord_bot():

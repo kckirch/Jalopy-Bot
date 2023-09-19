@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 
-def web_scrape(yard_id, car_make, car_model):
+def web_scrape(yard_id, car_make, car_model, yard_name):
     driver = webdriver.Chrome()
 
 
@@ -142,4 +142,4 @@ def web_scrape(yard_id, car_make, car_model):
     other_models_msg = "**Other " + car_make + " models to explore:**\n```\n" + '\n'.join(available_models) + "\n```"
 
     # Return the formatted table and other models message back to discord
-    return "`" + formatted_table + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p") + "\n\n" + other_models_msg
+    return "`" + formatted_table + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p") + yard_name + "\n\n" + other_models_msg
