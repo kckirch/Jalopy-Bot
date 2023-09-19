@@ -11,7 +11,16 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 
 def web_scrape(yard_id, car_make, car_model, yard_name):
-    driver = webdriver.Chrome()
+    # Set up the Chrome options
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.headless = True  # Run Chrome in headless mode
+    chrome_options.add_argument("--disable-gpu")  # Disable GPU acceleration (recommended for headless)
+    chrome_options.add_argument("--window-size=1920x1080")  # Set default window size
+    chrome_options.add_argument("--no-sandbox")  # Bypass OS security model (sometimes required)
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
+
+    # Create the browser instance with the options
+    driver = webdriver.Chrome(options=chrome_options)
 
 
     try:
@@ -142,4 +151,4 @@ def web_scrape(yard_id, car_make, car_model, yard_name):
     other_models_msg = "**Other " + car_make + " models to explore:**\n```\n" + '\n'.join(available_models) + "\n```"
 
     # Return the formatted table and other models message back to discord
-    return "`" + formatted_table + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p") + yard_name + "\n\n" + other_models_msg
+    return "`" + formatted_table + "\n" + yard_name + "`\n" + datetime.now().strftime("%A, %b-%d, %I:%M %p")  + "\n\n" + other_models_msg

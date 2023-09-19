@@ -38,7 +38,7 @@ def get_response(message: str) -> list:
                 for loc in location_to_yard_id:
                     try:
                         yard_id = location_to_yard_id[loc]
-                        result = web_scrape.web_scrape(yard_id, car_make, car_model)
+                        result = web_scrape.web_scrape(yard_id, car_make, car_model, loc)
                         responses.append(result)
                     except Exception as e:
                         responses.append(f'An error occurred for {loc}: {e}')
@@ -47,7 +47,7 @@ def get_response(message: str) -> list:
             # Handle a specific location
             try:
                 yard_id = location_to_yard_id[location]
-                result = [web_scrape.web_scrape(yard_id, car_make, car_model)]
+                result = [web_scrape.web_scrape(yard_id, car_make, car_model, location)]
                 return result
             except KeyError:
                 return [f"I'm sorry, I don't recognize the location '{location}'. Please try again with a valid location. The options are " '\n' + "**BOISE**" + '\n' + "**CALDWELL**" + '\n' + "**GARDENCITY**" + '\n' + "**NAMPA**" + '\n' + "**TWINFALLS**" + '\n' + "Example: !s BOISE HONDA ACCORD"]
