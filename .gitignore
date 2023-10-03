@@ -4,3 +4,5 @@ TODO.mkd
 /__pycache__/
 database/jalopy_database.db
 database/__pycache__
+.vscode/
+```

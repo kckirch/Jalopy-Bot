@@ -12,6 +12,7 @@ task_queue = queue.Queue()
 
 def start_worker(main_loop, send_message_func):
     global send_msg_coroutine
+    print(f"Starting worker with send_message_func: {send_message_func}")
     send_msg_coroutine = send_message_func
     worker_thread = threading.Thread(target=worker, args=(main_loop,))
     worker_thread.daemon = True
@@ -31,7 +32,9 @@ def worker(main_loop):
         # Unpack the task details and process it
         message, user_message, is_private = task
         try:
+            print(f"send_msg_coroutine before call: {send_msg_coroutine}")
             future = run_coroutine_threadsafe(
+                
             send_msg_coroutine(message, user_message, is_private), 
             main_loop
         )

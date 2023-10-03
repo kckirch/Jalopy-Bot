@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
         "./database"
-    ]
+    ],
+    "python.analysis.typeCheckingMode": "basic"
 }
