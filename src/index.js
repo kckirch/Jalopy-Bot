@@ -14,7 +14,7 @@ const vehicleMakes = [
   'Nissan', 'Oldsmobile', 'Plymouth', 'Pontiac', 'Porsche', 
   'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 
   'Toyota', 'Volkswagen', 'Volvo'
-].join(', ');
+];
 
 
 
@@ -45,7 +45,7 @@ client.on('interactionCreate', async (interaction) => {
       const makesEmbed = new EmbedBuilder()
         .setTitle('Available Vehicle Makes in ' + location)
         .setDescription('Please reply with the make of the vehicle you are interested in.')
-        .addFields({ name: 'Makes', value: vehicleMakes })
+        .addFields({ name: 'Makes', value: vehicleMakes.join(', ') })
         .setColor('Orange');
   
       await interaction.reply({ embeds: [makesEmbed] });
@@ -57,7 +57,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const makeInput = m.content.toLowerCase();
       
-          if (vehicleMakes.toLowerCase().split(', ').includes(makeInput)) {
+          if (vehicleMakes.map(make => make.toLowerCase()).includes(makeInput)) {
             // Create an embed similar to the 'Search Parameters' embed
             const resultEmbed = new EmbedBuilder()
               .setTitle('Search Parameters')
