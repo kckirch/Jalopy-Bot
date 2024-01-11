@@ -56,8 +56,20 @@ client.on('interactionCreate', async (interaction) => {
       messageCollector.on('collect', async m => {
         try {
           const makeInput = m.content.toLowerCase();
+      
           if (vehicleMakes.toLowerCase().split(', ').includes(makeInput)) {
-            await interaction.followUp(`You have selected Location: ${location} and Make: ${makeInput}.`);
+            // Create an embed similar to the 'Search Parameters' embed
+            const resultEmbed = new EmbedBuilder()
+              .setTitle('Search Parameters')
+              .setDescription('Here are your search parameters:')
+              .addFields(
+                { name: 'Location', value: location },
+                { name: 'Make', value: m.content }, // Use the collected make
+                { name: 'Model', value: 'Any' } // Assuming model is not yet selected
+              )
+              .setColor('Orange');
+      
+            await interaction.followUp({ embeds: [resultEmbed] });
             messageCollector.stop();
           } else {
             const quitButton = new ButtonBuilder()
@@ -77,6 +89,7 @@ client.on('interactionCreate', async (interaction) => {
           await m.reply('An error occurred while processing your request.');
         }
       });
+      
 
       messageCollector.on('end', collected => {
         if (collected.size === 0) {
