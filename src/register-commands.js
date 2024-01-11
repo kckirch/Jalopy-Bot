@@ -1,5 +1,10 @@
+//register-commands.js
+
 require('dotenv').config();
 const { REST, Routes, ApplicationCommandOptionType } = require('discord.js');
+
+
+
 
 const commands = [
     {
@@ -10,19 +15,52 @@ const commands = [
             name: 'location',
             description: 'The location to search in',
             type: ApplicationCommandOptionType.String,
+            choices: [
+                {
+                    name: 'Boise',
+                    value: 'boise',
+                    description: 'Search in Boise',
+                    type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                    name: 'Garden City',
+                    value: 'gardencity',
+                    description: 'Search in Garden City',
+                    type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                    name: 'Nampa',
+                    value: 'nampa',
+                    description: 'Search in Nampa',
+                    type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                    name: 'Caldwell',
+                    value: 'caldwell',
+                    description: 'Search in Caldwell',
+                    type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                    name: 'Twin Falls',
+                    value: 'twinfalls',
+                    description: 'Search in Twin Falls',
+                    type: ApplicationCommandOptionType.Subcommand,
+                }
+            ],
+                
             required: true,
           },
           {
             name: 'make',
             description: 'The make of the vehicle',
             type: ApplicationCommandOptionType.String,
-            required: true,
+            required: false,
           },
           {
             name: 'model',
             description: 'The model of the vehicle',
             type: ApplicationCommandOptionType.String,
-            required: true,
+            required: false,
           },
         ],
       },
