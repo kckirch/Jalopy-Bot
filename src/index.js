@@ -1,7 +1,7 @@
 //index.js
 
 require('dotenv').config();
-const { Client, IntentsBitField, EmbedBuilder } = require('discord.js');
+const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
 
 
@@ -27,60 +27,63 @@ const client = new Client({
   ],
 });
 
+// Global reference for the message collector
+let messageCollector = null;
+
 client.on('ready', (c) => {
   console.log(`✅   ${c.user.tag} is online.  ✅`);
 });
 
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
+  // Command interaction for 'search'
+  if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
+    const location = interaction.options.getString('location');
+    const make = interaction.options.getString('make');
+    const model = interaction.options.getString('model');
+
+    if (location && !make) {
+      const makesEmbed = new EmbedBuilder()
+        .setTitle('Available Vehicle Makes in ' + location)
+        .setDescription('Please reply with the make of the vehicle you are interested in.')
+        .addFields({ name: 'Makes', value: vehicleMakes })
+        .setColor('Orange');
   
-    if (interaction.commandName === 'search') {
-      const location = interaction.options.getString('location');
-      const make = interaction.options.getString('make');
-      const model = interaction.options.getString('model');
-  
-      if (location && !make) {
-        // Send an embed with a list of makes and prompt for a reply
-        const makesEmbed = new EmbedBuilder()
-          .setTitle('Available Vehicle Makes in ' + location)
-          .setDescription('Please reply with the make of the vehicle you are interested in.')
-          .addFields({ name: 'Makes', value: vehicleMakes })
-          .setColor('Orange');
-  
-        await interaction.reply({ embeds: [makesEmbed] });
-  
-        // Set up a collector or listener for the next message from this user
-        const filter = m => m.author.id === interaction.user.id;
-        const collector = interaction.channel.createMessageCollector({ filter, time: 60000, max: 1 });
-  
-        collector.on('collect', async m => {
-          try {
-            console.log(`Collected make: ${m.content}`);
-            const makeInput = m.content.toLowerCase();
-          
-            // Check if the make is in the list
-            if (!vehicleMakes.includes(makeInput)) {
-              await m.reply(`"${makeInput}" is not a valid make. Please choose from the list.`);
-              return; // Stop further processing
-            }
-          
-            // If valid, continue with your logic
+      await interaction.reply({ embeds: [makesEmbed] });
+
+      const filter = m => m.author.id === interaction.user.id;
+      messageCollector = interaction.channel.createMessageCollector({ filter, time: 60000 });
+
+      messageCollector.on('collect', async m => {
+        try {
+          const makeInput = m.content.toLowerCase();
+          if (vehicleMakes.toLowerCase().split(', ').includes(makeInput)) {
             await interaction.followUp(`You have selected Location: ${location} and Make: ${makeInput}.`);
-          
-            // Proceed with next steps...
-          } catch (error) {
-            console.error('Error handling collected make:', error);
-            await m.reply('An error occurred while processing your request.');
+            messageCollector.stop();
+          } else {
+            const quitButton = new ButtonBuilder()
+              .setCustomId('quit')
+              .setLabel('Cancel')
+              .setStyle(ButtonStyle.Danger);
+      
+            const row = new ActionRowBuilder().addComponents(quitButton);
+      
+            await m.reply({
+              content: `"${makeInput}" is not a valid make. Please choose from the list or cancel the operation.`,
+              components: [row]
+            });
           }
-        });
-  
-        collector.on('end', collected => {
-          if (collected.size === 0) {
-            interaction.followUp('No make was provided.');
-          }
-        });
-  
-      } else if (location && make) {
+        } catch (error) {
+          console.error('Error handling collected make:', error);
+          await m.reply('An error occurred while processing your request.');
+        }
+      });
+
+      messageCollector.on('end', collected => {
+        if (collected.size === 0) {
+          interaction.followUp('No valid make was provided.');
+        }
+      });
+    } else if (location && make) {
         // Process the search with both location and make provided
         const searchEmbed = new EmbedBuilder()
           .setTitle('Search Parameters')
@@ -95,6 +98,15 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [searchEmbed] });
         // Implement the search logic here
       }
+    }
+
+    // Button interaction for 'quit'
+    if (interaction.isButton() && interaction.customId === 'quit') {
+      if (messageCollector) {
+        messageCollector.stop();
+        messageCollector = null; // Reset the collector reference
+      }
+      await interaction.update({ content: 'Operation cancelled.', components: [] });
     }
   });
   
