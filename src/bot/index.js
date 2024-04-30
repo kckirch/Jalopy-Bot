@@ -1,9 +1,18 @@
 //index.js
 
+
 require('dotenv').config();
+
+const { webScrape } = require('../scraping/jalopyScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
-
+const yardIdMapping = {
+  'BOISE': 1020,
+  'CALDWELL': 1021,
+  'GARDENCITY': 1119,
+  'NAMPA': 1022,
+  'TWINFALLS': 1099,
+};
 
 const vehicleMakes = [
   'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 
@@ -39,7 +48,15 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
     const location = interaction.options.getString('location');
     const make = interaction.options.getString('make');
-    const model = interaction.options.getString('model');
+    const model = interaction.options.getString('model') || 'Any';
+
+    if (location && make) {
+      
+      const yard_id = convertLocationToYardId(location);
+
+      // Call the webScrape function with the parameters
+      webScrape(yard_id, make, model);
+    }
 
     if (location && !make) {
       const makesEmbed = new EmbedBuilder()
@@ -123,6 +140,11 @@ client.on('interactionCreate', async (interaction) => {
     }
   });
   
+  function convertLocationToYardId(location) {
+    const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
+    return yardIdMapping[normalizedLocation];
+  }
+
 
 
 client.login(process.env.TOKEN);
