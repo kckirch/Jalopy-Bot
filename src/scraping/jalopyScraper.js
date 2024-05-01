@@ -1,55 +1,63 @@
-//jalopyScraper.js
-const { Builder, By, until } = require('selenium-webdriver');
-const sqlite3 = require('sqlite3').verbose();
+const { Builder, By, Key, until } = require('selenium-webdriver');
+const { Browser } = require('selenium-webdriver');
 
-async function webScrape(yard_id, car_make, car_model) {
-    console.log(`Web scraping started with Yard ID: ${yard_id}, Car Make: ${car_make}, Car Model: ${car_model}`);
-    // let driver = new Builder().forBrowser('chrome').build();
+async function webScrape(yardId, make, model) {
+    let driver = await new Builder().forBrowser(Browser.CHROME).build();
 
-    // try {
-    //     await driver.get("http://inventory.pickapartjalopyjungle.com/");
+    try {
+        // log the user input
+        console.log('🔍 Scraping for:');
+        console.log(`   🏞️ Yard ID: ${yardId}`);
+        console.log(`   🚗 Make: ${make}`);
+        console.log(`   📋 Model: ${model}`);
+
+
+        // Replace 'https://inventory.pickapartjalopyjungle.com/' with the actual URL you want to scrape
+        await driver.get('https://inventory.pickapartjalopyjungle.com/');
+
+        // Execute JavaScript to directly set the values of dropdowns
+        await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
+
+
+        await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
         
-    //     // Select yard, make, and model from dropdowns
-    //     await selectDropdown(driver, 'yard-id', yard_id);
-    //     await selectDropdown(driver, 'car-make', car_make);
-    //     await selectDropdown(driver, 'car-model', car_model);
+
+
+        await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+
+
+        await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+
+        // Optionally, trigger any onchange events associated with these dropdowns
+        await driver.executeScript(`
+            document.getElementById('yard-id').dispatchEvent(new Event('change'));
+            document.getElementById('car-make').dispatchEvent(new Event('change'));
+            document.getElementById('car-model').dispatchEvent(new Event('change'));
+        `);
+
+        // Wait for the table to be displayed after setting the values
+        await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
+
+        // Extract and log the data from the table
+        let tableData = await driver.findElement(By.css('.table-responsive table')).getText();
         
-    //     // Click the search button
-    //     await driver.findElement(By.css("input[type='submit']")).click();
 
-    //     // Wait for the results to load
-    //     await driver.wait(until.elementLocated(By.css('your-result-element-selector')), 10000);
+        if (model !== 'Any') {
+            await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+            await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+            await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
+            let tableDataModel = await driver.findElement(By.css('.table-responsive table')).getText();
+            console.log(tableDataModel);
+        } else {
+            console.log(tableData);
+        }
 
-    //     // Scrape the data
-    //     const data = await scrapeData(driver);
 
-    //     // Process and save data to SQLite
-    //     saveToDatabase(data);
-    // } catch (error) {
-    //     console.error('Error occurred:', error);
-    // } finally {
-    //     await driver.quit();
-    // }
+    } catch (error) {
+        console.error('Scraping failed:', error);
+    } finally {
+        await driver.quit();
+    }
 }
-
-async function selectDropdown(driver, elementId, value) {
-    let dropdown = await driver.findElement(By.id(elementId));
-    // Logic to select the dropdown value
-    // ...
-}
-
-async function scrapeData(driver) {
-    // Logic to scrape data from the page
-    // Return the processed data
-    // ...
-}
-
-function saveToDatabase(data) {
-    // SQLite database interaction logic
-    // ...
-}
-
-webScrape('yard_id', 'car_make', 'car_model', 'yard_name');
-
 
 module.exports = { webScrape };
