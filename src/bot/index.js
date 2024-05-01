@@ -1,7 +1,10 @@
 //index.js
 
 
-require('dotenv').config();
+require('dotenv').config({ path: '../.env'});
+
+
+
 
 const { webScrape } = require('../scraping/jalopyScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
@@ -52,10 +55,10 @@ client.on('interactionCreate', async (interaction) => {
 
     if (location && make) {
       
-      const yard_id = convertLocationToYardId(location);
+      const yardId = convertLocationToYardId(location);
 
       // Call the webScrape function with the parameters
-      webScrape(yard_id, make, model);
+      webScrape(yardId, make, model);
     }
 
     if (location && !make) {
@@ -72,9 +75,9 @@ client.on('interactionCreate', async (interaction) => {
 
       messageCollector.on('collect', async m => {
         try {
-          const makeInput = m.content.toLowerCase();
+          const makeInput = m.content.toUpperCase();
       
-          if (vehicleMakes.map(make => make.toLowerCase()).includes(makeInput)) {
+          if (vehicleMakes.map(make => make.toUpperCase()).includes(makeInput)) {
             // Create an embed similar to the 'Search Parameters' embed
             const resultEmbed = new EmbedBuilder()
               .setTitle('Search Parameters')
@@ -144,6 +147,8 @@ client.on('interactionCreate', async (interaction) => {
     const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
     return yardIdMapping[normalizedLocation];
   }
+
+
 
 
 
