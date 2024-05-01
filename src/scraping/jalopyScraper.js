@@ -1,6 +1,12 @@
+//jalopyScraper.js
+
 const { Builder, By, Key, until, Capabilities } = require('selenium-webdriver');
 const { Browser } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
+
+
+
+const { insertVehicle } = require('../database/inventoryDb');
 
 
 async function webScrape(yardId, make, model) {
@@ -10,13 +16,8 @@ async function webScrape(yardId, make, model) {
     options.addArguments('--headless');
     options.addArguments('excludeSwitches=enable-logging');
     options.addArguments('--ignore-certificate-errors');
-
     options.addArguments('--allow-running-insecure-content');
     
-
-
-
-
 
     let driver = await new Builder()
         .forBrowser(Browser.CHROME)
@@ -24,30 +25,22 @@ async function webScrape(yardId, make, model) {
         .build();
 
     try {
-        // log the user input
+       
         console.log('🔍 Scraping for:');
         console.log(`   🏞️ Yard ID: ${yardId}`);
         console.log(`   🚗 Make: ${make}`);
         console.log(`   📋 Model: ${model}`);
 
-
-        // Replace 'https://inventory.pickapartjalopyjungle.com/' with the actual URL you want to scrape
         await driver.get('https://inventory.pickapartjalopyjungle.com/');
-
 
         // Setting the Yard ID and Make will always be needed to populate the table
         // Doing these two first will allow us to submit the form to take advantage of searching for all models easily
 
-        // Execute JavaScript to directly set the values of dropdowns
         await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
-        console.log("yard-id is being searched for: " + yardId);
+        // console.log("yard-id is being searched for: " + yardId);
 
         await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
-        console.log("car-make is being searched for: " + make);
-
-
-
-
+        // console.log("car-make is being searched for: " + make);
 
         await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
@@ -62,15 +55,32 @@ async function webScrape(yardId, make, model) {
         //     document.getElementById('car-model').dispatchEvent(new Event('change'));
         // `);
 
-        if (model == 'ANY') {
-            await driver.executeScript(`document.getElementById('car-model').value = '';`);
-            //sleep for testing
-            // await driver.sleep(1000);
-            
+        let vehicles = [];
+
+        if (model === 'ANY') {
+            await driver.executeScript(`document.getElementById('car-model').value = '';`);            
             await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
-            let tableDataModel = await driver.findElement(By.css('.table-responsive table')).getText();
-            console.log("Table Data Any Model");
-            console.log(tableDataModel);
+
+            // Any model for tableDataModel
+            let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
+            for (let row of rows) {
+                let cols = await row.findElements(By.tagName('td'));
+                if (cols.length >= 4) {
+                    insertVehicle(
+                        yardId,
+                        await cols[1].getText(), // make
+                        await cols[2].getText(), // model
+                        parseInt(await cols[0].getText(), 10), // year
+                        parseInt(await cols[3].getText(), 10), // row number
+                        'N/A', // firstSeen
+                        'N/A', // lastSeen
+                        'Available', // status
+                        '' // notes
+                    );
+                }
+            }
+            console.log("Table Data Model ANY");
+            
         } else {
 
 
@@ -95,11 +105,25 @@ async function webScrape(yardId, make, model) {
 
 
 
-            // Extract and log the data from the table
-            let tableData = await driver.findElement(By.css('.table-responsive table')).getText();
-                await driver.sleep(1000);
-                console.log("Table Data");
-                console.log(tableData);
+            // Specific model for tableData
+            let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
+            for (let row of rows) {
+                let cols = await row.findElements(By.tagName('td'));
+                if (cols.length >= 4) {
+                    insertVehicle(
+                        yardId,
+                        await cols[1].getText(), // make
+                        await cols[2].getText(), // model
+                        parseInt(await cols[0].getText(), 10), // year
+                        parseInt(await cols[3].getText(), 10), // row number
+                        'N/A', // firstSeen
+                        'N/A', // lastSeen
+                        'Available', // status
+                        '' // notes
+                    );
+                }
+            }
+            console.log("Data for specific model processed and inserted.");
         }
 
 
