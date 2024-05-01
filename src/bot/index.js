@@ -49,12 +49,13 @@ client.on('ready', (c) => {
 client.on('interactionCreate', async (interaction) => {
   // Command interaction for 'search'
   if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
-    const location = interaction.options.getString('location');
-    const make = interaction.options.getString('make');
-    const model = interaction.options.getString('model') || 'Any';
+    let location = interaction.options.getString('location');
+    let make = interaction.options.getString('make');
+    let model = interaction.options.getString('model') || 'Any';
 
     if (location && make) {
-      
+      make = make.toUpperCase();
+      model = model.toUpperCase();
       const yardId = convertLocationToYardId(location);
 
       // Call the webScrape function with the parameters
