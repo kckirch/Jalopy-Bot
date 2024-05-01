@@ -1,6 +1,7 @@
 //index.js
 
 
+
 require('dotenv').config({ path: '../.env'});
 
 
@@ -8,6 +9,15 @@ require('dotenv').config({ path: '../.env'});
 
 const { webScrape } = require('../scraping/jalopyScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
+
+const { setupDatabase, insertVehicle } = require('../database/inventoryDb');
+
+// Initialize database
+setupDatabase().then(() => {
+  console.log('Database setup completed successfully.');
+}).catch((error) => {
+  console.error('Failed to set up database:', error);
+});
 
 const yardIdMapping = {
   'BOISE': 1020,
