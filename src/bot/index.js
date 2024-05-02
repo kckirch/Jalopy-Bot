@@ -173,7 +173,7 @@ client.on('interactionCreate', async (interaction) => {
 
 
 
-      if (make !== 'ANY' && !vehicleMakes.includes(make)) {
+      if (make !== 'ANY' && !vehicleMakes.some(m => m.toUpperCase() === make)) {
         // If the make is not recognized, inform the user and list available options
         const makesEmbed = new EmbedBuilder()
             .setColor(0x0099FF) // Set a visually appealing color
