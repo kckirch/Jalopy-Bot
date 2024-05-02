@@ -13,7 +13,7 @@ async function webScrape(yardId, make, model) {
     let options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--disable-gpu');
-    // options.addArguments('--headless');
+    options.addArguments('--headless');
     options.addArguments('excludeSwitches=enable-logging');
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--allow-running-insecure-content');
@@ -55,6 +55,7 @@ async function webScrape(yardId, make, model) {
         //     document.getElementById('car-model').dispatchEvent(new Event('change'));
         // `);
 
+        //Handle if searching for all yards
         if (yardId === 'ANY') {
             // Refetch yard options for each iteration to avoid stale references
             await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
@@ -150,6 +151,7 @@ async function webScrape(yardId, make, model) {
     } catch (error) {
         console.error('Scraping failed:', error);
     } finally {
+        console.log('🛑 Closing browser');
         await driver.quit();
     }
 }
@@ -179,6 +181,8 @@ async function scrapeYardMakeModel(driver, yardId, make, model) {
     } else {
         await scrapeMakeModel(driver, yardId, make, model);
     }
+
+    console.log(`✅ Finished scraping yard: ${yardId}, make: ${make}, model: ${model}`);
 }
 
 
@@ -188,6 +192,7 @@ async function scrapeMakeModel(driver, yardId, make, model) {
     await driver.sleep(1000);
     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+
 
     await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
 

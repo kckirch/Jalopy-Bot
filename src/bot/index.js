@@ -59,7 +59,7 @@ client.on('ready', (c) => {
 client.on('interactionCreate', async (interaction) => {
   // Command interaction for 'search'
   if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
-    let location = interaction.options.getString('location') || 'Any';
+    let location = interaction.options.getString('location');
     let make = interaction.options.getString('make') || 'Any';
     let model = interaction.options.getString('model') || 'Any';
 
@@ -155,8 +155,11 @@ client.on('interactionCreate', async (interaction) => {
   });
   
   function convertLocationToYardId(location) {
+    if (location.toUpperCase() === 'ALL') {
+      return 'ALL';
+    }
     const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
-    return yardIdMapping[normalizedLocation];
+    return yardIdMapping[normalizedLocation] || 'ALL';
   }
 
 
