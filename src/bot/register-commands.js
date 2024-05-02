@@ -1,76 +1,58 @@
-//register-commands.js
-
 require('dotenv').config({ path: '../.env'});
-const { REST, Routes, ApplicationCommandOptionType } = require('discord.js');
+const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType } = require('discord.js');
 
+// Create command builders
+const searchCommand = new SlashCommandBuilder()
+  .setName('search')
+  .setDescription('Search for vehicles!')
+  .addStringOption(option => 
+    option.setName('location')
+    .setDescription('The location to search in')
+    .setRequired(true)
+    .addChoices(
+      { name: 'Boise', value: 'boise' },
+      { name: 'Garden City', value: 'gardencity' },
+      { name: 'Nampa', value: 'nampa' },
+      { name: 'Caldwell', value: 'caldwell' },
+      { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'All', value: 'all' }
+    ))
+  .addStringOption(option => 
+    option.setName('make')
+    .setDescription('The make of the vehicle')
+    .setRequired(false))
+  .addStringOption(option => 
+    option.setName('model')
+    .setDescription('The model of the vehicle')
+    .setRequired(false));
 
-
+const dbSearchCommand = new SlashCommandBuilder()
+  .setName('dbsearch')
+  .setDescription('Search for vehicles in the database')
+  .addStringOption(option => 
+    option.setName('location')
+    .setDescription('The yard location to search')
+    .setRequired(true)
+    .addChoices(
+      { name: 'Boise', value: 'boise' },
+      { name: 'Garden City', value: 'gardencity' },
+      { name: 'Nampa', value: 'nampa' },
+      { name: 'Caldwell', value: 'caldwell' },
+      { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'All', value: 'all' }
+    ))
+  .addStringOption(option => 
+    option.setName('make')
+    .setDescription('The make of the vehicle')
+    .setRequired(false))
+  .addStringOption(option => 
+    option.setName('model')
+    .setDescription('The model of the vehicle')
+    .setRequired(false));
 
 const commands = [
-    {
-        name: 'search',
-        description: 'Search for vehicles!',
-        options: [
-          {
-            name: 'location',
-            description: 'The location to search in',
-            type: ApplicationCommandOptionType.String,
-            choices: [
-                {
-                    name: 'Boise',
-                    value: 'boise',
-                    description: 'Search in Boise',
-                    type: ApplicationCommandOptionType.Subcommand,
-                },
-                {
-                    name: 'Garden City',
-                    value: 'gardencity',
-                    description: 'Search in Garden City',
-                    type: ApplicationCommandOptionType.Subcommand,
-                },
-                {
-                    name: 'Nampa',
-                    value: 'nampa',
-                    description: 'Search in Nampa',
-                    type: ApplicationCommandOptionType.Subcommand,
-                },
-                {
-                    name: 'Caldwell',
-                    value: 'caldwell',
-                    description: 'Search in Caldwell',
-                    type: ApplicationCommandOptionType.Subcommand,
-                },
-                {
-                    name: 'Twin Falls',
-                    value: 'twinfalls',
-                    description: 'Search in Twin Falls',
-                    type: ApplicationCommandOptionType.Subcommand,
-                },
-                {
-                  name: 'All',
-                  value: 'all',
-                  description: 'Search in all locations',
-                  type: ApplicationCommandOptionType.Subcommand,
-                }
-
-            ],
-                
-            required: true,
-          },
-          {
-            name: 'make',
-            description: 'The make of the vehicle',
-            type: ApplicationCommandOptionType.String,
-            required: false,
-          },
-          {
-            name: 'model',
-            description: 'The model of the vehicle',
-            type: ApplicationCommandOptionType.String,
-            required: false,
-          },
-        ],
-      },
+  searchCommand.toJSON(),
+  dbSearchCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -78,15 +60,10 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 (async () => {
   try {
     console.log('Registering slash commands...');
-
     await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.CLIENT_ID,
-        process.env.GUILD_ID
-      ),
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
     );
-
     console.log('Slash commands were registered successfully!');
   } catch (error) {
     console.log(`There was an error: ${error}`);

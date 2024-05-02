@@ -4,11 +4,12 @@
 
 require('dotenv').config({ path: '../.env'});
 
+const { queryVehicles } = require('../database/vehicleDbManager');
 
 
 
 const { webScrape } = require('../scraping/jalopyScraper');
-const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
+const { ButtonBuilder, ButtonStyle, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
 const { setupDatabase, insertVehicle } = require('../database/inventoryDb');
 
@@ -37,6 +38,22 @@ const vehicleMakes = [
   'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 
   'Toyota', 'Volkswagen', 'Volvo'
 ];
+
+function createRow(currentPage, maxPages) {
+  return new ActionRowBuilder()
+      .addComponents(
+          new ButtonBuilder()
+              .setCustomId('previous')
+              .setLabel('Previous')
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(currentPage === 0),
+          new ButtonBuilder()
+              .setCustomId('next')
+              .setLabel('Next')
+              .setStyle(ButtonStyle.Primary)
+              .setDisabled(currentPage === maxPages - 1)
+      );
+}
 
 
 
@@ -142,7 +159,58 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [searchEmbed] });
         // Implement the search logic here
       }
-    }
+    } else if (interaction.commandName === 'dbsearch') {
+      console.log('Database search command received.');
+  
+      const location = interaction.options.getString('location');
+      let make = interaction.options.getString('make') || 'Any';
+      let model = interaction.options.getString('model') || 'Any';
+  
+      console.log('🔍 DB Lookup for:');
+      console.log(`   🏞️ Location: ${location}`);
+      console.log(`   🚗 Make: ${make}`);
+      console.log(`   📋 Model: ${model}`);
+  
+      if (location) {  // Check to ensure 'location' is provided
+          make = make.toUpperCase();  // Normalize inputs
+          model = model.toUpperCase();
+          const yardId = convertLocationToYardId(location);  // Convert location to a yard ID
+  
+          try {
+              const vehicles = await queryVehicles(yardId, make, model);  // Query the database
+  
+              if (vehicles.length > 0) {
+                  const resultsEmbed = new EmbedBuilder()
+                      .setColor(0x0099FF) // Sets a blue color for the embed
+                      .setTitle(`Database search results for ${location} ${make} ${model}`)
+                      .setDescription('Here are the vehicles found:')
+                      .setTimestamp();
+  
+                  vehicles.forEach(v => {
+                      const firstSeenDate = new Date(v.first_seen);
+                      const formattedFirstSeen = `${firstSeenDate.getMonth() + 1}/${firstSeenDate.getDate()}`;
+                      const formattedLastUpdated = `${new Date(v.last_updated).getMonth() + 1}/${new Date(v.last_updated).getDate()}`;
+  
+                      resultsEmbed.addFields({
+                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                          value: `Row: ${v.row_number}, First Seen: ${formattedFirstSeen}, Last Updated: ${formattedLastUpdated}`,
+                          inline: false // Set to false for better readability; set to true if you prefer a compact layout
+                      });
+                  });
+  
+                  await interaction.reply({ embeds: [resultsEmbed] });
+              } else {
+                  await interaction.reply('No vehicles found.');
+              }
+          } catch (error) {
+              console.error('Error querying vehicles:', error);
+              await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
+          }
+      } else {
+          await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
+      }
+  }
+  
 
     // Button interaction for 'quit'
     if (interaction.isButton() && interaction.customId === 'quit') {
