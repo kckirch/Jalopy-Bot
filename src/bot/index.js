@@ -186,25 +186,35 @@ client.on('interactionCreate', async (interaction) => {
       }
   
       if (location) {
-
-          const yardId = convertLocationToYardId(location);
-  
-          try {
-              const vehicles = await queryVehicles(yardId, make, model);
-              const itemsPerPage = 20;
-              let currentPage = 0;
-              const totalPages = Math.ceil(vehicles.length / itemsPerPage);
-              const getPage = (page) => {
+        const yardId = convertLocationToYardId(location);
+    
+        try {
+            let vehicles = await queryVehicles(yardId, make, model);
+            // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
+            vehicles.sort((a, b) => {
+                const firstSeenA = new Date(a.first_seen);
+                const firstSeenB = new Date(b.first_seen);
+                if (firstSeenB - firstSeenA !== 0) {
+                    return firstSeenB - firstSeenA;  // Sort by first_seen descending
+                }
+                return a.vehicle_model.localeCompare(b.vehicle_model);  // Alphabetically by model
+            });
+    
+            const itemsPerPage = 20;
+            let currentPage = 0;
+            const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+    
+            const getPage = (page) => {
                 const start = page * itemsPerPage;
                 const end = start + itemsPerPage;
                 const pageItems = vehicles.slice(start, end);
-            
+    
                 const embed = new EmbedBuilder()
                     .setColor(0x0099FF) // Set a visually appealing color
                     .setTitle(`Database search results for ${location} ${make} ${model}`)
                     .setTimestamp()
                     .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
-            
+    
                 // Using fields to separate entries for better readability
                 pageItems.forEach(v => {
                     const firstSeen = new Date(v.first_seen);
@@ -217,50 +227,51 @@ client.on('interactionCreate', async (interaction) => {
                         inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
                     });
                 });
-            
+    
                 return embed;
             };
-            
-  
-              const updateComponents = (currentPage) => new ActionRowBuilder()
-                  .addComponents(
-                      new ButtonBuilder()
-                          .setCustomId('previous')
-                          .setLabel('Previous')
-                          .setStyle(ButtonStyle.Primary)
-                          .setDisabled(currentPage === 0),
-                      new ButtonBuilder()
-                          .setCustomId('next')
-                          .setLabel('Next')
-                          .setStyle(ButtonStyle.Primary)
-                          .setDisabled(currentPage === totalPages - 1)
-                  );
-  
-              const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
-  
-              const filter = i => i.user.id === interaction.user.id;
-              const collector = message.createMessageComponentCollector({ filter, time: 120000 });
-  
-              collector.on('collect', async i => {
-                  if (i.customId === 'previous' && currentPage > 0) {
-                      currentPage--;
-                  } else if (i.customId === 'next' && currentPage < totalPages - 1) {
-                      currentPage++;
-                  }
-  
-                  await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
-              });
-  
-              collector.on('end', () => {
-                  message.edit({ components: [] }); // Remove the buttons after the collector ends
-              });
-          } catch (error) {
-              console.error('Error querying vehicles:', error);
-              await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
-          }
-      } else {
-          await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
-      }
+    
+            // Function to update the components based on the current page
+            const updateComponents = (currentPage) => new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('previous')
+                        .setLabel('Previous')
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(currentPage === 0),
+                    new ButtonBuilder()
+                        .setCustomId('next')
+                        .setLabel('Next')
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(currentPage === totalPages - 1)
+                );
+    
+            const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
+    
+            const filter = i => i.user.id === interaction.user.id;
+            const collector = message.createMessageComponentCollector({ filter, time: 120000 });
+    
+            collector.on('collect', async i => {
+                if (i.customId === 'previous' && currentPage > 0) {
+                    currentPage--;
+                } else if (i.customId === 'next' && currentPage < totalPages - 1) {
+                    currentPage++;
+                }
+    
+                await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
+            });
+    
+            collector.on('end', () => {
+                message.edit({ components: [] }); // Remove the buttons after the collector ends
+            });
+        } catch (error) {
+            console.error('Error querying vehicles:', error);
+            await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
+        }
+    } else {
+        await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
+    }
+    
   }
   
   
