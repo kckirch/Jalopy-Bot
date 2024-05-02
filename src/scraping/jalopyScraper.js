@@ -55,12 +55,18 @@ async function webScrape(yardId, make, model) {
         //     document.getElementById('car-model').dispatchEvent(new Event('change'));
         // `);
 
-        //Handle if searching for all yards
         if (yardId === 'ANY') {
+            // Refetch yard options for each iteration to avoid stale references
+            await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
             let yardOptions = await driver.findElements(By.css('#yard-id option'));
-            for (let yardOption of yardOptions) {
-                let currentYardId = await yardOption.getAttribute('value');
-                if (currentYardId){
+            for (let i = 1; i < yardOptions.length; i++) {  // Start from 1 to skip default/placeholder option
+                // Re-fetch the dropdown and select the yard to handle potential updates
+                await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
+                yardOptions = await driver.findElements(By.css('#yard-id option'));
+                let currentYardId = await yardOptions[i].getAttribute('value');
+                if (currentYardId) {
+                    await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
+                    await driver.executeScript(`document.getElementById('searchinventory').submit();`);
                     await scrapeYardMakeModel(driver, currentYardId, make, model);
                 }
             }
@@ -150,15 +156,23 @@ async function webScrape(yardId, make, model) {
 
 
 async function scrapeYardMakeModel(driver, yardId, make, model) {
+    console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
     await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
     await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
     if (make === 'ANY') {
+        // Refetch makes for each iteration to avoid stale references
+        await driver.wait(until.elementLocated(By.css('#car-make')), 5000);
         let makeOptions = await driver.findElements(By.css('#car-make option'));
-        for (let makeOption of makeOptions) {
-            let currentMake = await makeOption.getAttribute('value');
-            if (currentMake){
+        for (let i = 1; i < makeOptions.length; i++) {  // Start from 1 to skip default/placeholder option
+            // Re-fetch the dropdown and select the make to handle potential updates
+            await driver.wait(until.elementLocated(By.css('#car-make')), 5000);
+            makeOptions = await driver.findElements(By.css('#car-make option'));
+            let currentMake = await makeOptions[i].getAttribute('value');
+            if (currentMake) {
+                await driver.executeScript(`document.getElementById('car-make').value = '${currentMake}';`);
+                await driver.executeScript(`document.getElementById('searchinventory').submit();`);
                 await scrapeMakeModel(driver, yardId, currentMake, model);
             }
         }
@@ -166,6 +180,7 @@ async function scrapeYardMakeModel(driver, yardId, make, model) {
         await scrapeMakeModel(driver, yardId, make, model);
     }
 }
+
 
 async function scrapeMakeModel(driver, yardId, make, model) {
     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);

@@ -59,8 +59,8 @@ client.on('ready', (c) => {
 client.on('interactionCreate', async (interaction) => {
   // Command interaction for 'search'
   if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
-    let location = interaction.options.getString('location');
-    let make = interaction.options.getString('make');
+    let location = interaction.options.getString('location') || 'Any';
+    let make = interaction.options.getString('make') || 'Any';
     let model = interaction.options.getString('model') || 'Any';
 
     if (location && make) {
