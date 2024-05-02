@@ -9,7 +9,7 @@ const { queryVehicles } = require('../database/vehicleDbManager');
 
 
 const { webScrape } = require('../scraping/jalopyScraper');
-const { ButtonBuilder, ButtonStyle, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
+const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
 const { setupDatabase, insertVehicle } = require('../database/inventoryDb');
 
@@ -163,45 +163,97 @@ client.on('interactionCreate', async (interaction) => {
       console.log('Database search command received.');
   
       const location = interaction.options.getString('location');
-      let make = interaction.options.getString('make') || 'Any';
-      let model = interaction.options.getString('model') || 'Any';
+      let make = (interaction.options.getString('make') || 'Any').toUpperCase();
+      let model = (interaction.options.getString('model') || 'Any').toUpperCase();
   
       console.log('🔍 DB Lookup for:');
       console.log(`   🏞️ Location: ${location}`);
       console.log(`   🚗 Make: ${make}`);
       console.log(`   📋 Model: ${model}`);
+
+
+
+      if (make !== 'ANY' && !vehicleMakes.includes(make)) {
+        // If the make is not recognized, inform the user and list available options
+        const makesEmbed = new EmbedBuilder()
+            .setColor(0x0099FF) // Set a visually appealing color
+            .setTitle('Available Vehicle Makes')
+            .setDescription('The make you entered is not recognized. Please choose from the list below.')
+            .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
+
+        await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
+        return; // Stop further execution
+      }
   
-      if (location) {  // Check to ensure 'location' is provided
-          make = make.toUpperCase();  // Normalize inputs
-          model = model.toUpperCase();
-          const yardId = convertLocationToYardId(location);  // Convert location to a yard ID
+      if (location) {
+
+          const yardId = convertLocationToYardId(location);
   
           try {
-              const vehicles = await queryVehicles(yardId, make, model);  // Query the database
+              const vehicles = await queryVehicles(yardId, make, model);
+              const itemsPerPage = 20;
+              let currentPage = 0;
+              const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+              const getPage = (page) => {
+                const start = page * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageItems = vehicles.slice(start, end);
+            
+                const embed = new EmbedBuilder()
+                    .setColor(0x0099FF) // Set a visually appealing color
+                    .setTitle(`Database search results for ${location} ${make} ${model}`)
+                    .setTimestamp()
+                    .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+            
+                // Using fields to separate entries for better readability
+                pageItems.forEach(v => {
+                    const firstSeen = new Date(v.first_seen);
+                    const lastUpdated = new Date(v.last_updated);
+                    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
+                    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+                    embed.addFields({ 
+                        name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                        value: `Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
+                        inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
+                    });
+                });
+            
+                return embed;
+            };
+            
   
-              if (vehicles.length > 0) {
-                  const resultsEmbed = new EmbedBuilder()
-                      .setColor(0x0099FF) // Sets a blue color for the embed
-                      .setTitle(`Database search results for ${location} ${make} ${model}`)
-                      .setDescription('Here are the vehicles found:')
-                      .setTimestamp();
+              const updateComponents = (currentPage) => new ActionRowBuilder()
+                  .addComponents(
+                      new ButtonBuilder()
+                          .setCustomId('previous')
+                          .setLabel('Previous')
+                          .setStyle(ButtonStyle.Primary)
+                          .setDisabled(currentPage === 0),
+                      new ButtonBuilder()
+                          .setCustomId('next')
+                          .setLabel('Next')
+                          .setStyle(ButtonStyle.Primary)
+                          .setDisabled(currentPage === totalPages - 1)
+                  );
   
-                  vehicles.forEach(v => {
-                      const firstSeenDate = new Date(v.first_seen);
-                      const formattedFirstSeen = `${firstSeenDate.getMonth() + 1}/${firstSeenDate.getDate()}`;
-                      const formattedLastUpdated = `${new Date(v.last_updated).getMonth() + 1}/${new Date(v.last_updated).getDate()}`;
+              const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
   
-                      resultsEmbed.addFields({
-                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                          value: `Row: ${v.row_number}, First Seen: ${formattedFirstSeen}, Last Updated: ${formattedLastUpdated}`,
-                          inline: false // Set to false for better readability; set to true if you prefer a compact layout
-                      });
-                  });
+              const filter = i => i.user.id === interaction.user.id;
+              const collector = message.createMessageComponentCollector({ filter, time: 120000 });
   
-                  await interaction.reply({ embeds: [resultsEmbed] });
-              } else {
-                  await interaction.reply('No vehicles found.');
-              }
+              collector.on('collect', async i => {
+                  if (i.customId === 'previous' && currentPage > 0) {
+                      currentPage--;
+                  } else if (i.customId === 'next' && currentPage < totalPages - 1) {
+                      currentPage++;
+                  }
+  
+                  await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
+              });
+  
+              collector.on('end', () => {
+                  message.edit({ components: [] }); // Remove the buttons after the collector ends
+              });
           } catch (error) {
               console.error('Error querying vehicles:', error);
               await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
@@ -210,6 +262,8 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
       }
   }
+  
+  
   
 
     // Button interaction for 'quit'
