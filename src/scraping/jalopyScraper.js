@@ -13,7 +13,7 @@ async function webScrape(yardId, make, model) {
     let options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--disable-gpu');
-    options.addArguments('--headless');
+    // options.addArguments('--headless');
     options.addArguments('excludeSwitches=enable-logging');
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--allow-running-insecure-content');
@@ -33,16 +33,16 @@ async function webScrape(yardId, make, model) {
 
         await driver.get('https://inventory.pickapartjalopyjungle.com/');
 
-        // Setting the Yard ID and Make will always be needed to populate the table
-        // Doing these two first will allow us to submit the form to take advantage of searching for all models easily
+        // // Setting the Yard ID and Make will always be needed to populate the table
+        // // Doing these two first will allow us to submit the form to take advantage of searching for all models easily
 
-        await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
-        // console.log("yard-id is being searched for: " + yardId);
+        // await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
+        // // console.log("yard-id is being searched for: " + yardId);
 
-        await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
-        // console.log("car-make is being searched for: " + make);
+        // await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
+        // // console.log("car-make is being searched for: " + make);
 
-        await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+        // await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
 
         // I think its better to not wait for the table to be displayed here because we will be submitting the form again
@@ -55,76 +55,90 @@ async function webScrape(yardId, make, model) {
         //     document.getElementById('car-model').dispatchEvent(new Event('change'));
         // `);
 
-        let vehicles = [];
-
-        if (model === 'ANY') {
-            await driver.executeScript(`document.getElementById('car-model').value = '';`);            
-            await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
-
-            // Any model for tableDataModel
-            let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
-            for (let row of rows) {
-                let cols = await row.findElements(By.tagName('td'));
-                if (cols.length >= 4) {
-                    insertOrUpdateVehicle(
-                        yardId,
-                        await cols[1].getText(), // make
-                        await cols[2].getText(), // model
-                        parseInt(await cols[0].getText(), 10), // year
-                        parseInt(await cols[3].getText(), 10), // row number
-                        'N/A', // firstSeen
-                        'N/A', // lastSeen
-                        'Available', // status
-                        '' // notes
-                    );
+        //Handle if searching for all yards
+        if (yardId === 'ANY') {
+            let yardOptions = await driver.findElements(By.css('#yard-id option'));
+            for (let yardOption of yardOptions) {
+                let currentYardId = await yardOption.getAttribute('value');
+                if (currentYardId){
+                    await scrapeYardMakeModel(driver, currentYardId, make, model);
                 }
             }
-            
-            
         } else {
-
-
-            await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
-            console.log("car-model is being searched for first time.");
-
-
-            await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
-            //we must sleep because the event change is super slow
-            // will need to investigate how to wait for the event to finish properly instead of it showing us the acura model options
-            await driver.sleep(1000);
-            console.log("event change is being dispatched for car-make.");
-
-            await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
-            console.log("car-model is being searched for second time.");
-
-            await driver.executeScript(`document.getElementById('searchinventory').submit();`);
-            console.log("searchinventory is being submitted.");
-
-            // Wait for the table to be displayed after setting the values
-            await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
-
-
-
-            // Specific model for tableData
-            let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
-            for (let row of rows) {
-                let cols = await row.findElements(By.tagName('td'));
-                if (cols.length >= 4) {
-                    insertOrUpdateVehicle(
-                        yardId,
-                        await cols[1].getText(), // make
-                        await cols[2].getText(), // model
-                        parseInt(await cols[0].getText(), 10), // year
-                        parseInt(await cols[3].getText(), 10), // row number
-                        'N/A', // firstSeen
-                        'N/A', // lastSeen
-                        'Available', // status
-                        '' // notes
-                    );
-                }
-            }
-            console.log("Data for specific model processed and inserted.");
+            await scrapeYardMakeModel(driver, yardId, make, model);
         }
+
+
+
+
+        // if (model === 'ANY') {
+        //     await driver.executeScript(`document.getElementById('car-model').value = '';`);            
+        //     await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
+
+        //     // Any model for tableDataModel
+        //     let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
+        //     for (let row of rows) {
+        //         let cols = await row.findElements(By.tagName('td'));
+        //         if (cols.length >= 4) {
+        //             insertOrUpdateVehicle(
+        //                 yardId,
+        //                 await cols[1].getText(), // make
+        //                 await cols[2].getText(), // model
+        //                 parseInt(await cols[0].getText(), 10), // year
+        //                 parseInt(await cols[3].getText(), 10), // row number
+        //                 'N/A', // firstSeen
+        //                 'N/A', // lastSeen
+        //                 'Active', // status
+        //                 '' // notes
+        //             );
+        //         }
+        //     }
+            
+            
+        // } else {
+
+
+        //     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+        //     console.log("car-model is being searched for first time.");
+
+
+        //     await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
+        //     //we must sleep because the event change is super slow
+        //     // will need to investigate how to wait for the event to finish properly instead of it showing us the acura model options
+        //     await driver.sleep(1000);
+        //     console.log("event change is being dispatched for car-make.");
+
+        //     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+        //     console.log("car-model is being searched for second time.");
+
+        //     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+        //     console.log("searchinventory is being submitted.");
+
+        //     // Wait for the table to be displayed after setting the values
+        //     await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
+
+
+
+        //     // Specific model for tableData
+        //     let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
+        //     for (let row of rows) {
+        //         let cols = await row.findElements(By.tagName('td'));
+        //         if (cols.length >= 4) {
+        //             insertOrUpdateVehicle(
+        //                 yardId,
+        //                 await cols[1].getText(), // make
+        //                 await cols[2].getText(), // model
+        //                 parseInt(await cols[0].getText(), 10), // year
+        //                 parseInt(await cols[3].getText(), 10), // row number
+        //                 'N/A', // firstSeen
+        //                 'N/A', // lastSeen
+        //                 'Available', // status
+        //                 '' // notes
+        //             );
+        //         }
+        //     }
+        //     console.log("Data for specific model processed and inserted.");
+        // }
 
 
     } catch (error) {
@@ -133,5 +147,55 @@ async function webScrape(yardId, make, model) {
         await driver.quit();
     }
 }
+
+
+async function scrapeYardMakeModel(driver, yardId, make, model) {
+    await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
+    await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
+    await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+
+    if (make === 'ANY') {
+        let makeOptions = await driver.findElements(By.css('#car-make option'));
+        for (let makeOption of makeOptions) {
+            let currentMake = await makeOption.getAttribute('value');
+            if (currentMake){
+                await scrapeMakeModel(driver, yardId, currentMake, model);
+            }
+        }
+    } else {
+        await scrapeMakeModel(driver, yardId, make, model);
+    }
+}
+
+async function scrapeMakeModel(driver, yardId, make, model) {
+    await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+    await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
+    await driver.sleep(1000);
+    await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+    await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+
+    await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
+
+    let rows = await driver.findElements(By.css('.table-responsive table tbody tr'));
+    for (let row of rows) {
+        let cols = await row.findElements(By.tagName('td'));
+        if (cols.length >= 4) {
+            insertOrUpdateVehicle(
+                yardId,
+                await cols[1].getText(), // make
+                await cols[2].getText(), // model
+                parseInt(await cols[0].getText(), 10), // year
+                parseInt(await cols[3].getText(), 10), // row number
+                'N/A', // firstSeen
+                'N/A', // lastSeen
+                'Available', // status
+                '' // notes
+            );
+        }
+    }
+}
+
+
+    
 
 module.exports = { webScrape };
