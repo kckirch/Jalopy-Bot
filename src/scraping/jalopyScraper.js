@@ -6,7 +6,7 @@ const chrome = require('selenium-webdriver/chrome');
 
 
 
-const { insertVehicle } = require('../database/inventoryDb');
+const { insertOrUpdateVehicle } = require('../database/inventoryDb');
 
 
 async function webScrape(yardId, make, model) {
@@ -66,7 +66,7 @@ async function webScrape(yardId, make, model) {
             for (let row of rows) {
                 let cols = await row.findElements(By.tagName('td'));
                 if (cols.length >= 4) {
-                    insertVehicle(
+                    insertOrUpdateVehicle(
                         yardId,
                         await cols[1].getText(), // make
                         await cols[2].getText(), // model
@@ -79,7 +79,7 @@ async function webScrape(yardId, make, model) {
                     );
                 }
             }
-            console.log("Table Data Model ANY");
+            
             
         } else {
 
@@ -110,7 +110,7 @@ async function webScrape(yardId, make, model) {
             for (let row of rows) {
                 let cols = await row.findElements(By.tagName('td'));
                 if (cols.length >= 4) {
-                    insertVehicle(
+                    insertOrUpdateVehicle(
                         yardId,
                         await cols[1].getText(), // make
                         await cols[2].getText(), // model
