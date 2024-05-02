@@ -1,6 +1,6 @@
 //register-commands.js
 
-require('dotenv').config();
+require('dotenv').config({ path: '../.env'});
 const { REST, Routes, ApplicationCommandOptionType } = require('discord.js');
 
 
@@ -45,7 +45,14 @@ const commands = [
                     value: 'twinfalls',
                     description: 'Search in Twin Falls',
                     type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                  name: 'All',
+                  value: 'all',
+                  description: 'Search in all locations',
+                  type: ApplicationCommandOptionType.Subcommand,
                 }
+
             ],
                 
             required: true,
