@@ -1,5 +1,3 @@
-// vehicleDbManager.js
-
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
@@ -29,8 +27,9 @@ async function queryVehicles(yardId, make, model) {
     }
 
     if (model !== 'ANY') {
-        conditions.push("vehicle_model = ?");
-        params.push(model);
+        // Using LIKE for fuzzy matching on model
+        conditions.push("vehicle_model LIKE ?");
+        params.push('%' + model + '%');  // This will find any model containing the provided substring
     } else {
         // If model is 'Any', skip model criteria in the query
         console.log("Model set to 'Any', skipping model criteria in query.");
@@ -56,11 +55,6 @@ async function queryVehicles(yardId, make, model) {
         });
     });
 }
-
-
-
-
-
 
 module.exports = {
     queryVehicles
