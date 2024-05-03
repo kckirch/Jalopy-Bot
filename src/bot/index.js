@@ -221,11 +221,21 @@ client.on('interactionCreate', async (interaction) => {
                     const lastUpdated = new Date(v.last_updated);
                     const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
                     const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-                    embed.addFields({ 
-                        name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                        value: `Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
-                        inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
-                    });
+                    //if the yard id is 'ALL' then we need to include the yard name in the embed
+                    if (yardId === 'ALL') {
+                      embed.addFields({
+                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                          value: `Yard: ${v.yard_name}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
+                          inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
+                      });
+                    } else {
+
+                      embed.addFields({ 
+                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                          value: `Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
+                          inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
+                      });
+                    }
                 });
     
                 return embed;
