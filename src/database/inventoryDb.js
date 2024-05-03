@@ -87,7 +87,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'A
                     console.error('Error updating existing vehicle', err.message);
                 } else {
                     const now = new Date();
-                    const formattedDate = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+                    const formattedDate = now.toLocaleDateString("en-US") + ' ' + now.toLocaleTimeString("en-US", {timeZone: "MST", timeZoneName: "short"}, { hour12: false} );
                     console.log(`Updated existing vehicle with DB ID ${row.id}`);
                     console.log(`${row.vehicle_year} ${row.vehicle_make} ${row.vehicle_model} in row ${row.row_number} at yard ${yardName} is still available.`);
                     console.log(`- Status set to 'Active'. Last Updated: ${formattedDate}`);
@@ -109,7 +109,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'A
                     date_added, 
                     last_updated
                 )
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'Active', ?, datetime('now'), datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'))
             `;
         
             db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes], function(err) {
@@ -117,7 +117,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'A
                     console.error('Error inserting new vehicle', err.message);
                 } else {
                     const now = new Date();
-                    const formattedDate = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+                    const formattedDate = now.toLocaleDateString("en-US") + ' ' + now.toLocaleTimeString("en-US", {timeZone: "MST", timeZoneName: "short"}, { hour12: false} );
                     console.log(`Inserted new vehicle: Yard ID = ${yardId}, Yard Name = ${yardName}, Make = ${make}, Model = ${model}, Year = ${year}, Row Number = ${rowNumber}, Status = ${status}, Notes = ${notes}, RowID = ${this.lastID}, Date Added: ${formattedDate}`);
                 }
             });
