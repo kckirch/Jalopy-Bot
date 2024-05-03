@@ -38,6 +38,30 @@ const vehicleMakes = [
   'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 
   'Toyota', 'Volkswagen', 'Volvo'
 ];
+const makeAliases = {
+  'Chevrolet' : ['chevrolet', 'chevy', 'chev'],
+  'Mercedes' : ['mercedes', 'mercedes-benz', 'mercedes benz', 'benz', 'mercedesbenz'],
+  'Volkswagen' : ['volkswagen', 'vw'],
+  'Land Rover' : ['land rover', 'landrover'],
+  'Mini' : ['mini', 'mini cooper'],
+  'BMW' : ['bmw', 'bimmer'],
+};
+
+// Create a reverse lookup map from the alias list
+const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
+  makeAliases[canonical].forEach(alias => {
+      acc[alias.toLowerCase()] = canonical; // Use lower case for case insensitive comparison
+  });
+  return acc;
+}, {});
+
+
+
+
+
+
+
+
 
 function createRow(currentPage, maxPages) {
   return new ActionRowBuilder()
@@ -163,33 +187,38 @@ client.on('interactionCreate', async (interaction) => {
       console.log('Database search command received.');
   
       const location = interaction.options.getString('location');
-      let make = (interaction.options.getString('make') || 'Any').toUpperCase();
+      let userMakeInput = (interaction.options.getString('make') || 'Any').toLowerCase();
       let model = (interaction.options.getString('model') || 'Any').toUpperCase();
   
       console.log('🔍 DB Lookup for:');
       console.log(`   🏞️ Location: ${location}`);
-      console.log(`   🚗 Make: ${make}`);
+      console.log(`   🚗 Make: ${userMakeInput}`);
       console.log(`   📋 Model: ${model}`);
+  
+      if (userMakeInput !== 'any') {
+          let canonicalMake = reverseMakeAliases[userMakeInput] || userMakeInput; // Resolve the make alias to its canonical form
 
-
-
-      if (make !== 'ANY' && !vehicleMakes.some(m => m.toUpperCase() === make)) {
-        // If the make is not recognized, inform the user and list available options
-        const makesEmbed = new EmbedBuilder()
-            .setColor(0x0099FF) // Set a visually appealing color
-            .setTitle('Available Vehicle Makes')
-            .setDescription('The make you entered is not recognized. Please choose from the list below.')
-            .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
-
-        await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
-        return; // Stop further execution
+          console.log(`   🚗 Canonical Make Found: ${canonicalMake}`);
+  
+          if (!vehicleMakes.includes(canonicalMake)) {
+              // If the canonical make is not recognized, inform the user and list available options
+              const makesEmbed = new EmbedBuilder()
+                  .setColor(0x0099FF) // Set a visually appealing color
+                  .setTitle('Available Vehicle Makes')
+                  .setDescription('The make you entered is not recognized. Please choose from the list below.')
+                  .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
+  
+              await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
+              return; // Stop further execution if make is not valid
+          }
+          userMakeInput = canonicalMake; // Use the canonical make for further processing
       }
   
       if (location) {
         const yardId = convertLocationToYardId(location);
     
         try {
-            let vehicles = await queryVehicles(yardId, make, model);
+            let vehicles = await queryVehicles(yardId, userMakeInput, model);
             // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
             vehicles.sort((a, b) => {
                 const firstSeenA = new Date(a.first_seen);
@@ -211,7 +240,7 @@ client.on('interactionCreate', async (interaction) => {
     
                 const embed = new EmbedBuilder()
                     .setColor(0x0099FF) // Set a visually appealing color
-                    .setTitle(`Database search results for ${location} ${make} ${model}`)
+                    .setTitle(`Database search results for ${location} ${userMakeInput} ${model}`)
                     .setTimestamp()
                     .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
     
