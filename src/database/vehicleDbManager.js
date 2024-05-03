@@ -10,20 +10,35 @@ const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE 
 });
 
 async function queryVehicles(yardId, make, model) {
-    let baseQuery = "SELECT * FROM vehicles WHERE yard_id = ?";
-    let params = [yardId];
+    let baseQuery = "SELECT * FROM vehicles";
+    let params = [];
+
+    // Start the WHERE clause only if necessary
+    let conditions = [];
+
+    // Check if a specific yard is requested or all yards
+    if (yardId !== 'ALL') {
+        conditions.push("yard_id = ?");
+        params.push(yardId);
+    }
 
     // Append conditions only if the inputs are not 'Any'
     if (make !== 'ANY') {
-        baseQuery += " AND vehicle_make = ?";
+        conditions.push("vehicle_make = ?");
         params.push(make);
     }
+
     if (model !== 'ANY') {
-        baseQuery += " AND vehicle_model = ?";
+        conditions.push("vehicle_model = ?");
         params.push(model);
     } else {
-        // If model is 'Any', do not try to match against 'ANY' in the database
+        // If model is 'Any', skip model criteria in the query
         console.log("Model set to 'Any', skipping model criteria in query.");
+    }
+
+    // Append conditions to the base query if there are any
+    if (conditions.length > 0) {
+        baseQuery += " WHERE " + conditions.join(" AND ");
     }
 
     console.log("Executing query:", baseQuery); // Log the final query
@@ -41,6 +56,7 @@ async function queryVehicles(yardId, make, model) {
         });
     });
 }
+
 
 
 
