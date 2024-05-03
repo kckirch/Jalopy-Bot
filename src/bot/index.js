@@ -29,14 +29,14 @@ const yardIdMapping = {
 };
 
 const vehicleMakes = [
-  'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 
-  'Chevrolet', 'Chrysler', 'Dodge', 'Ford', 'Geo', 
-  'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Isuzu', 
+  'Acura', 'Alfa Romeo', 'AMC', 'Audi', 'BMW', 'Buick', 'Cadillac', 
+  'Chevrolet', 'Chrysler', 'Datsun', 'Dodge', 'Eagle', 'Fiat', 'Ford', 'Geo', 
+  'GMC', 'Honda', 'Hummer', 'Hyundai', 'Infiniti', 'Isuzu', 
   'Jaguar', 'Jeep', 'Kia', 'Land Rover', 'Lexus', 
-  'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mercury', 'Mitsubishi', 
-  'Nissan', 'Oldsmobile', 'Plymouth', 'Pontiac', 'Porsche', 
-  'Saab', 'Saturn', 'Scion', 'Subaru', 'Suzuki', 
-  'Toyota', 'Volkswagen', 'Volvo'
+  'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mercury', 'MG', 'Mini', 'Mitsubishi', 'Nash',
+  'Nissan', 'Oldsmobile', 'Packard', 'Plymouth', 'Pontiac', 'Porsche', 'Ram',
+  'Saab', 'Saturn', 'Scion', 'Smart', 'Subaru', 'Suzuki', 
+  'Toyota', 'Triumph', 'Volkswagen', 'Volvo'
 ];
 const makeAliases = {
   'Chevrolet' : ['chevrolet', 'chevy', 'chev'],
