@@ -115,11 +115,10 @@ async function scrapeMakeModel(driver, yardId, make, model) {
                 await cols[2].getText(), // model
                 parseInt(await cols[0].getText(), 10), // year
                 parseInt(await cols[3].getText(), 10), // row number
-                'N/A', // firstSeen
-                'N/A', // lastSeen
-                'Available', // status
+                '', // status
                 '' // notes
             );
+            
         }
     }
 }

@@ -68,11 +68,10 @@ function runDbQueryWithRetry(sql, params, callback, retries = 5) {
     });
 }
 
-// Use this function to handle insert or update
-function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'Active', notes) {
+function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes) {
     const yardName = getYardNameById(yardId);
     const findSQL = `
-        SELECT id, vehicle_make, vehicle_model, vehicle_year, row_number FROM vehicles
+        SELECT id FROM vehicles
         WHERE yard_id = ? AND vehicle_make = ? AND vehicle_model = ? AND vehicle_year = ? AND row_number = ?
     `;
     db.get(findSQL, [yardId, make, model, year, rowNumber], function(err, row) {
@@ -81,19 +80,24 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'A
             return;
         }
         if (row) {
-            const updateSQL = `UPDATE vehicles SET vehicle_status = ?, last_updated = datetime('now') WHERE id = ?`;
-            db.run(updateSQL, [status, row.id], function(err) {
+            // Vehicle exists, use passed status or default to 'Active' if no status provided
+            const finalStatus = status || 'Active';
+            const updateSQL = `
+                UPDATE vehicles 
+                SET vehicle_status = ?, 
+                    last_seen = datetime('now'), 
+                    last_updated = datetime('now') 
+                WHERE id = ?;
+            `;
+            db.run(updateSQL, [finalStatus, row.id], function(err) {
                 if (err) {
                     console.error('Error updating existing vehicle', err.message);
                 } else {
-                    const now = new Date();
-                    const formattedDate = now.toLocaleDateString("en-US") + ' ' + now.toLocaleTimeString("en-US", {timeZone: "MST", timeZoneName: "short"}, { hour12: false} );
-                    console.log(`Updated existing vehicle with DB ID ${row.id}`);
-                    console.log(`${row.vehicle_year} ${row.vehicle_make} ${row.vehicle_model} in row ${row.row_number} at yard ${yardName} is still available.`);
-                    console.log(`- Status set to 'Active'. Last Updated: ${formattedDate}`);
+                    console.log(`Updated existing vehicle with ID ${row.id} to status ${finalStatus}`);
                 }
             });
         } else {
+            // New vehicle, so we insert with status 'NEW'
             const insertSQL = `
                 INSERT INTO vehicles (
                     yard_id, 
@@ -111,19 +115,19 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = 'A
                 )
                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'))
             `;
-        
             db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes], function(err) {
                 if (err) {
                     console.error('Error inserting new vehicle', err.message);
                 } else {
-                    const now = new Date();
-                    const formattedDate = now.toLocaleDateString("en-US") + ' ' + now.toLocaleTimeString("en-US", {timeZone: "MST", timeZoneName: "short"}, { hour12: false} );
-                    console.log(`Inserted new vehicle: Yard ID = ${yardId}, Yard Name = ${yardName}, Make = ${make}, Model = ${model}, Year = ${year}, Row Number = ${rowNumber}, Status = ${status}, Notes = ${notes}, RowID = ${this.lastID}, Date Added: ${formattedDate}`);
+                    console.log(`Inserted new vehicle with status 'NEW'`);
                 }
             });
         }
     });
 }
+
+
+
 
 
 
