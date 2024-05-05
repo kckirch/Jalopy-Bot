@@ -48,6 +48,10 @@ const dbSearchCommand = new SlashCommandBuilder()
   .addStringOption(option => 
     option.setName('model')
     .setDescription('The model of the vehicle')
+    .setRequired(false))
+  .addStringOption(option =>
+    option.setName('year')
+    .setDescription('The year(s) of the vehicle (comma-separated list or range)')
     .setRequired(false));
 
 const commands = [

@@ -37,6 +37,28 @@ const modelAliases = {
     
 };
 
+function parseYearInput(yearInput) {
+    const yearSegments = yearInput.split(',');
+    let yearConditions = [];
+    let yearParams = [];
+
+    for (const segment of yearSegments) {
+        if (segment.trim().includes('-')) {
+            const range = segment.trim().split('-').map(Number);
+            yearConditions.push("vehicle_year BETWEEN ? AND ?");
+            yearParams.push(range[0], range[1]);
+        } else {
+            yearConditions.push("vehicle_year = ?");
+            yearParams.push(parseInt(segment.trim(), 10));
+        }
+    }
+
+    return { conditions: yearConditions.join(' OR '), params: yearParams };
+}
+
+
+
+
 // Function to get all possible model variations with fuzzy matching
 function getModelVariations(model) {
     const aliases = modelAliases[model.toUpperCase()] || [model];
@@ -49,37 +71,36 @@ function getMakeVariations(make) {
     return aliases.map(alias => '%' + alias.replace(/\s+/g, '%') + '%'); // Adding '%' for fuzzy matching and accounting for spaces
 }
 
-async function queryVehicles(yardId, make, model) {
+async function queryVehicles(yardId, make, model, yearInput) {
     let baseQuery = "SELECT * FROM vehicles";
     let params = [];
-
-    // Start the WHERE clause only if necessary
     let conditions = [];
 
-    // Check if a specific yard is requested or all yards
     if (yardId !== 'ALL') {
         conditions.push("yard_id = ?");
         params.push(yardId);
     }
 
-    // Append conditions only if the inputs are not 'Any'
     if (make !== 'ANY') {
         const makes = getMakeVariations(make);
-        const makeConditions = makes.map(() => "vehicle_make LIKE ?").join(" OR ");
-        conditions.push(`(${makeConditions})`);
+        conditions.push(`(${makes.map(() => "vehicle_make LIKE ?").join(" OR ")})`);
         params.push(...makes);
     }
 
     if (model !== 'ANY') {
         const models = getModelVariations(model);
-        const modelConditions = models.map(() => "vehicle_model LIKE ?").join(" OR ");
-        conditions.push(`(${modelConditions})`);
+        conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
         params.push(...models);
     } else {
         console.log("Model set to 'Any', skipping model criteria in query.");
     }
 
-    // Append conditions to the base query if there are any
+    if (yearInput !== 'ANY') {
+        const yearData = parseYearInput(yearInput);
+        conditions.push(`(${yearData.conditions})`);
+        params.push(...yearData.params);
+    }
+
     if (conditions.length > 0) {
         baseQuery += " WHERE " + conditions.join(" AND ");
     }
