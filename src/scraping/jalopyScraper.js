@@ -36,7 +36,7 @@ async function webScrape(yardId, make, model) {
     
 
         //Handle if searching for all yards
-        if (yardId === 'ANY') {
+        if (yardId === 'ALL') {
             // Refetch yard options for each iteration to avoid stale references
             await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
             let yardOptions = await driver.findElements(By.css('#yard-id option'));
