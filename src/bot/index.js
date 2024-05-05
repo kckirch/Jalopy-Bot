@@ -189,6 +189,7 @@ client.on('interactionCreate', async (interaction) => {
       const location = interaction.options.getString('location');
       let userMakeInput = (interaction.options.getString('make') || 'Any').toLowerCase();
       let model = (interaction.options.getString('model') || 'Any').toUpperCase();
+      let yearInput = (interaction.options.getString('year') || 'Any');
   
       console.log('🔍 DB Lookup for:');
       console.log(`   🏞️ Location: ${location}`);
@@ -212,13 +213,15 @@ client.on('interactionCreate', async (interaction) => {
               return; // Stop further execution if make is not valid
           }
           userMakeInput = canonicalMake; // Use the canonical make for further processing
+      } else {
+          userMakeInput = 'ANY'; // Set to 'ANY' for the query
       }
   
       if (location) {
         const yardId = convertLocationToYardId(location);
     
         try {
-            let vehicles = await queryVehicles(yardId, userMakeInput, model);
+            let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput);
             // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
             vehicles.sort((a, b) => {
                 const firstSeenA = new Date(a.first_seen);
