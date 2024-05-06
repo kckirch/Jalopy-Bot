@@ -1,4 +1,22 @@
-//index.js
+/**
+ * discordBotMain.js
+ * 
+ * Main entry point for a Discord bot that manages interactions for vehicle inventory searches and updates.
+ * This bot handles commands from Discord users to initiate searches based on yard, make, and model criteria,
+ * scraping vehicle data from the Jalopy Jungle website and querying from a local database.
+ * 
+ * Key Features:
+ * - Set up the database and initialize connection.
+ * - Handle 'search' and 'dbsearch' commands to fetch vehicle data either by scraping online or querying the database.
+ * - Utilizes Discord.js for bot interactions, creating interactive messages with buttons and handling user input.
+ * 
+ * Dependencies:
+ * - dotenv for environment variable management.
+ * - Discord.js for handling interactions with the Discord API.
+ * - vehicleQueryManager and vehicleDbInventoryManager for database operations.
+ * - jalopyJungleScraper for web scraping functionality.
+ */
+
 
 
 
