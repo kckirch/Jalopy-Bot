@@ -1,4 +1,15 @@
-// vehicleDbManager.js
+/**
+ * vehicleDbInventoryManager.js
+ * 
+ * Handles database operations related to vehicle inventory for a junkyard system, including initialization, insertion, and updating of vehicle records.
+ * Functions included:
+ * - `setupDatabase()`: Initializes and creates the vehicle table if it doesn't exist, preparing the database for use.
+ * - `insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status, notes)`: Inserts a new vehicle record or updates an existing one based on provided parameters.
+ * - `getYardNameById(yardId)`: Utility function to convert yard ID to a human-readable yard name.
+ * 
+ * This module establishes a connection to the `vehicleInventory.db` SQLite database and handles potential connection errors or SQL errors during table creation and data manipulation.
+ */
+
 
 const sqlite3 = require('sqlite3').verbose();
 
@@ -55,18 +66,7 @@ function setupDatabase() {
     });
 }
 
-function runDbQueryWithRetry(sql, params, callback, retries = 5) {
-    db.run(sql, params, function(err) {
-        if (err && err.code === 'SQLITE_BUSY' && retries > 0) {
-            console.log('SQLITE_BUSY encountered, retrying...');
-            setTimeout(() => {
-                runDbQueryWithRetry(sql, params, callback, retries - 1);
-            }, 100); // Retry after 100 ms
-        } else {
-            callback(err, this);
-        }
-    });
-}
+
 
 function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes) {
     const yardName = getYardNameById(yardId);

@@ -1,3 +1,17 @@
+/**
+ * vehicleQueryManager.js
+ * 
+ * Manages database interactions for querying vehicle information from the `vehicleInventory.db` database.
+ * Utilizes fuzzy matching to accommodate variations in vehicle makes and models, enhancing the flexibility and user-friendliness of search operations.
+ * Functions included:
+ * - `queryVehicles(yardId, make, model, yearInput)`: Queries the database for vehicles based on yard ID, make, model, and year. Supports 'ANY' as a wildcard.
+ * - `getModelVariations(model)`: Returns possible model variations for fuzzy matching in SQL queries.
+ * - `getMakeVariations(make)`: Returns possible make variations for fuzzy matching in SQL queries.
+ * - `parseYearInput(yearInput)`: Parses and formats year input for SQL queries, handling ranges and specific years.
+ * 
+ * This module also establishes a SQLite database connection and logs connection status or errors. It defines alias mappings for vehicle makes and models to support the fuzzy matching logic.
+ */
+
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
