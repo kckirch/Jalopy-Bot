@@ -4,14 +4,14 @@
 
 require('dotenv').config({ path: '../.env'});
 
-const { queryVehicles } = require('../database/vehicleDbManager');
+const { queryVehicles } = require('../database/vehicleQueryManager');
 
 
 
-const { webScrape } = require('../scraping/jalopyScraper');
+const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
-const { setupDatabase, insertVehicle } = require('../database/inventoryDb');
+const { setupDatabase, insertVehicle } = require('../database/vehicleDbInventoryManager');
 
 // Initialize database
 setupDatabase().then(() => {

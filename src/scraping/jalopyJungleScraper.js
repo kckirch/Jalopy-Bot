@@ -1,4 +1,16 @@
-//jalopyScraper.js
+/**
+ * jalopyJungleScraper.js
+ * 
+ * Handles automated web scraping of vehicle inventory from the Pick-a-Part Jalopy Jungle website.
+ * Uses Selenium WebDriver to interact with the website, navigating through yard and vehicle options to gather and update vehicle details.
+ * Functions included:
+ * - `webScrape(yardId, make, model)`: Main function to initiate scraping based on yard, make, and model criteria.
+ * - `scrapeYardMakeModel(driver, yardId, make, model)`: Scrapes vehicle details for a specific yard, make, and model combination.
+ * - `scrapeMakeModel(driver, yardId, make, model)`: Handles detailed scraping for specific vehicle makes and models within a yard.
+ * 
+ * This module leverages Selenium for browser automation to fetch and submit forms dynamically, handle navigation, and extract vehicle data for subsequent database updates using `insertOrUpdateVehicle` from the vehicleDbInventoryManager module.
+ */
+
 
 const { Builder, By, Key, until, Capabilities } = require('selenium-webdriver');
 const { Browser } = require('selenium-webdriver');
@@ -6,7 +18,7 @@ const chrome = require('selenium-webdriver/chrome');
 
 
 
-const { insertOrUpdateVehicle } = require('../database/inventoryDb');
+const { insertOrUpdateVehicle } = require('../database/vehicleDbInventoryManager');
 
 
 async function webScrape(yardId, make, model) {
