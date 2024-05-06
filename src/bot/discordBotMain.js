@@ -81,21 +81,7 @@ const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
 
 
 
-function createRow(currentPage, maxPages) {
-  return new ActionRowBuilder()
-      .addComponents(
-          new ButtonBuilder()
-              .setCustomId('previous')
-              .setLabel('Previous')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(currentPage === 0),
-          new ButtonBuilder()
-              .setCustomId('next')
-              .setLabel('Next')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(currentPage === maxPages - 1)
-      );
-}
+
 
 
 
