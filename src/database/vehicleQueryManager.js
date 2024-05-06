@@ -52,6 +52,12 @@ const modelAliases = {
 };
 
 function parseYearInput(yearInput) {
+    // If the yearInput is not provided or is an empty string, return no conditions or parameters
+    if (!yearInput || yearInput.trim() === '') {
+        console.log("No year input provided or input is empty.");
+        return { conditions: '', params: [] };
+    }
+
     const yearSegments = yearInput.split(',');
     let yearConditions = [];
     let yearParams = [];
@@ -59,16 +65,29 @@ function parseYearInput(yearInput) {
     for (const segment of yearSegments) {
         if (segment.trim().includes('-')) {
             const range = segment.trim().split('-').map(Number);
-            yearConditions.push("vehicle_year BETWEEN ? AND ?");
-            yearParams.push(range[0], range[1]);
+            // Check if the range numbers are valid
+            if (!isNaN(range[0]) && !isNaN(range[1])) {
+                yearConditions.push("vehicle_year BETWEEN ? AND ?");
+                yearParams.push(range[0], range[1]);
+            }
         } else {
-            yearConditions.push("vehicle_year = ?");
-            yearParams.push(parseInt(segment.trim(), 10));
+            const year = parseInt(segment.trim(), 10);
+            if (!isNaN(year)) { // Ensure the year is a valid number before adding
+                yearConditions.push("vehicle_year = ?");
+                yearParams.push(year);
+            }
         }
+    }
+
+    // If no valid conditions were added, return no conditions or parameters
+    if (yearConditions.length === 0) {
+        console.log("No valid year conditions found.");
+        return { conditions: '', params: [] };
     }
 
     return { conditions: yearConditions.join(' OR '), params: yearParams };
 }
+
 
 
 
@@ -111,8 +130,10 @@ async function queryVehicles(yardId, make, model, yearInput) {
 
     if (yearInput !== 'ANY') {
         const yearData = parseYearInput(yearInput);
-        conditions.push(`(${yearData.conditions})`);
-        params.push(...yearData.params);
+        if (yearData.conditions) {
+            conditions.push(`(${yearData.conditions})`);
+            params.push(...yearData.params);
+        }
     }
 
     if (conditions.length > 0) {
