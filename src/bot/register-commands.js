@@ -39,6 +39,7 @@ const dbSearchCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
       { name: 'All', value: 'all' }
     ))
   .addStringOption(option => 

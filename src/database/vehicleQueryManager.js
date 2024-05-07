@@ -105,11 +105,19 @@ function getMakeVariations(make) {
 }
 
 async function queryVehicles(yardId, make, model, yearInput) {
-    let baseQuery = "SELECT * FROM vehicles";
+    // Determine if we need to include yard details in the results
+    let includeYardDetails = Array.isArray(yardId) || yardId === 'ALL';
+
+    // Adjust the SELECT clause based on whether yard details are needed
+    let selectClause = includeYardDetails ? "SELECT *, yard_name FROM vehicles" : "SELECT * FROM vehicles";
+    let baseQuery = selectClause;
     let params = [];
     let conditions = [];
 
-    if (yardId !== 'ALL') {
+    if (Array.isArray(yardId) && yardId.length > 0) {
+        conditions.push(`yard_id IN (${yardId.map(() => '?').join(', ')})`);
+        params.push(...yardId);
+    } else if (yardId !== 'ALL') {
         conditions.push("yard_id = ?");
         params.push(yardId);
     }
@@ -125,7 +133,7 @@ async function queryVehicles(yardId, make, model, yearInput) {
         conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
         params.push(...models);
     } else {
-        console.log("Model set to 'Any', skipping model criteria in query.");
+        console.log("\nModel set to 'Any', skipping model criteria in query.");
     }
 
     if (yearInput !== 'ANY') {
@@ -140,8 +148,8 @@ async function queryVehicles(yardId, make, model, yearInput) {
         baseQuery += " WHERE " + conditions.join(" AND ");
     }
 
-    console.log("Executing query:", baseQuery); // Log the final query
-    console.log("With parameters:", params); // Log the parameters used in the query
+    console.log("Executing query:", baseQuery);
+    console.log("With parameters:", params);
 
     return new Promise((resolve, reject) => {
         db.all(baseQuery, params, (err, rows) => {
@@ -149,12 +157,17 @@ async function queryVehicles(yardId, make, model, yearInput) {
                 console.error('Failed to query vehicles:', err);
                 reject(err);
             } else {
-                console.log("Rows found:", rows.length); // Log the number of rows found
-                resolve(rows);
+                console.log("Rows found:", rows.length);
+                if (includeYardDetails) {
+                    resolve(rows.map(row => ({ ...row, yard_display: `Yard: ${row.yard_name}` })));
+                } else {
+                    resolve(rows);
+                }
             }
         });
     });
 }
+
 
 module.exports = {
     queryVehicles
