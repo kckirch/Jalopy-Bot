@@ -46,6 +46,9 @@ const yardIdMapping = {
   'TWINFALLS': 1099,
 };
 
+const treasureValleyYards = [1020, 1119, 1021, 1022]; // Boise, Garden City, Caldwell, Nampa
+
+
 const vehicleMakes = [
   'Acura', 'Alfa Romeo', 'AMC', 'Audi', 'BMW', 'Buick', 'Cadillac', 
   'Chevrolet', 'Chrysler', 'Datsun', 'Dodge', 'Eagle', 'Fiat', 'Ford', 'Geo', 
@@ -76,15 +79,6 @@ const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
 
 
 
-
-
-
-
-
-
-
-
-
 const client = new Client({
   intents: [
     IntentsBitField.Flags.Guilds,
@@ -102,6 +96,15 @@ client.on('ready', (c) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+
+  const commandName = interaction.commandName;
+  const user = interaction.user.tag; // Discord tag of the user who issued the command
+  const channelId = interaction.channelId; // Channel ID where the command was issued
+  const commandText = interaction.toString(); // This will attempt to serialize the entire interaction command to a string
+
+  console.log(`\n\nCommand received: ${commandName} from ${user} in channel ${channelId}`);
+  console.log(`Full command text: ${commandText}\n\n`);
+        
   // Command interaction for 'search'
   if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
     let location = interaction.options.getString('location');
@@ -203,7 +206,7 @@ client.on('interactionCreate', async (interaction) => {
       if (userMakeInput !== 'any') {
           let canonicalMake = reverseMakeAliases[userMakeInput] || userMakeInput; // Resolve the make alias to its canonical form
 
-          console.log(`   🚗 Canonical Make Found: ${canonicalMake}`);
+          console.log(`   🚗 Canonical Make Found: ${canonicalMake}\n\n`);
   
           if (!vehicleMakes.includes(canonicalMake)) {
               // If the canonical make is not recognized, inform the user and list available options
@@ -258,12 +261,13 @@ client.on('interactionCreate', async (interaction) => {
                     const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
                     const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
                     //if the yard id is 'ALL' then we need to include the yard name in the embed
-                    if (yardId === 'ALL') {
+                    if (yardId === 'ALL' || Array.isArray(yardId)) {
                       embed.addFields({
                           name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
                           value: `Yard: ${v.yard_name}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
                           inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
                       });
+                      
                     } else {
 
                       embed.addFields({ 
@@ -335,11 +339,14 @@ client.on('interactionCreate', async (interaction) => {
   
   function convertLocationToYardId(location) {
     if (location.toUpperCase() === 'ALL') {
-      return 'ALL';
+        return 'ALL';
+    } else if (location.toUpperCase() === 'TREASUREVALLEYYARDS') {
+        return treasureValleyYards;  // Return an array of yard IDs
     }
     const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
     return yardIdMapping[normalizedLocation] || 'ALL';
-  }
+}
+
 
 
 
