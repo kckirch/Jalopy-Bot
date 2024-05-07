@@ -220,7 +220,9 @@ client.on('interactionCreate', async (interaction) => {
       if (userMakeInput !== 'any') {
           let canonicalMake = reverseMakeAliases[userMakeInput] || userMakeInput; // Resolve the make alias to its canonical form
 
-          console.log(`   🚗 Canonical Make Found: ${canonicalMake}\n\n`);
+          if (vehicleMakes.includes(canonicalMake)) {
+            console.log(`   🚗 Canonical Make Found: ${canonicalMake}\n\n`);
+          }
   
           if (!vehicleMakes.includes(canonicalMake)) {
               // If the canonical make is not recognized, inform the user and list available options
@@ -231,7 +233,9 @@ client.on('interactionCreate', async (interaction) => {
                   .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
   
               await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
+              console.log(`no valid make found, search ended\n\n`);
               return; // Stop further execution if make is not valid
+              
           }
           userMakeInput = canonicalMake; // Use the canonical make for further processing
       } else {
