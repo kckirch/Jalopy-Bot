@@ -103,7 +103,7 @@ client.on('interactionCreate', async (interaction) => {
   // Check if the interaction is a command
   if (interaction.isCommand()) {
       const commandName = interaction.commandName;
-      console.log(`Command received: ${commandName} from ${user} in channel ${channelId}`);
+      console.log(`\n\n\nCommand received: ${commandName} from ${user} in channel ${channelId}`);
       
       const options = interaction.options.data.map(opt => `${opt.name}: ${opt.value}`).join(', ');
       console.log(`Options: ${options}`);
