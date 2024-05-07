@@ -97,13 +97,27 @@ client.on('ready', (c) => {
 
 client.on('interactionCreate', async (interaction) => {
 
-  const commandName = interaction.commandName;
-  const user = interaction.user.tag; // Discord tag of the user who issued the command
-  const channelId = interaction.channelId; // Channel ID where the command was issued
-  const commandText = interaction.toString(); // This will attempt to serialize the entire interaction command to a string
+  const user = interaction.user.tag;  // Discord tag of the user who initiated the interaction
+  const channelId = interaction.channelId;  // Channel ID where the interaction occurred
 
-  console.log(`\n\nCommand received: ${commandName} from ${user} in channel ${channelId}`);
-  console.log(`Full command text: ${commandText}\n\n`);
+  // Check if the interaction is a command
+  if (interaction.isCommand()) {
+      const commandName = interaction.commandName;
+      console.log(`Command received: ${commandName} from ${user} in channel ${channelId}`);
+      
+      const options = interaction.options.data.map(opt => `${opt.name}: ${opt.value}`).join(', ');
+      console.log(`Options: ${options}`);
+  } 
+  // Check if the interaction is a button click
+  else if (interaction.isButton()) {
+      const buttonId = interaction.customId;
+      console.log(`Button clicked: ${buttonId} by ${user} in channel ${channelId}`);
+  } 
+  // Handle other types of interactions similarly
+  else {
+      console.log(`Interaction received from ${user} in channel ${channelId}`);
+      console.log(`Interaction details: ${JSON.stringify(interaction, null, 2)}`);
+  }
         
   // Command interaction for 'search'
   if (interaction.isChatInputCommand() && interaction.commandName === 'scrape') {
