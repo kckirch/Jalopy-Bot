@@ -2,9 +2,9 @@ require('dotenv').config({ path: '../.env'});
 const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType } = require('discord.js');
 
 // Create command builders
-const searchCommand = new SlashCommandBuilder()
-  .setName('search')
-  .setDescription('Search for vehicles!')
+const scrapeCommand = new SlashCommandBuilder()
+  .setName('scrape')
+  .setDescription('Scrape the website for DB data!')
   .addStringOption(option => 
     option.setName('location')
     .setDescription('The location to search in')
@@ -26,8 +26,8 @@ const searchCommand = new SlashCommandBuilder()
     .setDescription('The model of the vehicle')
     .setRequired(false));
 
-const dbSearchCommand = new SlashCommandBuilder()
-  .setName('dbsearch')
+const searchCommand = new SlashCommandBuilder()
+  .setName('search')
   .setDescription('Search for vehicles in the database')
   .addStringOption(option => 
     option.setName('location')
@@ -56,8 +56,8 @@ const dbSearchCommand = new SlashCommandBuilder()
     .setRequired(false));
 
 const commands = [
-  searchCommand.toJSON(),
-  dbSearchCommand.toJSON()
+  scrapeCommand.toJSON(),
+  searchCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

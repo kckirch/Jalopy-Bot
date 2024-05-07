@@ -7,7 +7,7 @@
  * 
  * Key Features:
  * - Set up the database and initialize connection.
- * - Handle 'search' and 'dbsearch' commands to fetch vehicle data either by scraping online or querying the database.
+ * - Handle 'scrape' and 'search' commands to fetch vehicle data either by scraping online or querying the database.
  * - Utilizes Discord.js for bot interactions, creating interactive messages with buttons and handling user input.
  * 
  * Dependencies:
@@ -106,7 +106,7 @@ client.on('interactionCreate', async (interaction) => {
   console.log(`Full command text: ${commandText}\n\n`);
         
   // Command interaction for 'search'
-  if (interaction.isChatInputCommand() && interaction.commandName === 'search') {
+  if (interaction.isChatInputCommand() && interaction.commandName === 'scrape') {
     let location = interaction.options.getString('location');
     let make = interaction.options.getString('make') || 'Any';
     let model = interaction.options.getString('model') || 'Any';
@@ -140,7 +140,7 @@ client.on('interactionCreate', async (interaction) => {
             // Create an embed similar to the 'Search Parameters' embed
             const resultEmbed = new EmbedBuilder()
               .setTitle('Search Parameters')
-              .setDescription('Here are your search parameters:')
+              .setDescription('Here are your scrape search parameters:')
               .addFields(
                 { name: 'Location', value: location },
                 { name: 'Make', value: m.content }, // Use the collected make
@@ -190,7 +190,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [searchEmbed] });
         // Implement the search logic here
       }
-    } else if (interaction.commandName === 'dbsearch') {
+    } else if (interaction.commandName === 'search') {
       console.log('Database search command received.');
   
       const location = interaction.options.getString('location');
