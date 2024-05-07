@@ -127,7 +127,7 @@ async function queryVehicles(yardId, make, model, yearInput) {
     let includeYardDetails = Array.isArray(yardIds) || yardIds === 'ALL';
 
     // Adjust the SELECT clause based on whether yard details are needed
-    let baseQuery = "SELECT * FROM vehicles";
+    let baseQuery = "SELECT * FROM vehicles WHERE vehicle_status != 'Inactive'";
     let params = [];
     let conditions = [];
 
@@ -162,7 +162,7 @@ async function queryVehicles(yardId, make, model, yearInput) {
     }
 
     if (conditions.length > 0) {
-        baseQuery += " WHERE " + conditions.join(" AND ");
+        baseQuery += " AND " + conditions.join(" AND ");
     }
 
     console.log("Executing query:", baseQuery);

@@ -93,7 +93,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
 
     const yardName = getYardNameById(yardId);
     const findSQL = `
-        SELECT id FROM vehicles
+        SELECT id, session_id, strftime('%Y%m%d', first_seen) AS first_seen_date FROM vehicles
         WHERE yard_id = ? AND vehicle_make = ? AND vehicle_model = ? AND vehicle_year = ? AND row_number = ?
     `;
     db.get(findSQL, [yardId, make, model, year, rowNumber], function(err, row) {
@@ -102,8 +102,9 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
             return;
         }
         if (row) {
-            // Vehicle exists, use passed status or default to 'Active' if no status provided
-            const finalStatus = status || 'Active';
+            // Vehicle exists, determine the status
+            let finalStatus = (row.first_seen_date === sessionID) ? 'NEW' : 'ACTIVE';
+
             const updateSQL = `
                 UPDATE vehicles 
                 SET vehicle_status = ?, 
@@ -112,11 +113,11 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
                     session_id = ?
                 WHERE id = ?;
             `;
-            db.run(updateSQL, [status || 'Active', sessionID, row.id], function(err) {
+            db.run(updateSQL, [finalStatus, sessionID, row.id], function(err) {
                 if (err) {
                     console.error('Error updating existing vehicle:', err.message);
                 } else {
-                    console.log(`Updated existing vehicle with ID ${row.id} to status ${status || 'Active'} and session ID ${sessionID}`);
+                    console.log(`Updated existing vehicle with ID ${row.id} to status ${finalStatus} and session ID ${sessionID}`);
                 }
             });
         } else {
@@ -143,7 +144,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
                 if (err) {
                     console.error('Error inserting new vehicle', err.message);
                 } else {
-                    console.log(`Inserted new vehicle with status 'NEW'`);
+                    console.log(`🆕Inserted new vehicle with status 'NEW' and session ID ${sessionID}🆕`);
                 }
             });
         }
