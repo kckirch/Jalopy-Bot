@@ -88,6 +88,23 @@ function parseYearInput(yearInput) {
     return { conditions: yearConditions.join(' OR '), params: yearParams };
 }
 
+function parseYardIds(input) {
+    if (Array.isArray(input)) {
+        // If input is already an array, return it directly (assuming it's an array of valid yard IDs)
+        return input;
+    } else if (typeof input === 'string') {
+        if (input.trim().toUpperCase() === 'ALL') {
+            return 'ALL';
+        }
+        const ids = input.split(',').map(id => id.trim()).filter(id => !isNaN(parseInt(id)));
+        return ids.length ? ids : 'ALL'; // Default to 'ALL' if no valid IDs are parsed
+    } else {
+        // Handle unexpected input type
+        console.error('Unexpected yardId input type:', typeof input);
+        return 'ALL'; // Default to safe value
+    }
+}
+
 
 
 
@@ -105,21 +122,21 @@ function getMakeVariations(make) {
 }
 
 async function queryVehicles(yardId, make, model, yearInput) {
+    const yardIds = parseYardIds(yardId);
     // Determine if we need to include yard details in the results
-    let includeYardDetails = Array.isArray(yardId) || yardId === 'ALL';
+    let includeYardDetails = Array.isArray(yardIds) || yardIds === 'ALL';
 
     // Adjust the SELECT clause based on whether yard details are needed
-    let selectClause = includeYardDetails ? "SELECT *, yard_name FROM vehicles" : "SELECT * FROM vehicles";
-    let baseQuery = selectClause;
+    let baseQuery = "SELECT * FROM vehicles";
     let params = [];
     let conditions = [];
 
-    if (Array.isArray(yardId) && yardId.length > 0) {
-        conditions.push(`yard_id IN (${yardId.map(() => '?').join(', ')})`);
-        params.push(...yardId);
-    } else if (yardId !== 'ALL') {
+    if (Array.isArray(yardIds) && yardIds.length > 0) {
+        conditions.push(`yard_id IN (${yardIds.map(() => '?').join(', ')})`);
+        params.push(...yardIds);
+    } else if (yardIds !== 'ALL') {
         conditions.push("yard_id = ?");
-        params.push(yardId);
+        params.push(yardIds);
     }
 
     if (make !== 'ANY') {
