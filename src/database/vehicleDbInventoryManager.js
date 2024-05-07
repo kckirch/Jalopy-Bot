@@ -25,6 +25,25 @@ function getYardNameById(yardId) {
 }
 
 
+
+function markInactiveVehicles(sessionID) {
+    const sql = `
+        UPDATE vehicles
+        SET vehicle_status = 'Inactive'
+        WHERE session_id != ?;
+    `;
+    db.run(sql, [sessionID], function(err) {
+        if (err) {
+            console.error('Error marking vehicles as inactive:', err);
+        } else {
+            console.log(`Vehicles not seen on ${sessionID} have been marked as inactive.`);
+        }
+    });
+}
+
+
+
+
 // Initialize the database connection to a file named vehicleInventory.db
 const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
@@ -51,7 +70,8 @@ function setupDatabase() {
                 vehicle_status TEXT,
                 date_added TEXT,
                 last_updated TEXT,
-                notes TEXT
+                notes TEXT,
+                session_id TEXT
             );
         `;
         db.run(createTableSQL, (err) => {
@@ -68,7 +88,9 @@ function setupDatabase() {
 
 
 
-function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes) {
+function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes, sessionID) {
+    // console.log(`Inserting or updating vehicle with session ID: ${sessionID}`);
+
     const yardName = getYardNameById(yardId);
     const findSQL = `
         SELECT id FROM vehicles
@@ -86,14 +108,15 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
                 UPDATE vehicles 
                 SET vehicle_status = ?, 
                     last_seen = datetime('now'), 
-                    last_updated = datetime('now') 
+                    last_updated = datetime('now'), 
+                    session_id = ?
                 WHERE id = ?;
             `;
-            db.run(updateSQL, [finalStatus, row.id], function(err) {
+            db.run(updateSQL, [status || 'Active', sessionID, row.id], function(err) {
                 if (err) {
-                    console.error('Error updating existing vehicle', err.message);
+                    console.error('Error updating existing vehicle:', err.message);
                 } else {
-                    console.log(`Updated existing vehicle with ID ${row.id} to status ${finalStatus}`);
+                    console.log(`Updated existing vehicle with ID ${row.id} to status ${status || 'Active'} and session ID ${sessionID}`);
                 }
             });
         } else {
@@ -111,11 +134,12 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
                     vehicle_status, 
                     notes, 
                     date_added, 
-                    last_updated
+                    last_updated,
+                    session_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'), ?)
             `;
-            db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes], function(err) {
+            db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes,sessionID], function(err) {
                 if (err) {
                     console.error('Error inserting new vehicle', err.message);
                 } else {
@@ -138,4 +162,4 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
 
 
 
-module.exports = { setupDatabase, insertOrUpdateVehicle };
+module.exports = { markInactiveVehicles, setupDatabase, insertOrUpdateVehicle };

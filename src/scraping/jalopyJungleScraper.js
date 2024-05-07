@@ -18,10 +18,10 @@ const chrome = require('selenium-webdriver/chrome');
 
 
 
-const { insertOrUpdateVehicle } = require('../database/vehicleDbInventoryManager');
+const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 
 
-async function webScrape(yardId, make, model) {
+async function webScrape(yardId, make, model, sessionID) {
     let options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--disable-gpu');
@@ -60,11 +60,11 @@ async function webScrape(yardId, make, model) {
                 if (currentYardId) {
                     await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
                     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
-                    await scrapeYardMakeModel(driver, currentYardId, make, model);
+                    await scrapeYardMakeModel(driver, currentYardId, make, model, sessionID);
                 }
             }
         } else {
-            await scrapeYardMakeModel(driver, yardId, make, model);
+            await scrapeYardMakeModel(driver, yardId, make, model, sessionID);
         }
 
 
@@ -72,13 +72,14 @@ async function webScrape(yardId, make, model) {
     } catch (error) {
         console.error('Scraping failed:', error);
     } finally {
+        markInactiveVehicles(sessionID);
         console.log('🛑 Closing browser');
         await driver.quit();
     }
 }
 
 
-async function scrapeYardMakeModel(driver, yardId, make, model) {
+async function scrapeYardMakeModel(driver, yardId, make, model, sessionID) {
     console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
     await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
     await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
@@ -96,18 +97,18 @@ async function scrapeYardMakeModel(driver, yardId, make, model) {
             if (currentMake) {
                 await driver.executeScript(`document.getElementById('car-make').value = '${currentMake}';`);
                 await driver.executeScript(`document.getElementById('searchinventory').submit();`);
-                await scrapeMakeModel(driver, yardId, currentMake, model);
+                await scrapeMakeModel(driver, yardId, currentMake, model, sessionID);
             }
         }
     } else {
-        await scrapeMakeModel(driver, yardId, make, model);
+        await scrapeMakeModel(driver, yardId, make, model, sessionID);
     }
 
     console.log(`✅ Finished scraping yard: ${yardId}, make: ${make}, model: ${model}`);
 }
 
 
-async function scrapeMakeModel(driver, yardId, make, model) {
+async function scrapeMakeModel(driver, yardId, make, model, sessionID) {
     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
     await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
     await driver.sleep(1000);
@@ -128,7 +129,8 @@ async function scrapeMakeModel(driver, yardId, make, model) {
                 parseInt(await cols[0].getText(), 10), // year
                 parseInt(await cols[3].getText(), 10), // row number
                 '', // status
-                '' // notes
+                '', // notes
+                sessionID // session ID
             );
             
         }

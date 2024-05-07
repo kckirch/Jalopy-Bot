@@ -29,7 +29,7 @@ const { queryVehicles } = require('../database/vehicleQueryManager');
 const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
-const { setupDatabase, insertVehicle } = require('../database/vehicleDbInventoryManager');
+const { markInactiveVehicles, setupDatabase, insertVehicle } = require('../database/vehicleDbInventoryManager');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -76,7 +76,10 @@ const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
   return acc;
 }, {});
 
-
+function getSessionID() {
+  const today = new Date();
+  return today.toISOString().substring(0, 10).replace(/-/g, '');  // Format as 'YYYYMMDD'
+}
 
 
 const client = new Client({
@@ -125,13 +128,18 @@ client.on('interactionCreate', async (interaction) => {
     let make = interaction.options.getString('make') || 'Any';
     let model = interaction.options.getString('model') || 'Any';
 
+    const sessionID = getSessionID();
+    console.log(`Session ID: ${sessionID}`);
+
     if (location && make) {
       make = make.toUpperCase();
       model = model.toUpperCase();
       const yardId = convertLocationToYardId(location);
 
       // Call the webScrape function with the parameters
-      webScrape(yardId, make, model);
+      console.log(`Starting web scrape with sessionID: ${sessionID}`); // This should log a proper sessionID
+
+      webScrape(yardId, make, model, sessionID);
     }
 
     if (location && !make) {
