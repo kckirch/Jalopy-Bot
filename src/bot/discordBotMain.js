@@ -30,7 +30,7 @@ const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
 const { setupDatabase } = require('../database/database');
-const { getSavedSearches } = require('../database/savedSearchManager');
+const { getSavedSearches, addSavedSearch } = require('../database/savedSearchManager');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -255,96 +255,106 @@ client.on('interactionCreate', async (interaction) => {
         const yardId = convertLocationToYardId(location);
     
         try {
-            let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput);
-            // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
-            vehicles.sort((a, b) => {
-                const firstSeenA = new Date(a.first_seen);
-                const firstSeenB = new Date(b.first_seen);
-                if (firstSeenB - firstSeenA !== 0) {
-                    return firstSeenB - firstSeenA;  // Sort by first_seen descending
-                }
-                return a.vehicle_model.localeCompare(b.vehicle_model);  // Alphabetically by model
-            });
-    
-            const itemsPerPage = 20;
-            let currentPage = 0;
-            const totalPages = Math.ceil(vehicles.length / itemsPerPage);
-    
-            const getPage = (page) => {
-                const start = page * itemsPerPage;
-                const end = start + itemsPerPage;
-                const pageItems = vehicles.slice(start, end);
-    
-                const embed = new EmbedBuilder()
-                    .setColor(0x0099FF) // Set a visually appealing color
-                    .setTitle(`Database search results for ${location} ${userMakeInput} ${model}`)
-                    .setTimestamp()
-                    .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
-    
-                // Using fields to separate entries for better readability
-                pageItems.forEach(v => {
-                    const firstSeen = new Date(v.first_seen);
-                    const lastUpdated = new Date(v.last_updated);
-                    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-                    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-                    //if the yard id is 'ALL' then we need to include the yard name in the embed
-                    if (yardId === 'ALL' || Array.isArray(yardId)) {
-                      embed.addFields({
-                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                          value: `Yard: ${v.yard_name}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
-                          inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
-                      });
-                      
-                    } else {
-
-                      embed.addFields({ 
-                          name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                          value: `Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
-                          inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
-                      });
-                    }
-                });
-    
-                return embed;
-            };
-    
-            // Function to update the components based on the current page
-            const updateComponents = (currentPage) => new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('previous')
-                        .setLabel('Previous')
-                        .setStyle(ButtonStyle.Primary)
-                        .setDisabled(currentPage === 0),
-                    new ButtonBuilder()
-                        .setCustomId('next')
-                        .setLabel('Next')
-                        .setStyle(ButtonStyle.Primary)
-                        .setDisabled(currentPage === totalPages - 1)
-                );
-    
-            const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
-    
-            const filter = i => i.user.id === interaction.user.id;
-            const collector = message.createMessageComponentCollector({ filter, time: 120000 });
-    
-            collector.on('collect', async i => {
-                if (i.customId === 'previous' && currentPage > 0) {
-                    currentPage--;
-                } else if (i.customId === 'next' && currentPage < totalPages - 1) {
-                    currentPage++;
-                }
-    
+          let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput);
+          // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
+          vehicles.sort((a, b) => {
+              const firstSeenA = new Date(a.first_seen);
+              const firstSeenB = new Date(b.first_seen);
+              return firstSeenB - firstSeenA || a.vehicle_model.localeCompare(b.vehicle_model);  // Sort by first_seen descending, then alphabetically by model
+          });
+      
+          const itemsPerPage = 20;
+          let currentPage = 0;
+          const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+      
+          const getPage = (page) => {
+              const start = page * itemsPerPage;
+              const end = start + itemsPerPage;
+              const pageItems = vehicles.slice(start, end);
+      
+              const embed = new EmbedBuilder()
+                  .setColor(0x0099FF) // Set a visually appealing color
+                  .setTitle(`Database search results for ${location} ${userMakeInput} ${model} (${yearInput})`)
+                  .setTimestamp()
+                  .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+      
+              // Using fields to separate entries for better readability
+              pageItems.forEach(v => {
+                  const firstSeen = new Date(v.first_seen);
+                  const lastUpdated = new Date(v.last_updated);
+                  const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
+                  const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+                  embed.addFields({
+                      name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                      value: `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
+                      inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
+                  });
+              });
+      
+              return embed;
+          };
+      
+          console.log(`\n\nAttempting to create a button with customId as save:${yardId}:${userMakeInput}:${model}:${yearInput}\n\n`)
+          const saveButton = new ButtonBuilder()
+              .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}`)
+              .setLabel('Save Search')
+              .setStyle(ButtonStyle.Success);
+      
+          // Function to update the components based on the current page
+          const updateComponents = (currentPage) => new ActionRowBuilder()
+              .addComponents(
+                  new ButtonBuilder()
+                      .setCustomId('previous')
+                      .setLabel('Previous')
+                      .setStyle(ButtonStyle.Primary)
+                      .setDisabled(currentPage === 0),
+                  new ButtonBuilder()
+                      .setCustomId('next')
+                      .setLabel('Next')
+                      .setStyle(ButtonStyle.Primary)
+                      .setDisabled(currentPage === totalPages - 1),
+                  saveButton
+              );
+      
+          const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
+      
+          const filter = i => i.user.id === interaction.user.id;
+          const collector = message.createMessageComponentCollector({ filter, time: 120000 });
+      
+          collector.on('collect', async i => {
+            if (i.customId.startsWith('save:')) {
+                // Parse the customId to get the search parameters
+                const params = i.customId.split(':').slice(1);
+                const yardId = params[0];
+                const userMakeInput = params[1];
+                const model = params[2];
+                const yearInput = params[3];
+        
+                // Call the addSavedSearch function
+                await addSavedSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active', ''); // assuming status 'Active' and empty notes for now
+        
+                // Provide feedback to the user without removing the buttons
+                await i.reply({ content: 'Search saved successfully!', ephemeral: true });
+            } else if (i.customId === 'previous' && currentPage > 0) {
+                currentPage--;
                 await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
-            });
-    
-            collector.on('end', () => {
-                message.edit({ components: [] }); // Remove the buttons after the collector ends
-            });
-        } catch (error) {
-            console.error('Error querying vehicles:', error);
-            await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
-        }
+            } else if (i.customId === 'next' && currentPage < totalPages - 1) {
+                currentPage++;
+                await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
+            }
+        });
+        
+        collector.on('end', () => {
+            // Optionally, you can clear the buttons after the collector expires if needed
+            if (message) {
+                message.edit({ components: [] });
+            }
+        });
+      } catch (error) {
+          console.error('Error querying vehicles:', error);
+          await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
+      }
+      
     } else {
         await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
     }
@@ -372,6 +382,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply('Failed to retrieve saved searches.');
     }
   }
+
   
   
   
@@ -396,7 +407,7 @@ client.on('interactionCreate', async (interaction) => {
     }
     const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
     return yardIdMapping[normalizedLocation] || 'ALL';
-}
+  }
 
 
 
