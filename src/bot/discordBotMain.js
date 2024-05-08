@@ -331,7 +331,7 @@ client.on('interactionCreate', async (interaction) => {
                 const yearInput = params[3];
         
                 // Call the addSavedSearch function
-                await addSavedSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active', ''); // assuming status 'Active' and empty notes for now
+                await addSavedSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Any', '');
         
                 // Provide feedback to the user without removing the buttons
                 await i.reply({ content: 'Search saved successfully!', ephemeral: true });
