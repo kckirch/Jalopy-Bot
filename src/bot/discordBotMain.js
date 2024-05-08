@@ -294,7 +294,7 @@ client.on('interactionCreate', async (interaction) => {
               return embed;
           };
       
-          console.log(`\n\nAttempting to create a button with customId as save:${yardId}:${userMakeInput}:${model}:${yearInput}\n\n`)
+          console.log(`\n\nAttempting to create a button with customId as save: ${interaction.user.id} ${interaction.user.tag} ${yardId}:${userMakeInput}:${model}:${yearInput}\n\n`)
           const saveButton = new ButtonBuilder()
               .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}`)
               .setLabel('Save Search')
@@ -320,18 +320,21 @@ client.on('interactionCreate', async (interaction) => {
       
           const filter = i => i.user.id === interaction.user.id;
           const collector = message.createMessageComponentCollector({ filter, time: 120000 });
+
+          convertYardIdToLocation
       
           collector.on('collect', async i => {
             if (i.customId.startsWith('save:')) {
                 // Parse the customId to get the search parameters
                 const params = i.customId.split(':').slice(1);
                 const yardId = params[0];
+                const yard_name = convertYardIdToLocation(yardId);
                 const userMakeInput = params[1];
                 const model = params[2];
                 const yearInput = params[3];
         
                 // Call the addSavedSearch function
-                await addSavedSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Any', '');
+                await addSavedSearch(i.user.id, i.user.tag, yardId, yard_name, userMakeInput, model, yearInput, 'Any', '');
         
                 // Provide feedback to the user without removing the buttons
                 await i.reply({ content: 'Search saved successfully!', ephemeral: true });
@@ -408,6 +411,22 @@ client.on('interactionCreate', async (interaction) => {
     const normalizedLocation = location.toUpperCase().replace(/\s/g, '');
     return yardIdMapping[normalizedLocation] || 'ALL';
   }
+
+  function convertYardIdToLocation(yardId) {
+    if (yardId === 'ALL') {
+        return 'All Yards';
+    } else if (yardId.includes(',')) { // Handling comma-separated lists of yard IDs
+        const yardNames = yardId.split(',').map(id => {
+            const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id.trim()));
+            return yardKey || 'Unknown Yard';
+        });
+        return yardNames.join(', ');
+    }
+    // Handling single yard ID
+    const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(yardId));
+    return yardKey || 'Unknown Yard'; // Fallback if no matching key is found
+}
+
 
 
 

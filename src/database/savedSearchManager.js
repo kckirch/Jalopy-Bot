@@ -7,7 +7,9 @@ function setupSavedSearchesTable() {
         CREATE TABLE IF NOT EXISTS saved_searches (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
+            username TEXT,
             yard_id TEXT,
+            yard_name TEXT,
             make TEXT,
             model TEXT,
             year_range TEXT,
@@ -27,12 +29,12 @@ function setupSavedSearchesTable() {
     });
 }
 
-function addSavedSearch(userId, yardId, make, model, yearRange, status, notes) {
+function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRange, status, notes) {
     const sql = `
-        INSERT INTO saved_searches (user_id, yard_id, make, model, year_range, status, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO saved_searches (user_id, username, yard_id, yard_name, make, model, year_range, status, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     `;
-    db.run(sql, [userId, yardId, make, model, yearRange, status, notes], function(err) {
+    db.run(sql, [userId, username, yardId, yard_name, make, model, yearRange, status, notes], function(err) {
         if (err) console.error('Error adding new saved search:', err);
         else console.log('Saved search added successfully with ID:', this.lastID);
     });
