@@ -29,7 +29,8 @@ const { queryVehicles } = require('../database/vehicleQueryManager');
 const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
-const { markInactiveVehicles, setupDatabase, insertVehicle } = require('../database/vehicleDbInventoryManager');
+const { setupDatabase } = require('../database/database');
+const { getSavedSearches } = require('../database/savedSearchManager');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -348,7 +349,31 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: 'Location is required for this search.', ephemeral: true });
     }
     
+  } else if (interaction.commandName === 'savedsearch') {
+    console.log('Saved search retrieval command received.');
+    
+    const userId = interaction.user.id;
+    const location = interaction.options.getString('location');
+    let yardId = location ? convertLocationToYardId(location) : null;  // Convert location to yardId if provided
+    console.log(`Retrieving saved searches for user ${userId} in location ${location || 'All'}`);
+    try {
+      const savedSearches = await getSavedSearches(userId, yardId);
+      if (savedSearches.length > 0) {
+        const searchDetails = savedSearches.map(search => {
+          return `Yard ID: ${search.yard_id || 'Any'}, Make: ${search.make || 'Any'}, Model: ${search.model || 'Any'}, Year Range: ${search.year_range || 'Any'}, Status: ${search.status || 'Any'}`;
+        }).join('\n');
+  
+        await interaction.reply(`Here are your saved searches:\n${searchDetails}`);
+      } else {
+        await interaction.reply('You have no saved searches matching the criteria.');
+      }
+    } catch (error) {
+      console.error('Error retrieving saved searches:', error);
+      await interaction.reply('Failed to retrieve saved searches.');
+    }
   }
+  
+  
   
   
   
