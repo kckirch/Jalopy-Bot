@@ -40,6 +40,23 @@ function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRa
     });
 }
 
+function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
+    return new Promise((resolve, reject) => {
+        const sql = `
+            SELECT 1 FROM saved_searches
+            WHERE user_id = ? AND yard_id = ? AND make = ? AND model = ? AND year_range = ? AND status = ?;
+        `;
+        db.get(sql, [userId, yardId, make, model, yearRange, status], (err, row) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(row ? true : false); // Returns true if a row exists, otherwise false
+            }
+        });
+    });
+}
+
+
 function updateSavedSearch(id, updates) {
     // Assume updates is an object containing key-value pairs of columns to update
     const setPart = Object.keys(updates).map(key => `${key} = ?`).join(', ');
@@ -84,4 +101,4 @@ function getSavedSearches(userId, yardId = null) {
 
 // Optionally include other functions here to handle CRUD operations for saved searches
 
-module.exports = { setupSavedSearchesTable, getSavedSearches, addSavedSearch, updateSavedSearch, deleteSavedSearch};
+module.exports = { setupSavedSearchesTable, getSavedSearches, addSavedSearch, checkExistingSearch, updateSavedSearch, deleteSavedSearch};
