@@ -30,7 +30,7 @@ const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
 
 const { setupDatabase } = require('../database/database');
-const { getSavedSearches, addSavedSearch } = require('../database/savedSearchManager');
+const { getSavedSearches, addSavedSearch, checkExistingSearch } = require('../database/savedSearchManager');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -325,19 +325,25 @@ client.on('interactionCreate', async (interaction) => {
       
           collector.on('collect', async i => {
             if (i.customId.startsWith('save:')) {
-                // Parse the customId to get the search parameters
                 const params = i.customId.split(':').slice(1);
                 const yardId = params[0];
-                const yard_name = convertYardIdToLocation(yardId);
+                const yardName = convertYardIdToLocation(yardId);
                 const userMakeInput = params[1];
                 const model = params[2];
                 const yearInput = params[3];
         
-                // Call the addSavedSearch function
-                await addSavedSearch(i.user.id, i.user.tag, yardId, yard_name, userMakeInput, model, yearInput, 'Any', '');
-        
-                // Provide feedback to the user without removing the buttons
-                await i.reply({ content: 'Search saved successfully!', ephemeral: true });
+                try {
+                    const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active');
+                    if (!exists) {
+                        await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, 'Active', '');
+                        await i.reply({ content: 'Search saved successfully!', ephemeral: true });
+                    } else {
+                        await i.reply({ content: 'This search has already been saved.', ephemeral: true });
+                    }
+                } catch (error) {
+                    console.error('Error checking for existing search:', error);
+                    await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
+                }
             } else if (i.customId === 'previous' && currentPage > 0) {
                 currentPage--;
                 await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
@@ -346,6 +352,7 @@ client.on('interactionCreate', async (interaction) => {
                 await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
             }
         });
+        
         
         collector.on('end', () => {
             // Optionally, you can clear the buttons after the collector expires if needed
@@ -364,7 +371,7 @@ client.on('interactionCreate', async (interaction) => {
     
   } else if (interaction.commandName === 'savedsearch') {
     console.log('Saved search retrieval command received.');
-    
+  
     const userId = interaction.user.id;
     const location = interaction.options.getString('location');
     let yardId = location ? convertLocationToYardId(location) : null;  // Convert location to yardId if provided
@@ -372,19 +379,38 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const savedSearches = await getSavedSearches(userId, yardId);
       if (savedSearches.length > 0) {
-        const searchDetails = savedSearches.map(search => {
-          return `Yard ID: ${search.yard_id || 'Any'}, Make: ${search.make || 'Any'}, Model: ${search.model || 'Any'}, Year Range: ${search.year_range || 'Any'}, Status: ${search.status || 'Any'}`;
-        }).join('\n');
+        const searchEmbed = new EmbedBuilder()
+          .setColor(0x0099FF) // Set a visually appealing color
+          .setTitle('Your Saved Searches')
+          .setDescription('Here are the searches you have saved:')
+          .setTimestamp();
   
-        await interaction.reply(`Here are your saved searches:\n${searchDetails}`);
+        // Loop through each saved search and add them to the embed
+        savedSearches.forEach(search => {
+          const createDate = new Date(search.create_date).toLocaleDateString('en-US', {
+            month: 'numeric', day: 'numeric', year: 'numeric'
+          });
+          const lastUpdatedDate = new Date(search.update_date).toLocaleDateString('en-US', {
+            month: 'numeric', day: 'numeric', year: 'numeric'
+          });
+          
+          searchEmbed.addFields({
+            name: `${search.make} ${search.model} (${search.year_range})`,
+            value: `Yard: ${search.yard_name}, Status: ${search.status}\nCreated: ${createDate}, Last Updated: ${lastUpdatedDate}`,
+            inline: false
+          });
+        });
+  
+        await interaction.reply({ embeds: [searchEmbed] });
       } else {
-        await interaction.reply('You have no saved searches matching the criteria.');
+        await interaction.reply({ content: 'You have no saved searches matching the criteria.', ephemeral: true });
       }
     } catch (error) {
       console.error('Error retrieving saved searches:', error);
-      await interaction.reply('Failed to retrieve saved searches.');
+      await interaction.reply({ content: 'Failed to retrieve saved searches.', ephemeral: true });
     }
   }
+  
 
   
   
