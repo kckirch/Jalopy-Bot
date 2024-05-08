@@ -55,9 +55,31 @@ const searchCommand = new SlashCommandBuilder()
     .setDescription('The year(s) of the vehicle (comma-separated list or range)')
     .setRequired(false));
 
+
+const savedSearchCommand = new SlashCommandBuilder()
+  .setName('savedsearch')
+  .setDescription('Save a search for automatic daily updates')
+  .addStringOption(option => 
+    option.setName('location')
+    .setDescription('The yard location to search')
+    .setRequired(false)
+    .addChoices(
+      { name: 'Boise', value: 'boise' },
+      { name: 'Garden City', value: 'gardencity' },
+      { name: 'Nampa', value: 'nampa' },
+      { name: 'Caldwell', value: 'caldwell' },
+      { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
+      { name: 'All', value: 'all' }
+    ));
+
+
+
+
 const commands = [
   scrapeCommand.toJSON(),
-  searchCommand.toJSON()
+  searchCommand.toJSON(),
+  savedSearchCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

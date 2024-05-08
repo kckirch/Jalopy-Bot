@@ -92,18 +92,17 @@ function parseYardIds(input) {
     if (Array.isArray(input)) {
         // If input is already an array, return it directly (assuming it's an array of valid yard IDs)
         return input;
-    } else if (typeof input === 'string') {
-        if (input.trim().toUpperCase() === 'ALL') {
-            return 'ALL';
-        }
-        const ids = input.split(',').map(id => id.trim()).filter(id => !isNaN(parseInt(id)));
-        return ids.length ? ids : 'ALL'; // Default to 'ALL' if no valid IDs are parsed
+    } else if (typeof input === 'number') {
+        // Directly return an array containing the number if the input is a numeric ID
+        return [input];
     } else {
         // Handle unexpected input type
         console.error('Unexpected yardId input type:', typeof input);
-        return 'ALL'; // Default to safe value
+        console.error('The user input was:', input);
+        return []; // Return an empty array as a safe value
     }
 }
+
 
 
 
@@ -187,5 +186,5 @@ async function queryVehicles(yardId, make, model, yearInput) {
 
 
 module.exports = {
-    queryVehicles
+    queryVehicles, db
 };

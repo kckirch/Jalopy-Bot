@@ -3,12 +3,12 @@
  * 
  * Handles database operations related to vehicle inventory for a junkyard system, including initialization, insertion, and updating of vehicle records.
  * Functions included:
- * - `setupDatabase()`: Initializes and creates the vehicle table if it doesn't exist, preparing the database for use.
  * - `insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status, notes)`: Inserts a new vehicle record or updates an existing one based on provided parameters.
  * - `getYardNameById(yardId)`: Utility function to convert yard ID to a human-readable yard name.
  * 
  * This module establishes a connection to the `vehicleInventory.db` SQLite database and handles potential connection errors or SQL errors during table creation and data manipulation.
  */
+const db = require('./database');
 
 
 const sqlite3 = require('sqlite3').verbose();
@@ -41,50 +41,6 @@ function markInactiveVehicles(sessionID) {
     });
 }
 
-
-
-
-// Initialize the database connection to a file named vehicleInventory.db
-const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-    if (err) {
-        console.error('Error when connecting to the database', err);
-    } else {
-        console.log('Database connection established to vehicleInventory.db');
-    }
-});
-
-// Function to set up the database table
-function setupDatabase() {
-    return new Promise((resolve, reject) => {
-        const createTableSQL = `
-            CREATE TABLE IF NOT EXISTS vehicles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                yard_id INTEGER,
-                yard_name TEXT,
-                vehicle_make TEXT,
-                vehicle_model TEXT,
-                vehicle_year INTEGER,
-                row_number INTEGER,
-                first_seen TEXT,
-                last_seen TEXT,
-                vehicle_status TEXT,
-                date_added TEXT,
-                last_updated TEXT,
-                notes TEXT,
-                session_id TEXT
-            );
-        `;
-        db.run(createTableSQL, (err) => {
-            if (err) {
-                console.error('Error creating vehicles table in vehicleInventory.db', err);
-                reject(err);
-            } else {
-                console.log('Vehicles table setup complete in vehicleInventory.db');
-                resolve();
-            }
-        });
-    });
-}
 
 
 
@@ -163,4 +119,4 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
 
 
 
-module.exports = { markInactiveVehicles, setupDatabase, insertOrUpdateVehicle };
+module.exports = { markInactiveVehicles, insertOrUpdateVehicle};
