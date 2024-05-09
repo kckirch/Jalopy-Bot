@@ -18,6 +18,7 @@ const chrome = require('selenium-webdriver/chrome');
 
 
 
+
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 
 
