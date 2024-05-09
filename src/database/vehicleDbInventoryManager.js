@@ -8,7 +8,7 @@
  * 
  * This module establishes a connection to the `vehicleInventory.db` SQLite database and handles potential connection errors or SQL errors during table creation and data manipulation.
  */
-const db = require('./database');
+const {db} = require('./database');
 
 
 const sqlite3 = require('sqlite3').verbose();
