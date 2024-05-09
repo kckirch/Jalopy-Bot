@@ -67,13 +67,22 @@ function updateSavedSearch(id, updates) {
     });
 }
 
-function deleteSavedSearch(id) {
-    const sql = `DELETE FROM saved_searches WHERE id = ?;`;
-    db.run(sql, [id], function(err) {
-        if (err) console.error('Error deleting saved search:', err);
-        else console.log('Saved search deleted successfully');
+// In your database management file
+async function deleteSavedSearch(searchId) {
+    return new Promise((resolve, reject) => {
+      const sql = 'DELETE FROM saved_searches WHERE id = ?';
+      db.run(sql, [searchId], function(err) {
+        if (err) {
+          console.error('Error deleting saved search:', err);
+          reject(err);
+        } else {
+          console.log('Saved search deleted successfully.');
+          resolve();
+        }
+      });
     });
-}
+  }
+  
 
 function getSavedSearches(userId, yardId = null) {
     return new Promise((resolve, reject) => {
