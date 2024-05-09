@@ -295,63 +295,88 @@ client.on('interactionCreate', async (interaction) => {
           };
       
           console.log(`\n\nAttempting to create a button with customId as save: ${interaction.user.id} ${interaction.user.tag} ${yardId}:${userMakeInput}:${model}:${yearInput}\n\n`)
-          const saveButton = new ButtonBuilder()
-              .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}`)
-              .setLabel('Save Search')
-              .setStyle(ButtonStyle.Success);
+          const status = 'Active';
       
           // Function to update the components based on the current page
-          const updateComponents = (currentPage) => new ActionRowBuilder()
-              .addComponents(
-                  new ButtonBuilder()
-                      .setCustomId('previous')
-                      .setLabel('Previous')
-                      .setStyle(ButtonStyle.Primary)
-                      .setDisabled(currentPage === 0),
-                  new ButtonBuilder()
-                      .setCustomId('next')
-                      .setLabel('Next')
-                      .setStyle(ButtonStyle.Primary)
-                      .setDisabled(currentPage === totalPages - 1),
-                  saveButton
-              );
+          const updateComponents = (currentPage, userId) => new ActionRowBuilder()
+          .addComponents(
+              new ButtonBuilder()
+                  .setCustomId(`previous:${userId}`)
+                  .setLabel('Previous')
+                  .setStyle(ButtonStyle.Primary)
+                  .setDisabled(currentPage === 0),
+              new ButtonBuilder()
+                  .setCustomId(`next:${userId}`)
+                  .setLabel('Next')
+                  .setStyle(ButtonStyle.Primary)
+                  .setDisabled(currentPage === totalPages - 1),
+              new ButtonBuilder()
+                  .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}:${status}:${userId}`)
+                  .setLabel('Save Search')
+                  .setStyle(ButtonStyle.Success)
+          );
       
-          const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0)], fetchReply: true });
       
-          const filter = i => i.user.id === interaction.user.id;
-          const collector = message.createMessageComponentCollector({ filter, time: 120000 });
+          const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0, interaction.user.id)], fetchReply: true });
 
-          convertYardIdToLocation
+
+      
+          const collector = message.createMessageComponentCollector({ filter: i => i.user.id === interaction.user.id, time: 120000 });
+
+          
       
           collector.on('collect', async i => {
-            if (i.customId.startsWith('save:')) {
-                const params = i.customId.split(':').slice(1);
-                const yardId = params[0];
-                const yardName = convertYardIdToLocation(yardId);
-                const userMakeInput = params[1];
-                const model = params[2];
-                const yearInput = params[3];
+            const parts = i.customId.split(':');
+            const action = parts[0];
+            const userId = parts[parts.length - 1];  // User ID is always the last part of the customId
+            const yardName = convertYardIdToLocation(yardId);
         
-                try {
-                    const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active');
-                    if (!exists) {
-                        await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, 'Active', '');
-                        await i.reply({ content: 'Search saved successfully!', ephemeral: true });
-                    } else {
-                        await i.reply({ content: 'This search has already been saved.', ephemeral: true });
-                    }
-                } catch (error) {
-                    console.error('Error checking for existing search:', error);
-                    await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
-                }
-            } else if (i.customId === 'previous' && currentPage > 0) {
-                currentPage--;
-                await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
-            } else if (i.customId === 'next' && currentPage < totalPages - 1) {
-                currentPage++;
-                await i.update({ embeds: [getPage(currentPage)], components: [updateComponents(currentPage)] });
+            // Ensure the action is initiated by the user who started the interaction
+            if (userId !== i.user.id) {
+                await i.reply({ content: "You do not have permission to perform this action.", ephemeral: true });
+                return;
+            }
+        
+            switch (action) {
+                case 'next':
+                case 'previous':
+                    // Handle page navigation
+                    const pageChange = (action === 'next') ? 1 : -1;
+                    currentPage += pageChange;
+                    await i.update({
+                        embeds: [getPage(currentPage)],
+                        components: [updateComponents(currentPage, userId)]
+                    });
+                    break;
+        
+                case 'save':
+                    const yardId = parts[1];
+                    const make = parts[2];
+                    const model = parts[3];
+                    const yearInput = parts[4];
+        
+                    console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}`);
+        
+                    // Check if the search already exists
+                    try {
+                      const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active');
+                      if (!exists) {
+                          await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, 'Active', '');
+                          await i.reply({ content: 'Search saved successfully!', ephemeral: true });
+                      } else {
+                          await i.reply({ content: 'This search has already been saved.', ephemeral: true });
+                      }
+                  } catch (error) {
+                      console.error('Error checking for existing search:', error);
+                      await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
+                  }
+                    break;
             }
         });
+        
+        
+        
+        
         
         
         collector.on('end', () => {
