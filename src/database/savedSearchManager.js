@@ -34,27 +34,41 @@ function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRa
         INSERT INTO saved_searches (user_id, username, yard_id, yard_name, make, model, year_range, status, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     `;
-    db.run(sql, [userId, username, yardId, yard_name, make, model, yearRange, status, notes], function(err) {
-        if (err) console.error('Error adding new saved search:', err);
-        else console.log('Saved search added successfully with ID:', this.lastID);
+    const params = [userId, username, yardId, yard_name, make, model, yearRange, status, notes];
+    console.log("Attempting to add saved search with parameters:", params);
+    db.run(sql, params, function(err) {
+        if (err) {
+            console.error('Error adding new saved search:', err);
+        } else {
+            console.log('Saved search added successfully with ID:', this.lastID);
+        }
     });
 }
+
 
 function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
     return new Promise((resolve, reject) => {
         const sql = `
             SELECT 1 FROM saved_searches
-            WHERE user_id = ? AND yard_id = ? AND make = ? AND model = ? AND year_range = ? AND status = ?;
+            WHERE user_id = TRIM(?) AND yard_id = TRIM(?) AND UPPER(make) = UPPER(TRIM(?)) AND UPPER(model) = UPPER(TRIM(?)) AND year_range = TRIM(?) AND status = TRIM(?);
         `;
-        db.get(sql, [userId, yardId, make, model, yearRange, status], (err, row) => {
+        const params = [userId.trim(), yardId.trim(), make.trim(), model.trim(), yearRange.trim(), status.trim()];
+        console.log("Running SQL Check for Existing Search:", sql, params);  // Log the query and parameters
+        
+        db.get(sql, params, (err, row) => {
             if (err) {
+                console.error("SQL Error in checkExistingSearch:", err);  // Log any SQL errors
                 reject(err);
             } else {
-                resolve(row ? true : false); // Returns true if a row exists, otherwise false
+                const exists = !!row;
+                console.log("Search Exists Check Result:", exists);  // Log the result of the existence check
+                resolve(exists);
             }
         });
     });
 }
+
+
 
 
 function updateSavedSearch(id, updates) {
