@@ -89,7 +89,10 @@ function parseYearInput(yearInput) {
 }
 
 function parseYardIds(input) {
-    if (Array.isArray(input)) {
+    if (input === "ALL") {
+        // If input is "ALL", return it directly
+        return input;
+    } else if (Array.isArray(input)) {
         // If input is already an array, return it directly (assuming it's an array of valid yard IDs)
         return input;
     } else if (typeof input === 'number') {
@@ -102,6 +105,7 @@ function parseYardIds(input) {
         return []; // Return an empty array as a safe value
     }
 }
+
 
 
 
