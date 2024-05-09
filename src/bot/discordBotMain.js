@@ -394,10 +394,12 @@ client.on('interactionCreate', async (interaction) => {
 
                 const components = new ActionRowBuilder()
                     .addComponents(
-                        new ButtonBuilder().setCustomId('prev').setLabel('Previous').setStyle(ButtonStyle.Primary).setDisabled(index === 0),
-                        new ButtonBuilder().setCustomId('next').setLabel('Next').setStyle(ButtonStyle.Primary).setDisabled(index === savedSearches.length - 1),
-                        new ButtonBuilder().setCustomId(`delete:${index}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
+                        new ButtonBuilder().setCustomId(`prev:${currentIndex}:${userId}`).setLabel('Previous').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === 0),
+                        new ButtonBuilder().setCustomId(`next:${currentIndex}:${userId}`).setLabel('Next').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === savedSearches.length - 1),
+                        new ButtonBuilder().setCustomId(`delete:${currentIndex}:${userId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
                     );
+                
+                
 
                 return { embed, components };
             };
@@ -409,24 +411,32 @@ client.on('interactionCreate', async (interaction) => {
             const collector = interaction.channel.createMessageComponentCollector({ filter, time: 60000 });
 
             collector.on('collect', async i => {
-                const [action, index] = i.customId.split(':');
-
-                if (action === 'next' || action === 'prev') {
-                    currentIndex = action === 'next' ? currentIndex + 1 : currentIndex - 1;
-                    const update = updateEmbedAndComponents(currentIndex);
-                    await i.update({ embeds: [update.embed], components: [update.components] });
-                } else if (action === 'delete') {
-                    await deleteSavedSearch(savedSearches[currentIndex].id);
-                    savedSearches.splice(currentIndex, 1); // Remove the search from the array
-                    if (savedSearches.length === 0) {
-                        await i.update({ content: 'All saved searches have been deleted.', components: [], embeds: [] });
-                        return;
-                    }
-                    currentIndex = Math.min(currentIndex, savedSearches.length - 1); // Adjust index if needed
-                    const update = updateEmbedAndComponents(currentIndex);
-                    await i.update({ embeds: [update.embed], components: [update.components] });
-                }
-            });
+              const [action, index, interactionUserId] = i.customId.split(':');
+          
+              if (interactionUserId !== i.user.id) {
+                  await i.reply({ content: "You do not have permission to modify this saved search.", ephemeral: true });
+                  return;
+              }
+          
+              if (action === 'next' || action === 'prev') {
+                  const newIndex = action === 'next' ? parseInt(index) + 1 : parseInt(index) - 1;
+                  currentIndex = newIndex; // Update the current index based on the action
+                  const update = updateEmbedAndComponents(currentIndex);
+                  await i.update({ embeds: [update.embed], components: [update.components] });
+              } else if (action === 'delete') {
+                  await deleteSavedSearch(savedSearches[currentIndex].id);
+                  savedSearches.splice(currentIndex, 1); // Remove the search from the array
+                  if (savedSearches.length === 0) {
+                      await i.update({ content: 'All saved searches have been deleted.', components: [], embeds: [] });
+                      return;
+                  }
+                  currentIndex = Math.min(currentIndex, savedSearches.length - 1); // Adjust index if needed
+                  const update = updateEmbedAndComponents(currentIndex);
+                  await i.update({ embeds: [update.embed], components: [update.components] });
+              }
+          });
+          
+          
 
             collector.on('end', () => {
                 interaction.editReply({ components: [] }); // Optionally clear the buttons when the interaction ends
