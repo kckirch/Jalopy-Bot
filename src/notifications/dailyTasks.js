@@ -13,7 +13,7 @@ async function processDailySavedSearches() {
         const savedSearches = await getAllSavedSearches();
         for (const search of savedSearches) {
             console.log("Processing search for:", search.username);
-            const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY');
+            const results = await await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'Active');
             if (results.length > 0) {
                 const embeds = formatMessages(results, search);
                 sendNotification(search.user_id, embeds);
@@ -53,7 +53,7 @@ function formatMessages(vehicles, search) {
 
     for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()
-            .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name}`)
+            .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name} with ${search.status} status`)
             .setDescription(`Results found: ${vehicles.length}`)
             .setColor(0x0099FF) // Blue color
             .setTimestamp();

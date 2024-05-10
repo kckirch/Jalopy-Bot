@@ -254,7 +254,7 @@ client.on('interactionCreate', async (interaction) => {
         const yardId = convertLocationToYardId(location);
     
         try {
-          let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput);
+          let vehicles = await await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'Active');
           // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
           vehicles.sort((a, b) => {
               const firstSeenA = new Date(a.first_seen);
