@@ -22,15 +22,19 @@
 
 require('dotenv').config({ path: '../.env'});
 
+const { client, } = require('./client.js');
+
 const { queryVehicles } = require('../database/vehicleQueryManager');
 
 
 
 const { webScrape } = require('../scraping/jalopyJungleScraper');
-const { ButtonBuilder, ActionRowBuilder, ButtonStyle, Client, IntentsBitField, EmbedBuilder } = require('discord.js');
+const { ButtonBuilder, ActionRowBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 
 const { setupDatabase } = require('../database/database');
 const { getSavedSearches, addSavedSearch, checkExistingSearch, deleteSavedSearch } = require('../database/savedSearchManager');
+
+const { processDailySavedSearches } = require('../notifications/dailyTasks');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -83,14 +87,7 @@ function getSessionID() {
 }
 
 
-const client = new Client({
-  intents: [
-    IntentsBitField.Flags.Guilds,
-    IntentsBitField.Flags.GuildMembers,
-    IntentsBitField.Flags.GuildMessages,
-    IntentsBitField.Flags.MessageContent,
-  ],
-});
+
 
 // Global reference for the message collector
 let messageCollector = null;
@@ -475,7 +472,16 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Error retrieving saved searches:', error);
         await interaction.reply({ content: 'Failed to retrieve saved searches.', ephemeral: true });
     }
-}
+} else if (interaction.commandName === 'dailysavedsearch') {
+    console.log('Daily saved search command received.');
+    try { 
+      await processDailySavedSearches();
+      await interaction.reply('Daily saved searches processed successfully.');
+    } catch (error) {
+      console.error('Error processing daily saved searches:', error);
+      await interaction.reply('An error occurred while processing daily saved searches.');
+    }
+  }
 
 
 
@@ -504,19 +510,31 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   function convertYardIdToLocation(yardId) {
-    if (yardId === 'ALL') {
-        return 'All Yards';
-    } else if (yardId.includes(',')) { // Handling comma-separated lists of yard IDs
-        const yardNames = yardId.split(',').map(id => {
-            const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id.trim()));
+    console.log("Received yardId:", yardId); // Log the input to see what is received
+
+    // Convert number to string if necessary
+    if (typeof yardId === 'number') {
+        yardId = yardId.toString();
+        console.log("Converted number yardId to string:", yardId);
+    }
+
+    if (yardId.includes(',')) {
+        const ids = yardId.split(',').map(id => id.trim());
+        const yardNames = ids.map(id => {
+            const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id));
+            console.log(`Mapping ${id} to ${yardKey}`); // Log each ID mapping
             return yardKey || 'Unknown Yard';
         });
         return yardNames.join(', ');
+    } else {
+        const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key].toString() === yardId.trim());
+        console.log(`Single ID mapping: ${yardId} to ${yardKey}`); // Log single ID mapping
+        return yardKey || 'Unknown Yard';  // Fallback if no matching key is found
     }
-    // Handling single yard ID
-    const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(yardId));
-    return yardKey || 'Unknown Yard'; // Fallback if no matching key is found
 }
+
+
+
 
 
 

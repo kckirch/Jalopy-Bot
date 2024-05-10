@@ -73,13 +73,16 @@ const savedSearchCommand = new SlashCommandBuilder()
       { name: 'All', value: 'all' }
     ));
 
-
+const dailySearchCommand = new SlashCommandBuilder()
+  .setName('dailysavedsearch')
+  .setDescription('Enable or disable daily saved searches')
 
 
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
-  savedSearchCommand.toJSON()
+  savedSearchCommand.toJSON(),
+  dailySearchCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
