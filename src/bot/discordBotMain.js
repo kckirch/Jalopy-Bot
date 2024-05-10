@@ -101,6 +101,8 @@ client.on('ready', (c) => {
 
 client.on('interactionCreate', async (interaction) => {
 
+  try {
+
   const user = interaction.user.tag;  // Discord tag of the user who initiated the interaction
   const channelId = interaction.channelId;  // Channel ID where the interaction occurred
 
@@ -485,6 +487,10 @@ client.on('interactionCreate', async (interaction) => {
       }
       await interaction.update({ content: 'Operation cancelled.', components: [] });
     }
+  } catch (error) {
+    console.error('Error processing interaction:', error);
+    await interaction.reply('An error occurred while processing your request.');
+  }
   });
   
   function convertLocationToYardId(location) {
