@@ -89,20 +89,14 @@ function parseYearInput(yearInput) {
 }
 
 function parseYardIds(input) {
-    if (input === "ALL") {
-        // If input is "ALL", return it directly
-        return input;
-    } else if (Array.isArray(input)) {
-        // If input is already an array, return it directly (assuming it's an array of valid yard IDs)
-        return input;
-    } else if (typeof input === 'number') {
-        // Directly return an array containing the number if the input is a numeric ID
-        return [input];
+    if (typeof input === 'string' && input.includes(',')) {
+        return input.split(',').map(id => parseInt(id.trim(), 10));
+    } else if (typeof input === 'string') {
+        return [parseInt(input, 10)];
     } else {
-        // Handle unexpected input type
         console.error('Unexpected yardId input type:', typeof input);
         console.error('The user input was:', input);
-        return []; // Return an empty array as a safe value
+        return []; // Return an empty array as a fallback
     }
 }
 
@@ -112,17 +106,25 @@ function parseYardIds(input) {
 
 
 
-// Function to get all possible model variations with fuzzy matching
-function getModelVariations(model) {
-    const aliases = modelAliases[model.toUpperCase()] || [model];
-    return aliases.map(alias => '%' + alias.replace(/\s+/g, '%') + '%'); // Adding '%' for fuzzy matching and accounting for spaces
+
+function getMakeVariations(make) {
+    if (typeof make !== 'string') {
+        console.error("Expected a string for 'make', received:", make);
+        return [];  // Return an empty array to handle the error gracefully
+    }
+    const aliases = makeAliases[make.toLowerCase()] || [make];
+    return aliases.map(alias => '%' + alias.replace(/\s+/g, '%') + '%');
 }
 
-// Function to get all possible make variations with fuzzy matching
-function getMakeVariations(make) {
-    const aliases = makeAliases[make.toLowerCase()] || [make];
-    return aliases.map(alias => '%' + alias.replace(/\s+/g, '%') + '%'); // Adding '%' for fuzzy matching and accounting for spaces
+function getModelVariations(model) {
+    if (typeof model !== 'string') {
+        console.error("Expected a string for 'model', received:", model);
+        return [];  // Return an empty array to handle the error gracefully
+    }
+    const aliases = modelAliases[model.toUpperCase()] || [model];
+    return aliases.map(alias => '%' + alias.replace(/\s+/g, '%') + '%');
 }
+
 
 async function queryVehicles(yardId, make, model, yearInput) {
     const yardIds = parseYardIds(yardId);

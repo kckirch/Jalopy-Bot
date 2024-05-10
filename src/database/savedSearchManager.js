@@ -120,8 +120,20 @@ function getSavedSearches(userId, yardId = null) {
     });
   }
   
+  function getAllSavedSearches() {
+    return new Promise((resolve, reject) => {
+        const query = `SELECT * FROM saved_searches`;
+        db.all(query, [], (err, rows) => {
+            if (err) {
+                console.error('Failed to retrieve all saved searches:', err);
+                reject(err);
+            } else {
+                console.log("Retrieved all saved searches successfully.");
+                resolve(rows);
+            }
+        });
+    });
+}
 
 
-// Optionally include other functions here to handle CRUD operations for saved searches
-
-module.exports = { setupSavedSearchesTable, getSavedSearches, addSavedSearch, checkExistingSearch, updateSavedSearch, deleteSavedSearch};
+module.exports = { setupSavedSearchesTable, getSavedSearches, getAllSavedSearches, addSavedSearch, checkExistingSearch, updateSavedSearch, deleteSavedSearch};
