@@ -139,48 +139,50 @@ function getModelVariations(model) {
 }
 
 
-async function queryVehicles(yardId, make, model, yearInput) {
+function queryVehicles(yardId, make, model, yearInput, status = 'Active') {  // Default status is 'Active'
     const yardIds = parseYardIds(yardId);
-    // Determine if we need to include yard details in the results
-    let includeYardDetails = Array.isArray(yardIds) || yardIds === 'ALL';
-
-    // Adjust the SELECT clause based on whether yard details are needed
-    let baseQuery = "SELECT * FROM vehicles WHERE vehicle_status != 'Inactive'";
+    
     let params = [];
     let conditions = [];
+    let baseQuery = "SELECT * FROM vehicles";
 
-    if (Array.isArray(yardIds) && yardIds.length > 0) {
+    // Dynamically build the condition for vehicle status
+    if (status === 'Any') {
+        conditions.push("vehicle_status != 'Inactive'");
+    } else {
+        conditions.push("vehicle_status = ?");
+        params.push(status);
+    }
+
+    if (yardIds !== 'ALL' && Array.isArray(yardIds) && yardIds.length > 0) {
         conditions.push(`yard_id IN (${yardIds.map(() => '?').join(', ')})`);
-        params.push(...yardIds);
-    } else if (yardIds !== 'ALL') {
-        conditions.push("yard_id = ?");
-        params.push(yardIds);
+        params = params.concat(yardIds);
     }
 
     if (make !== 'ANY') {
         const makes = getMakeVariations(make);
         conditions.push(`(${makes.map(() => "vehicle_make LIKE ?").join(" OR ")})`);
-        params.push(...makes);
+        params = params.concat(makes);
     }
 
     if (model !== 'ANY') {
         const models = getModelVariations(model);
         conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
-        params.push(...models);
+        params = params.concat(models);
     } else {
-        console.log("\nModel set to 'Any', skipping model criteria in query.");
+        console.log("Model set to 'Any', skipping model criteria in query.");
     }
 
     if (yearInput !== 'ANY') {
         const yearData = parseYearInput(yearInput);
         if (yearData.conditions) {
             conditions.push(`(${yearData.conditions})`);
-            params.push(...yearData.params);
+            params = params.concat(yearData.params);
         }
     }
 
     if (conditions.length > 0) {
-        baseQuery += " AND " + conditions.join(" AND ");
+        baseQuery += " WHERE " + conditions.join(" AND ");
     }
 
     console.log("Executing query:", baseQuery);
@@ -193,15 +195,12 @@ async function queryVehicles(yardId, make, model, yearInput) {
                 reject(err);
             } else {
                 console.log("Rows found:", rows.length);
-                if (includeYardDetails) {
-                    resolve(rows.map(row => ({ ...row, yard_display: `Yard: ${row.yard_name}` })));
-                } else {
-                    resolve(rows);
-                }
+                resolve(rows);
             }
         });
     });
 }
+
 
 
 module.exports = {
