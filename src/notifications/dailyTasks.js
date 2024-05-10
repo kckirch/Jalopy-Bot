@@ -53,15 +53,19 @@ function formatMessages(vehicles, search) {
 
     for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()
-            .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range})`)
+            .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name}`)
             .setDescription(`Results found: ${vehicles.length}`)
             .setColor(0x0099FF) // Blue color
             .setTimestamp();
 
         vehicles.slice(i, i + chunkSize).forEach(vehicle => {
+            const firstSeenFormatted = new Date(vehicle.first_seen).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            const lastUpdatedFormatted = new Date(vehicle.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
             embed.addFields({
                 name: `${vehicle.vehicle_make} ${vehicle.vehicle_model} (${vehicle.vehicle_year})`,
-                value: `Located at: ${vehicle.yard_name}, Row: ${vehicle.row_number}`
+                value: `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}\nFirst Seen: ${firstSeenFormatted}\nLast Updated: ${lastUpdatedFormatted}`,
+                inline: false
             });
         });
 
@@ -70,5 +74,6 @@ function formatMessages(vehicles, search) {
 
     return embeds;
 }
+
 
 module.exports = { processDailySavedSearches };

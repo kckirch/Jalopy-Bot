@@ -512,26 +512,30 @@ client.on('interactionCreate', async (interaction) => {
   function convertYardIdToLocation(yardId) {
     console.log("Received yardId:", yardId); // Log the input to see what is received
 
-    // Convert number to string if necessary
-    if (typeof yardId === 'number') {
-        yardId = yardId.toString();
-        console.log("Converted number yardId to string:", yardId);
-    }
-
-    if (yardId.includes(',')) {
-        const ids = yardId.split(',').map(id => id.trim());
-        const yardNames = ids.map(id => {
+    if (Array.isArray(yardId)) {
+        // Handle array of yard IDs by converting each ID to its corresponding yard name
+        const yardNames = yardId.map(id => {
             const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id));
-            console.log(`Mapping ${id} to ${yardKey}`); // Log each ID mapping
-            return yardKey || 'Unknown Yard';
+            return yardKey || 'Unknown Yard'; // If no key found, return 'Unknown Yard'
         });
-        return yardNames.join(', ');
+        return yardNames.join(', '); // Join all names with comma for readable format
+    } else if (typeof yardId === 'string' && yardId.includes(',')) {
+        // Split the string by commas, convert to array of names
+        return yardId.split(',').map(id => {
+            const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id.trim()));
+            return yardKey || 'Unknown Yard'; // If no key found, return 'Unknown Yard'
+        }).join(', ');
+    } else if (typeof yardId === 'number' || (typeof yardId === 'string' && !isNaN(parseInt(yardId)))) {
+        // Convert single yard ID (number or string) to yard name
+        const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(yardId));
+        return yardKey || 'Unknown Yard'; // If no key found, return 'Unknown Yard'
     } else {
-        const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key].toString() === yardId.trim());
-        console.log(`Single ID mapping: ${yardId} to ${yardKey}`); // Log single ID mapping
-        return yardKey || 'Unknown Yard';  // Fallback if no matching key is found
+        // Handle unexpected input type
+        console.error('Unexpected yardId input type:', typeof yardId);
+        return 'Invalid Yard ID'; // Fallback for undefined or unexpected types
     }
 }
+
 
 
 
