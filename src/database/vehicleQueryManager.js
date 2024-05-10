@@ -139,19 +139,30 @@ function getModelVariations(model) {
 }
 
 
-function queryVehicles( yardId, make, model, yearInput ) {  // Default status is 'Active'
+function queryVehicles( yardId, make, model, yearInput, status) {
     const yardIds = parseYardIds(yardId);
-    const status = 'Any'
     let params = [];
     let conditions = [];
     let baseQuery = "SELECT * FROM vehicles";
 
     // Dynamically build the condition for vehicle status
-    if (status === 'Any') {
-        conditions.push("vehicle_status = 'NEW' OR vehicle_status = 'Active'");
-    } else {
-        conditions.push("vehicle_status = ?");
-        params.push(status);
+    switch (status) {
+        case 'ACTIVE':
+            // Excludes 'Inactive' vehicles, includes both 'Active' and 'New'
+            conditions.push("vehicle_status != 'INACTIVE'");
+            break;
+        case 'NEW':
+            // Includes only 'New' vehicles
+            conditions.push("vehicle_status = 'NEW'");
+            break;
+        case 'INACTIVE':
+            // Includes only 'Inactive' vehicles
+            conditions.push("vehicle_status = 'INACTIVE'");
+            break;
+        default:
+            // Defaults to not showing 'INACTIVE' vehicles
+            conditions.push("vehicle_status != 'INACTIVE'");
+            break;
     }
 
     if (yardIds !== 'ALL' && Array.isArray(yardIds) && yardIds.length > 0) {

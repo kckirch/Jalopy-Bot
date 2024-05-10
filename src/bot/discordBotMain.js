@@ -76,7 +76,7 @@ const makeAliases = {
 // Create a reverse lookup map from the alias list
 const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
   makeAliases[canonical].forEach(alias => {
-      acc[alias.toLowerCase()] = canonical; // Use lower case for case insensitive comparison
+      acc[alias.toUpperCase()] = canonical;
   });
   return acc;
 }, {});
@@ -216,16 +216,19 @@ client.on('interactionCreate', async (interaction) => {
       console.log('Database search command received.');
   
       const location = interaction.options.getString('location');
-      let userMakeInput = (interaction.options.getString('make') || 'Any').toLowerCase();
+      let userMakeInput = (interaction.options.getString('make') || 'Any').toUpperCase();
       let model = (interaction.options.getString('model') || 'Any').toUpperCase();
       let yearInput = (interaction.options.getString('year') || 'Any');
+      let status = (interaction.options.getString('status') || 'ACTIVE').toUpperCase();
   
       console.log('🔍 DB Lookup for:');
       console.log(`   🏞️ Location: ${location}`);
       console.log(`   🚗 Make: ${userMakeInput}`);
       console.log(`   📋 Model: ${model}`);
+      console.log(`   📅 Year: ${yearInput}`);
+      console.log(`   📊 Status: ${status}`);
   
-      if (userMakeInput !== 'any') {
+      if (userMakeInput !== 'ANY') {
           let canonicalMake = reverseMakeAliases[userMakeInput] || userMakeInput; // Resolve the make alias to its canonical form
 
           if (vehicleMakes.includes(canonicalMake)) {
@@ -254,7 +257,7 @@ client.on('interactionCreate', async (interaction) => {
         const yardId = convertLocationToYardId(location);
     
         try {
-          let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput); //need to fix this line for status
+          let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput, status); //need to fix this line for status
           // Sort vehicles first by 'first_seen' in descending order, then by 'model' alphabetically
           vehicles.sort((a, b) => {
               const firstSeenA = new Date(a.first_seen);
@@ -273,7 +276,7 @@ client.on('interactionCreate', async (interaction) => {
       
               const embed = new EmbedBuilder()
                   .setColor(0x0099FF) // Set a visually appealing color
-                  .setTitle(`Database search results for ${location} ${userMakeInput} ${model} (${yearInput})`)
+                  .setTitle(`Database search results for ${location} ${userMakeInput} ${model} (${yearInput}) ${status}`)
                   .setTimestamp()
                   .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
       
@@ -293,8 +296,8 @@ client.on('interactionCreate', async (interaction) => {
               return embed;
           };
       
-          console.log(`\n\nAttempting to create a button with customId as save: ${interaction.user.id} ${interaction.user.tag} ${yardId}:${userMakeInput}:${model}:${yearInput}\n\n`)
-          const status = 'Active';
+          console.log(`\n\nAttempting to create a button with customId as save: ${interaction.user.id} ${interaction.user.tag} ${yardId}:${userMakeInput}:${model}:${yearInput}:${status}\n\n`)
+          
       
           // Function to update the components based on the current page
           const updateComponents = (currentPage, userId) => new ActionRowBuilder()
@@ -354,13 +357,13 @@ client.on('interactionCreate', async (interaction) => {
                     const model = parts[3];
                     const yearInput = parts[4];
         
-                    console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}`);
+                    console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
         
                     // Check if the search already exists
                     try {
-                      const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, 'Active');
+                      const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, status);
                       if (!exists) {
-                          await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, 'Active', '');
+                          await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, status, '');
                           await i.reply({ content: 'Search saved successfully!', ephemeral: true });
                       } else {
                           await i.reply({ content: 'This search has already been saved.', ephemeral: true });
@@ -512,7 +515,11 @@ client.on('interactionCreate', async (interaction) => {
   function convertYardIdToLocation(yardId) {
     console.log("Received yardId:", yardId); // Log the input to see what is received
 
-    if (Array.isArray(yardId)) {
+    if (yardId === 'ALL') {
+        // Return all yard names joined by commas if 'ALL' is received
+        const allYardNames = Object.keys(yardIdMapping).map(key => key.replace(/[A-Z]/g, ' $&').trim()); // Convert keys like 'BOISE' to 'Boise'
+        return allYardNames.join(', ');
+    } else if (Array.isArray(yardId)) {
         // Handle array of yard IDs by converting each ID to its corresponding yard name
         const yardNames = yardId.map(id => {
             const yardKey = Object.keys(yardIdMapping).find(key => yardIdMapping[key] === parseInt(id));
@@ -535,6 +542,7 @@ client.on('interactionCreate', async (interaction) => {
         return 'Invalid Yard ID'; // Fallback for undefined or unexpected types
     }
 }
+
 
 
 

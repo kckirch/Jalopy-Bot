@@ -53,6 +53,15 @@ const searchCommand = new SlashCommandBuilder()
   .addStringOption(option =>
     option.setName('year')
     .setDescription('The year(s) of the vehicle (comma-separated list or range)')
+    .setRequired(false))
+  .addStringOption(option =>
+    option.setName('status')
+    .setDescription('The status of the vehicle | New, Active, or Inactive')
+    .addChoices(
+      { name: 'New', value: 'NEW' },
+      { name: 'Active (Includes New)', value: 'ACTIVE' },
+      { name: 'Inactive', value: 'INACTIVE' }
+    )
     .setRequired(false));
 
 
