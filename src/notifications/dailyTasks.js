@@ -49,7 +49,7 @@ function sendNotification(userId, embeds) {
 
 function formatMessages(vehicles, search) {
     let embeds = [];
-    const chunkSize = 25; // Maximum fields per embed
+    const chunkSize = 15; // Maximum fields per embed
 
     for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()

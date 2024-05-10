@@ -139,16 +139,16 @@ function getModelVariations(model) {
 }
 
 
-function queryVehicles(yardId, make, model, yearInput, status = 'Active') {  // Default status is 'Active'
+function queryVehicles( yardId, make, model, yearInput ) {  // Default status is 'Active'
     const yardIds = parseYardIds(yardId);
-    
+    const status = 'Any'
     let params = [];
     let conditions = [];
     let baseQuery = "SELECT * FROM vehicles";
 
     // Dynamically build the condition for vehicle status
     if (status === 'Any') {
-        conditions.push("vehicle_status != 'Inactive'");
+        conditions.push("vehicle_status = 'NEW' OR vehicle_status = 'Active'");
     } else {
         conditions.push("vehicle_status = ?");
         params.push(status);
