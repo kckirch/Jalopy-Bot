@@ -52,7 +52,7 @@ function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
             SELECT 1 FROM saved_searches
             WHERE user_id = TRIM(?) AND yard_id = TRIM(?) AND UPPER(make) = UPPER(TRIM(?)) AND UPPER(model) = UPPER(TRIM(?)) AND year_range = TRIM(?) AND status = TRIM(?);
         `;
-        const params = [userId.trim(), yardId.trim(), make.trim(), model.trim(), yearRange.trim(), status.trim()];
+        const params = [userId, yardId, make, model, yearRange, status];
         console.log("Running SQL Check for Existing Search:", sql, params);  // Log the query and parameters
         
         db.get(sql, params, (err, row) => {

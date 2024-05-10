@@ -89,16 +89,29 @@ function parseYearInput(yearInput) {
 }
 
 function parseYardIds(input) {
-    if (typeof input === 'string' && input.includes(',')) {
-        return input.split(',').map(id => parseInt(id.trim(), 10));
-    } else if (typeof input === 'string') {
-        return [parseInt(input, 10)];
+    if (typeof input === 'string') {
+        if (input.includes(',')) {
+            // Split the string by commas and map each part to an integer
+            return input.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+        } else {
+            // Convert a single string ID to an integer
+            const id = parseInt(input.trim(), 10);
+            return isNaN(id) ? [] : [id];
+        }
+    } else if (Array.isArray(input)) {
+        // Directly return the array assuming it's already an array of integers
+        return input;
+    } else if (typeof input === 'number') {
+        // Wrap a single numeric ID in an array
+        return [input];
     } else {
+        // Handle unexpected input type
         console.error('Unexpected yardId input type:', typeof input);
         console.error('The user input was:', input);
-        return []; // Return an empty array as a fallback
+        return []; // Return an empty array as a safe fallback
     }
 }
+
 
 
 
