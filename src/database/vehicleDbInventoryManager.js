@@ -29,14 +29,14 @@ function getYardNameById(yardId) {
 function markInactiveVehicles(sessionID) {
     const sql = `
         UPDATE vehicles
-        SET vehicle_status = 'Inactive'
+        SET vehicle_status = 'INACTIVE'
         WHERE session_id != ?;
     `;
     db.run(sql, [sessionID], function(err) {
         if (err) {
-            console.error('Error marking vehicles as inactive:', err);
+            console.error('Error marking vehicles as INACTIVE:', err);
         } else {
-            console.log(`Vehicles not seen on ${sessionID} have been marked as inactive.`);
+            console.log(`Vehicles not seen on ${sessionID} have been marked as INACTIVE.`);
         }
     });
 }

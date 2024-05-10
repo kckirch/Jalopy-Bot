@@ -13,7 +13,7 @@ async function processDailySavedSearches() {
         const savedSearches = await getAllSavedSearches();
         for (const search of savedSearches) {
             console.log("Processing search for:", search.username);
-            const results = await await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'Active');
+            const results = await await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
             if (results.length > 0) {
                 const embeds = formatMessages(results, search);
                 sendNotification(search.user_id, embeds);
@@ -49,7 +49,7 @@ function sendNotification(userId, embeds) {
 
 function formatMessages(vehicles, search) {
     let embeds = [];
-    const chunkSize = 15; // Maximum fields per embed
+    const chunkSize = 25; // Maximum fields per embed
 
     for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()
