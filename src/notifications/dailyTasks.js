@@ -61,10 +61,15 @@ function formatMessages(vehicles, search) {
         vehicles.slice(i, i + chunkSize).forEach(vehicle => {
             const firstSeenFormatted = new Date(vehicle.first_seen).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
             const lastUpdatedFormatted = new Date(vehicle.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            
+            let valueText = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}\nFirst Seen: ${firstSeenFormatted}\nLast Updated: ${lastUpdatedFormatted}`;
+            if (vehicle.notes) {
+                valueText += `\nNotes: ${vehicle.notes}`; // Add notes to the value text if present
+            }
 
             embed.addFields({
                 name: `${vehicle.vehicle_make} ${vehicle.vehicle_model} (${vehicle.vehicle_year})`,
-                value: `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}\nFirst Seen: ${firstSeenFormatted}\nLast Updated: ${lastUpdatedFormatted}`,
+                value: valueText,
                 inline: false
             });
         });
@@ -74,6 +79,7 @@ function formatMessages(vehicles, search) {
 
     return embeds;
 }
+
 
 
 module.exports = { processDailySavedSearches };

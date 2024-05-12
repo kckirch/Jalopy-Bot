@@ -280,18 +280,25 @@ client.on('interactionCreate', async (interaction) => {
                   .setTimestamp()
                   .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
       
-              // Using fields to separate entries for better readability
+              
               pageItems.forEach(v => {
-                  const firstSeen = new Date(v.first_seen);
-                  const lastUpdated = new Date(v.last_updated);
-                  const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-                  const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-                  embed.addFields({
-                      name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                      value: `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`,
-                      inline: false // Setting inline to false ensures each vehicle entry is clearly separated.
-                  });
-              });
+                const firstSeen = new Date(v.first_seen);
+                const lastUpdated = new Date(v.last_updated);
+                const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
+                const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+                let vehicleDescription = `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
+            
+                if (v.notes) {
+                    vehicleDescription += `\nNotes: ${v.notes}`;
+                }
+            
+                embed.addFields({
+                    name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                    value: vehicleDescription,
+                    inline: false
+                });
+            });
+            
       
               return embed;
           };
