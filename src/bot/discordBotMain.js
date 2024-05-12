@@ -55,22 +55,22 @@ const treasureValleyYards = [1020, 1119, 1021, 1022]; // Boise, Garden City, Cal
 
 
 const vehicleMakes = [
-  'Acura', 'Alfa Romeo', 'AMC', 'Audi', 'BMW', 'Buick', 'Cadillac', 
-  'Chevrolet', 'Chrysler', 'Datsun', 'Dodge', 'Eagle', 'Fiat', 'Ford', 'Geo', 
-  'GMC', 'Honda', 'Hummer', 'Hyundai', 'Infiniti', 'Isuzu', 
-  'Jaguar', 'Jeep', 'Kia', 'Land Rover', 'Lexus', 
-  'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mercury', 'MG', 'Mini', 'Mitsubishi', 'Nash',
-  'Nissan', 'Oldsmobile', 'Packard', 'Plymouth', 'Pontiac', 'Porsche', 'Ram',
-  'Saab', 'Saturn', 'Scion', 'Smart', 'Subaru', 'Suzuki', 
-  'Toyota', 'Triumph', 'Volkswagen', 'Volvo'
+  'ACURA', 'ALFA ROMEO', 'AMC', 'AUDI', 'BMW', 'BUICK', 'CADILLAC',
+  'CHEVROLET', 'CHRYSLER', 'DATSUN', 'DODGE', 'EAGLE', 'FIAT', 'FORD', 'GEO',
+  'GMC', 'HONDA', 'HUMMER', 'HYUNDAI', 'INFINITI', 'ISUZU',
+  'JAGUAR', 'JEEP', 'KIA', 'LAND ROVER', 'LEXUS',
+  'LINCOLN', 'MAZDA', 'MERCEDES-BENZ', 'MERCURY', 'MG', 'MINI', 'MITSUBISHI', 'NASH',
+  'NISSAN', 'OLDSMOBILE', 'PACKARD', 'PLYMOUTH', 'PONTIAC', 'PORSCHE', 'RAM',
+  'SAAB', 'SATURN', 'SCION', 'SMART', 'SUBARU', 'SUZUKI',
+  'TOYOTA', 'TRIUMPH', 'VOLKSWAGEN', 'VOLVO'
 ];
 const makeAliases = {
-  'Chevrolet' : ['chevrolet', 'chevy', 'chev'],
-  'Mercedes' : ['mercedes', 'mercedes-benz', 'mercedes benz', 'benz', 'mercedesbenz'],
-  'Volkswagen' : ['volkswagen', 'vw'],
-  'Land Rover' : ['land rover', 'landrover'],
-  'Mini' : ['mini', 'mini cooper'],
-  'BMW' : ['bmw', 'bimmer'],
+  'Chevrolet' : ['CHEVROLET', 'CHEVY', 'CHEV', 'chevy'],
+  'Mercedes' : ['MERCEDES', 'MERCEDES-BENZ', 'MERCEDES BENZ', 'BENZ', 'MERCEDESBENZ'],
+  'Volkswagen' : [ 'VW'],
+  'Land Rover' : ['LAND ROVER', 'LANDROVER'],
+  'Mini' : ['MINI COOPER'],
+  'BMW' : [ 'BIMMER'],
 };
 
 // Create a reverse lookup map from the alias list
@@ -228,30 +228,30 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`   📅 Year: ${yearInput}`);
       console.log(`   📊 Status: ${status}`);
   
-      if (userMakeInput !== 'ANY') {
-          let canonicalMake = reverseMakeAliases[userMakeInput] || userMakeInput; // Resolve the make alias to its canonical form
-
-          if (vehicleMakes.includes(canonicalMake)) {
-            console.log(`   🚗 Canonical Make Found: ${canonicalMake}\n\n`);
-          }
+    
   
-          if (!vehicleMakes.includes(canonicalMake)) {
-              // If the canonical make is not recognized, inform the user and list available options
+      // First check directly in vehicleMakes
+      if (vehicleMakes.includes(userMakeInput)) {
+        console.log(`Direct make found: ${userMakeInput}`);
+      } else {
+          // If not found, check for a canonical name via makeAliases
+          const canonicalMake = reverseMakeAliases[userMakeInput];
+          if (canonicalMake && vehicleMakes.includes(canonicalMake.toUpperCase())) {
+              userMakeInput = canonicalMake;  // Update userMakeInput to the canonical form
+              console.log(` 🚗 Canonical Make Found: ${canonicalMake}`);
+          } else {
+              // If the make is still not recognized, inform the user and list available options
               const makesEmbed = new EmbedBuilder()
-                  .setColor(0x0099FF) // Set a visually appealing color
+                  .setColor(0x0099FF)  // A visually appealing color
                   .setTitle('Available Vehicle Makes')
                   .setDescription('The make you entered is not recognized. Please choose from the list below.')
                   .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
-  
-              await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
-              console.log(`no valid make found, search ended\n\n`);
-              return; // Stop further execution if make is not valid
               
+              await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
+              console.log('No valid make found, search ended.');
+              return;  // Stop further execution if make is not valid
           }
-          userMakeInput = canonicalMake; // Use the canonical make for further processing
-      } else {
-          userMakeInput = 'ANY'; // Set to 'ANY' for the query
-      }
+        }
   
       if (location) {
         const yardId = convertLocationToYardId(location);
