@@ -36,6 +36,11 @@ const { getSavedSearches, addSavedSearch, checkExistingSearch, deleteSavedSearch
 
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 
+const { startScheduledTasks } = require('../notifications/scheduler');
+const { verifySessionAndUpdateStatus } = require('../notifications/sessionCheck');
+
+const { getSessionID } = require('./utils.js');
+
 // Initialize database
 setupDatabase().then(() => {
   console.log('Database setup completed successfully.');
@@ -55,7 +60,7 @@ const treasureValleyYards = [1020, 1119, 1021, 1022]; // Boise, Garden City, Cal
 
 
 const vehicleMakes = [
-  'ACURA', 'ALFA ROMEO', 'AMC', 'AUDI', 'BMW', 'BUICK', 'CADILLAC',
+  'ALL', 'ACURA', 'ALFA ROMEO', 'AMC', 'AUDI', 'BMW', 'BUICK', 'CADILLAC',
   'CHEVROLET', 'CHRYSLER', 'DATSUN', 'DODGE', 'EAGLE', 'FIAT', 'FORD', 'GEO',
   'GMC', 'HONDA', 'HUMMER', 'HYUNDAI', 'INFINITI', 'ISUZU',
   'JAGUAR', 'JEEP', 'KIA', 'LAND ROVER', 'LEXUS',
@@ -81,10 +86,6 @@ const reverseMakeAliases = Object.keys(makeAliases).reduce((acc, canonical) => {
   return acc;
 }, {});
 
-function getSessionID() {
-  const today = new Date();
-  return today.toISOString().substring(0, 10).replace(/-/g, '');  // Format as 'YYYYMMDD'
-}
 
 
 
@@ -92,9 +93,18 @@ function getSessionID() {
 // Global reference for the message collector
 let messageCollector = null;
 
-client.on('ready', (c) => {
+client.on('ready', async (c) => {
   console.log(`✅   ${c.user.tag} is online.  ✅`);
+  try {
+    startScheduledTasks();
+    console.log('Scheduled tasks started.');
+    console.log("Current server time:", new Date().toLocaleString());
+
+  } catch (error) {
+    console.error('Failed to start scheduled tasks:', error);
+  }
 });
+
 
 client.on('interactionCreate', async (interaction) => {
 
@@ -491,7 +501,24 @@ client.on('interactionCreate', async (interaction) => {
       console.error('Error processing daily saved searches:', error);
       await interaction.reply('An error occurred while processing daily saved searches.');
     }
-  }
+  } else if (interaction.commandName === 'runtestscheduler') {
+    console.log('Test scheduler command received.');
+
+    // Immediately acknowledge the interaction
+    await interaction.deferReply(); // This prevents the "Application did not respond" message
+
+    try {
+        const { performScrape, processSearches } = require('../notifications/testScheduler');
+        await performScrape();
+        await processSearches();
+        await interaction.editReply('Test scheduler functions have been executed successfully.'); // Use editReply after deferReply
+    } catch (error) {
+        console.error('Error running test scheduler:', error);
+        await interaction.editReply('An error occurred while running the test scheduler.'); // Update the user on errors similarly
+    }
+}
+
+
 
 
 
@@ -558,7 +585,7 @@ client.on('interactionCreate', async (interaction) => {
 
 
 
-
+module.exports = { getSessionID, client };
 
 
 client.login(process.env.TOKEN);

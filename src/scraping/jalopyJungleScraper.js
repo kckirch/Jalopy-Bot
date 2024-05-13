@@ -23,6 +23,8 @@ const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/veh
 
 
 async function webScrape(yardId, make, model, sessionID) {
+    const startTime = Date.now();  // Capture start time
+
     let options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--disable-gpu');
@@ -38,7 +40,8 @@ async function webScrape(yardId, make, model, sessionID) {
         .build();
 
     try {
-       
+
+        
         console.log('🔍 Scraping for:');
         console.log(`   🏞️ Yard ID: ${yardId}`);
         console.log(`   🚗 Make: ${make}`);
@@ -76,6 +79,12 @@ async function webScrape(yardId, make, model, sessionID) {
         markInactiveVehicles(sessionID);
         console.log('🛑 Closing browser');
         await driver.quit();
+
+        const endTime = Date.now();  // Capture end time
+        const duration = endTime - startTime;
+        const minutes = Math.floor(duration / 60000);  // Convert duration to minutes
+        const seconds = ((duration % 60000) / 1000).toFixed(0);  // Convert remainder to seconds
+        console.log(`Scraping Duration: ${minutes} minutes and ${seconds} seconds.`);
     }
 }
 
