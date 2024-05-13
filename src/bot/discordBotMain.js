@@ -37,7 +37,6 @@ const { getSavedSearches, addSavedSearch, checkExistingSearch, deleteSavedSearch
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 
 const { startScheduledTasks } = require('../notifications/scheduler');
-const { verifySessionAndUpdateStatus } = require('../notifications/sessionCheck');
 
 const { getSessionID } = require('./utils.js');
 
@@ -60,7 +59,7 @@ const treasureValleyYards = [1020, 1119, 1021, 1022]; // Boise, Garden City, Cal
 
 
 const vehicleMakes = [
-  'ALL', 'ACURA', 'ALFA ROMEO', 'AMC', 'AUDI', 'BMW', 'BUICK', 'CADILLAC',
+  'ACURA', 'ALFA ROMEO', 'AMC', 'AUDI', 'BMW', 'BUICK', 'CADILLAC',
   'CHEVROLET', 'CHRYSLER', 'DATSUN', 'DODGE', 'EAGLE', 'FIAT', 'FORD', 'GEO',
   'GMC', 'HONDA', 'HUMMER', 'HYUNDAI', 'INFINITI', 'ISUZU',
   'JAGUAR', 'JEEP', 'KIA', 'LAND ROVER', 'LEXUS',
@@ -240,9 +239,13 @@ client.on('interactionCreate', async (interaction) => {
   
     
   
+    // Skip make validation if it is empty
+    if (userMakeInput === 'ANY') {
+      console.log('Make is empty, skipping validation.');
+    } else {
       // First check directly in vehicleMakes
       if (vehicleMakes.includes(userMakeInput)) {
-        console.log(`Direct make found: ${userMakeInput}`);
+          console.log(`Direct make found: ${userMakeInput}`);
       } else {
           // If not found, check for a canonical name via makeAliases
           const canonicalMake = reverseMakeAliases[userMakeInput];
@@ -261,7 +264,8 @@ client.on('interactionCreate', async (interaction) => {
               console.log('No valid make found, search ended.');
               return;  // Stop further execution if make is not valid
           }
-        }
+      }
+    }
   
       if (location) {
         const yardId = convertLocationToYardId(location);
@@ -280,38 +284,41 @@ client.on('interactionCreate', async (interaction) => {
           const totalPages = Math.ceil(vehicles.length / itemsPerPage);
       
           const getPage = (page) => {
-              const start = page * itemsPerPage;
-              const end = start + itemsPerPage;
-              const pageItems = vehicles.slice(start, end);
-      
-              const embed = new EmbedBuilder()
-                  .setColor(0x0099FF) // Set a visually appealing color
-                  .setTitle(`Database search results for ${location} ${userMakeInput} ${model} (${yearInput}) ${status}`)
-                  .setTimestamp()
-                  .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
-      
-              
-              pageItems.forEach(v => {
-                const firstSeen = new Date(v.first_seen);
-                const lastUpdated = new Date(v.last_updated);
-                const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-                const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-                let vehicleDescription = `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
-            
-                if (v.notes) {
-                    vehicleDescription += `\nNotes: ${v.notes}`;
-                }
-            
-                embed.addFields({
-                    name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-                    value: vehicleDescription,
-                    inline: false
+            const start = page * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageItems = vehicles.slice(start, end);
+        
+            const embed = new EmbedBuilder()
+                .setColor(0x0099FF) // Set a visually appealing color
+                .setTitle(`Database search results for ${location} ${userMakeInput || 'Any'} ${model} (${yearInput}) ${status}`)
+                .setTimestamp()
+                .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+        
+            if (pageItems.length === 0) {
+                embed.setDescription('No Results Found');
+            } else {
+                pageItems.forEach(v => {
+                    const firstSeen = new Date(v.first_seen);
+                    const lastUpdated = new Date(v.last_updated);
+                    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
+                    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+                    let vehicleDescription = `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
+        
+                    if (v.notes) {
+                        vehicleDescription += `\nNotes: ${v.notes}`;
+                    }
+        
+                    embed.addFields({
+                        name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
+                        value: vehicleDescription,
+                        inline: false
+                    });
                 });
-            });
-            
-      
-              return embed;
-          };
+            }
+        
+            return embed;
+        };
+        
       
           console.log(`\n\nAttempting to create a button with customId as save: ${interaction.user.id} ${interaction.user.tag} ${yardId}:${userMakeInput}:${model}:${yearInput}:${status}\n\n`)
           
@@ -323,16 +330,17 @@ client.on('interactionCreate', async (interaction) => {
                   .setCustomId(`previous:${userId}`)
                   .setLabel('Previous')
                   .setStyle(ButtonStyle.Primary)
-                  .setDisabled(currentPage === 0),
+                  .setDisabled(currentPage === 0 || vehicles.length === 0),
               new ButtonBuilder()
                   .setCustomId(`next:${userId}`)
                   .setLabel('Next')
                   .setStyle(ButtonStyle.Primary)
-                  .setDisabled(currentPage === totalPages - 1),
+                  .setDisabled(currentPage === totalPages - 1 || vehicles.length === 0),
               new ButtonBuilder()
                   .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}:${status}:${userId}`)
                   .setLabel('Save Search')
                   .setStyle(ButtonStyle.Success)
+                  .setDisabled(vehicles.length === 0)
           );
       
       
