@@ -86,12 +86,16 @@ const dailySearchCommand = new SlashCommandBuilder()
   .setName('dailysavedsearch')
   .setDescription('Enable or disable daily saved searches')
 
+const runTestScheduler = new SlashCommandBuilder()
+  .setName('runtestscheduler')
+  .setDescription('Run the test scheduler');
 
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
   savedSearchCommand.toJSON(),
-  dailySearchCommand.toJSON()
+  dailySearchCommand.toJSON(),
+  runTestScheduler.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
