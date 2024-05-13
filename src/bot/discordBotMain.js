@@ -378,7 +378,7 @@ client.on('interactionCreate', async (interaction) => {
                         const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, status);
                         if (!exists) {
                             await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, status, '');
-                            await i.reply({ content: 'Search saved successfully!', ephemeral: true });
+                            await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
                         } else {
                             await i.reply({ content: 'This search has already been saved.', ephemeral: true });
                         }
