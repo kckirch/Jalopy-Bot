@@ -88,14 +88,19 @@ const dailySearchCommand = new SlashCommandBuilder()
 
 const runTestScheduler = new SlashCommandBuilder()
   .setName('runtestscheduler')
-  .setDescription('Run the test scheduler');
+  .setDescription('Run the test scheduler')
+
+const commandsCommand = new SlashCommandBuilder()
+.setName('commands')
+.setDescription('Showcase all user commands with examples');
 
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
   savedSearchCommand.toJSON(),
   dailySearchCommand.toJSON(),
-  runTestScheduler.toJSON()
+  runTestScheduler.toJSON(),
+  commandsCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

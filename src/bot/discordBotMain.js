@@ -30,6 +30,7 @@ const { queryVehicles } = require('../database/vehicleQueryManager');
 
 const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { ButtonBuilder, ActionRowBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { searchEmbed, savedSearchEmbed } = require('../testing/commandEmbeds');
 
 const { setupDatabase } = require('../database/database');
 const { getSavedSearches, addSavedSearch, checkExistingSearch, deleteSavedSearch } = require('../database/savedSearchManager');
@@ -508,7 +509,12 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Error running test scheduler:', error);
         await interaction.editReply('An error occurred while running the test scheduler.'); // Update the user on errors similarly
     }
+} else if (interaction.commandName === 'commands') {
+    console.log('Commands showcase command received.');
+    await interaction.reply({ embeds: [searchEmbed, savedSearchEmbed]  });
+
 }
+
 
 
 
