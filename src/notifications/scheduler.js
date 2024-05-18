@@ -47,7 +47,7 @@ function startScheduledTasks() {
     
 
     // Check session and process saved searches at a slightly later time to ensure data integrity
-    cron.schedule('12 5 * * *', async () => {
+    cron.schedule('45 5 * * *', async () => {
         console.log('Checking sessions and processing saved searches.');
 
         try {

@@ -11,16 +11,14 @@
  * This module leverages Selenium for browser automation to fetch and submit forms dynamically, handle navigation, and extract vehicle data for subsequent database updates using `insertOrUpdateVehicle` from the vehicleDbInventoryManager module.
  */
 
-
-const { Builder, By, Key, until, Capabilities } = require('selenium-webdriver');
-const { Browser } = require('selenium-webdriver');
+const { Builder, By, until } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
-
-
-
-
+const os = require('os');
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 
+// Determine the Chromedriver path based on the operating system
+const isWindows = os.platform() === 'win32';
+const chromedriverPath = isWindows ? 'path/to/windows/chromedriver' : '/usr/local/bin/chromedriver';
 
 async function webScrape(yardId, make, model, sessionID) {
     const startTime = Date.now();  // Capture start time
@@ -32,16 +30,16 @@ async function webScrape(yardId, make, model, sessionID) {
     options.addArguments('excludeSwitches=enable-logging');
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--allow-running-insecure-content');
-    
+
+    let serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);  // Path to system-installed Chromedriver
 
     let driver = await new Builder()
-        .forBrowser(Browser.CHROME)
+        .forBrowser('chrome')
         .setChromeOptions(options)
+        .setChromeService(serviceBuilder)
         .build();
 
     try {
-
-        
         console.log('🔍 Scraping for:');
         console.log(`   🏞️ Yard ID: ${yardId}`);
         console.log(`   🚗 Make: ${make}`);
@@ -49,15 +47,11 @@ async function webScrape(yardId, make, model, sessionID) {
 
         await driver.get('https://inventory.pickapartjalopyjungle.com/');
 
-    
-
-        //Handle if searching for all yards
+        // Handle if searching for all yards
         if (yardId === 'ALL') {
-            // Refetch yard options for each iteration to avoid stale references
             await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
             let yardOptions = await driver.findElements(By.css('#yard-id option'));
             for (let i = 1; i < yardOptions.length; i++) {  // Start from 1 to skip default/placeholder option
-                // Re-fetch the dropdown and select the yard to handle potential updates
                 await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
                 yardOptions = await driver.findElements(By.css('#yard-id option'));
                 let currentYardId = await yardOptions[i].getAttribute('value');
@@ -70,9 +64,6 @@ async function webScrape(yardId, make, model, sessionID) {
         } else {
             await scrapeYardMakeModel(driver, yardId, make, model, sessionID);
         }
-
-
-
     } catch (error) {
         console.error('Scraping failed:', error);
     } finally {
@@ -88,7 +79,6 @@ async function webScrape(yardId, make, model, sessionID) {
     }
 }
 
-
 async function scrapeYardMakeModel(driver, yardId, make, model, sessionID) {
     console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
     await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
@@ -96,11 +86,9 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID) {
     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
     if (make === 'ANY') {
-        // Refetch makes for each iteration to avoid stale references
         await driver.wait(until.elementLocated(By.css('#car-make')), 5000);
         let makeOptions = await driver.findElements(By.css('#car-make option'));
         for (let i = 1; i < makeOptions.length; i++) {  // Start from 1 to skip default/placeholder option
-            // Re-fetch the dropdown and select the make to handle potential updates
             await driver.wait(until.elementLocated(By.css('#car-make')), 5000);
             makeOptions = await driver.findElements(By.css('#car-make option'));
             let currentMake = await makeOptions[i].getAttribute('value');
@@ -117,14 +105,12 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID) {
     console.log(`✅ Finished scraping yard: ${yardId}, make: ${make}, model: ${model}`);
 }
 
-
 async function scrapeMakeModel(driver, yardId, make, model, sessionID) {
     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
     await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
     await driver.sleep(1000);
     await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
-
 
     await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
 
@@ -142,12 +128,8 @@ async function scrapeMakeModel(driver, yardId, make, model, sessionID) {
                 '', // notes
                 sessionID // session ID
             );
-            
         }
     }
 }
-
-
-    
 
 module.exports = { webScrape };
