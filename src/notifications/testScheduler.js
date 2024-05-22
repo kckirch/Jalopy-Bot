@@ -1,7 +1,7 @@
 // testScheduler.js
 const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
-const { getSessionID } = require('../bot/utils');
+const { getSessionID } = require('../bot/utils/utils');
 
 // Helper function to perform retries with a delay
 function retryOperation(operation, retries, delay) {

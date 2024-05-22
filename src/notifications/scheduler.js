@@ -4,7 +4,7 @@
 const cron = require('node-cron');
 const { webScrape } = require('../scraping/jalopyJungleScraper');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
-const { getSessionID } = require('../bot/utils');
+const { getSessionID } = require('../bot/utils/utils');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
 
 // Helper function to perform retries with a delay
