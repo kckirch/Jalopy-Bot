@@ -18,7 +18,7 @@ const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/veh
 
 // Determine the Chromedriver path based on the operating system
 const isWindows = os.platform() === 'win32';
-const chromedriverPath = isWindows ? 'path/to/windows/chromedriver' : '/usr/local/bin/chromedriver';
+const chromedriverPath = isWindows ? 'C:/Program Files/chromedriver-win64/chromedriver.exe' : '/usr/local/bin/chromedriver'; //your paths for chromedriver
 
 async function webScrape(yardId, make, model, sessionID) {
     const startTime = Date.now();  // Capture start time
@@ -31,7 +31,7 @@ async function webScrape(yardId, make, model, sessionID) {
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--allow-running-insecure-content');
 
-    let serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);  // Path to system-installed Chromedriver
+    let serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);
 
     let driver = await new Builder()
         .forBrowser('chrome')
@@ -65,7 +65,13 @@ async function webScrape(yardId, make, model, sessionID) {
             await scrapeYardMakeModel(driver, yardId, make, model, sessionID);
         }
     } catch (error) {
-        console.error('Scraping failed:', error);
+        if (error.message.includes('spawn') && error.message.includes('ENOENT')) {
+            console.error('Error: Chromedriver not found. Please ensure the path to chromedriver is correct.');
+        } else if (error.message.includes('session not created')) {
+            console.error('Error: Chromedriver version mismatch. Please ensure you have the correct version of Chromedriver for your installed Chrome browser.');
+        } else {
+            console.error('Scraping failed:', error);
+        }
     } finally {
         markInactiveVehicles(sessionID);
         console.log('🛑 Closing browser');
