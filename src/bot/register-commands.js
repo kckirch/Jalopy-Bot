@@ -67,7 +67,7 @@ const searchCommand = new SlashCommandBuilder()
 
 const savedSearchCommand = new SlashCommandBuilder()
   .setName('savedsearch')
-  .setDescription('Save a search for automatic daily updates')
+  .setDescription('Send Your Saved Searches to Your DMs!')
   .addStringOption(option => 
     option.setName('location')
     .setDescription('The yard location to search')
@@ -84,7 +84,7 @@ const savedSearchCommand = new SlashCommandBuilder()
 
 const dailySearchCommand = new SlashCommandBuilder()
   .setName('dailysavedsearch')
-  .setDescription('Enable or disable daily saved searches')
+  .setDescription('Manually Force a daily saved searches to send to users')
 
 const runTestScheduler = new SlashCommandBuilder()
   .setName('runtestscheduler')

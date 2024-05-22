@@ -1,6 +1,6 @@
 //dailyTasks.js is a module that contains the processDailySavedSearches function. This function is responsible for querying the database for all saved searches and sending a notification to the user if any vehicles match the search criteria. The function is called once a day by the scheduler module.
 
-const { client } = require('../bot/client');
+const { client } = require('../bot/utils/client');
 const { getAllSavedSearches } = require('../database/savedSearchManager');
 const { queryVehicles } = require('../database/vehicleQueryManager');
 
