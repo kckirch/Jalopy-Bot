@@ -15,5 +15,7 @@
     "node-cron": "^3.0.3",
     "selenium-webdriver": "^4.16.0",
     "sqlite3": "^5.1.7"
-  }
+  },
+  "optionalDependencies": {
+    "chromedriver": "^98.0.1"}
 }
