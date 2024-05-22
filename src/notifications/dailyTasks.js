@@ -1,10 +1,10 @@
 const { client } = require('../bot/utils/client');
 const { getAllSavedSearches } = require('../database/savedSearchManager');
-const { queryVehicles } = require('../database/vehicleQueryManager');
+const { queryVehicles, executeQuery } = require('../database/vehicleQueryManager');
 const { EmbedBuilder } = require('discord.js');
 
 const NEW_VEHICLES_CHANNEL_ID = '1239688596080955492';
-const CRUSHED_VEHICLES_CHANNEL_ID = '1242953295006531596';
+
 
 async function processDailySavedSearches() {
     try {
@@ -19,7 +19,6 @@ async function processDailySavedSearches() {
         }
 
         await notifyNewVehicles();
-        await notifyCrushedVehicles();
 
     } catch (error) {
         console.error('Error processing daily saved searches:', error);
@@ -39,18 +38,6 @@ async function notifyNewVehicles() {
     }
 }
 
-async function notifyCrushedVehicles() {
-    try {
-        const today = new Date().toISOString().substring(0, 10);
-        const crushedVehicles = await queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'INACTIVE', today);
-        if (crushedVehicles.length > 0) {
-            const embeds = formatVehicles(crushedVehicles, 'Vehicles Marked Inactive Today');
-            sendChannelNotification(CRUSHED_VEHICLES_CHANNEL_ID, embeds);
-        }
-    } catch (error) {
-        console.error('Error notifying crushed vehicles:', error);
-    }
-}
 
 function sendNotification(userId, embeds) {
     if (!client || !client.isReady()) {
@@ -91,8 +78,9 @@ function sendChannelNotification(channelId, embeds) {
 function formatMessages(vehicles, search) {
     let embeds = [];
     const chunkSize = 25; // Maximum fields per embed
+    const maxEmbeds = 10; // Maximum number of embeds per message
 
-    for (let i = 0; i < vehicles.length; i += chunkSize) {
+    for (let i = 0; i < vehicles.length && embeds.length < maxEmbeds; i += chunkSize) {
         const embed = new EmbedBuilder()
             .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name} with ${search.status} status`)
             .setDescription(`Results found: ${vehicles.length}`)
@@ -124,8 +112,9 @@ function formatMessages(vehicles, search) {
 function formatVehicles(vehicles, title) {
     let embeds = [];
     const chunkSize = 25; // Maximum fields per embed
+    const maxEmbeds = 10; // Maximum number of embeds per message
 
-    for (let i = 0; i < vehicles.length; i += chunkSize) {
+    for (let i = 0; i < vehicles.length && embeds.length < maxEmbeds; i += chunkSize) {
         const embed = new EmbedBuilder()
             .setTitle(title)
             .setDescription(`Results found: ${vehicles.length}`)
