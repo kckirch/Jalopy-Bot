@@ -142,6 +142,7 @@ async function handleSearchCommand(interaction) {
             const make = parts[2];
             const model = parts[3];
             const yearInput = parts[4];
+            const yardName = convertYardIdToLocation(yardId); // Make sure yardName is defined here
 
             console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
 
