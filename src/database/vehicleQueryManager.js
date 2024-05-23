@@ -34,22 +34,25 @@ const makeAliases = {
 
 
 const modelAliases = {
-    '1500' : ['1500', 'C1500', 'K1500'],
-    '2500' : ['2500', 'C2500', 'K2500'],
-    '3500' : ['3500', 'C3500', 'K3500'],
-    '3 SERIES' : ['3 series', '3-series', '3series','318', '320', '323', '325', '328', '330', '335'],
-    '5 SERIES' : ['5 series', '5-series', '5series','525', '528', '530', '535', '540', '545', '550'],
-    '7 SERIES' : ['7 series', '7-series', '7series','740', '745', '750', '760'],
-    'X' : ['x3', 'X3', 'x5', 'X5', 'x6', 'X6'],
-    'E CLASS' : ['e class', 'e-class', 'eclass', 'e320', 'e350', 'e500', 'e550', 'e63'],
-    'C CLASS' : ['c class', 'c-class', 'cclass', 'c230', 'c240', 'c250', 'c280', 'c300', 'c320', 'c350', 'c63'],
-    'S CLASS' : ['s class', 's-class', 'sclass', 's430', 's500', 's550', 's600', 's63'],
-    'F150' : ['f150', 'f-150', 'f 150'],
-    'F250' : ['f250', 'f-250', 'f 250'],
-    'F350' : ['f350', 'f-350', 'f 350'],
-
-    
+    '1500': ['C1500', 'K1500', 'Silverado', 'Sierra'],
+    '2500': ['C2500', 'K2500', 'Silverado', 'Sierra'],
+    '3500': ['C3500', 'K3500', 'Silverado', 'Sierra'],
+    '3 SERIES': ['3 series', '3-series', '3series', '318', '325', '328', '330', '330CI', '335', 'M3', '340'],
+    '5 SERIES': ['5 series', '5-series', '5series', '528', '530I', '540', '545I', '550', 'M5'],
+    '7 SERIES': ['7 series', '7-series', '7series', '750IL'],
+    'X': ['x3', 'X3', 'x5', 'X5', 'x6', 'X6'],
+    'E CLASS': ['e class', 'e-class', 'eclass', 'e320', 'e350', 'e500', 'e550', 'e63'],
+    'C CLASS': ['c class', 'c-class', 'cclass', 'c230', 'c240', 'c250', 'c280', 'c300', 'c320', 'c350', 'c63'],
+    'S CLASS': ['s class', 's-class', 'sclass', 's430', 's500', 's550', 's600', 's63'],
+    'F150': ['f-150', 'f 150'],
+    'F250': ['f-250', 'f 250'],
+    'F350': ['f-350', 'f 350'],
+    'IS': ['IS250', 'IS300'],
+    'LS': ['LS400', 'LS430'],
+    'RX': ['RX300', 'RX350', 'RX400H'],
+    'SC': ['SC300', 'SC430']
 };
+
 
 function parseYearInput(yearInput) {
     // If the yearInput is not provided or is an empty string, return no conditions or parameters
