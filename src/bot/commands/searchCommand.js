@@ -2,6 +2,19 @@ const { queryVehicles } = require('../../database/vehicleQueryManager');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
 const { getSavedSearches, deleteSavedSearch, checkExistingSearch, addSavedSearch } = require('../../database/savedSearchManager');
+const crypto = require('crypto');
+
+const parameterStore = new Map();
+
+function generateHash(parameters) {
+  const hash = crypto.createHash('md5').update(parameters).digest('hex');
+  parameterStore.set(hash, parameters);
+  return hash;
+}
+
+function resolveHash(hash) {
+  return parameterStore.get(hash);
+}
 
 async function handleSearchCommand(interaction) {
   const location = interaction.options.getString('location');
@@ -67,7 +80,7 @@ async function handleSearchCommand(interaction) {
           .setTimestamp();
 
         if (vehicles.length === 0) {
-          embed.setDescription('No Results Found')
+          embed.setDescription('No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)')
             .setFooter({ text: 'Page 0 of 0' });
         } else {
           embed.setFooter({ text: `Page ${page + 1} of ${totalPages}` });
@@ -93,72 +106,102 @@ async function handleSearchCommand(interaction) {
         return embed;
       };
 
-      const updateComponents = (currentPage, userId) => new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(`previous:${userId}`)
-            .setLabel('Previous')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(currentPage === 0 || vehicles.length === 0),
-          new ButtonBuilder()
-            .setCustomId(`next:${userId}`)
-            .setLabel('Next')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(currentPage === totalPages - 1 || vehicles.length === 0),
-          new ButtonBuilder()
-            .setCustomId(`save:${yardId}:${userMakeInput}:${model}:${yearInput}:${status}:${userId}`)
-            .setLabel('Save Search')
-            .setStyle(ButtonStyle.Success)
-            .setDisabled(vehicles.length === 0)
-        );
+      const updateComponents = (currentPage, userId) => {
+        try {
+          const createCustomId = (action) => {
+            const parameters = `pg:${currentPage}|act:${action}|uid:${userId}|yd:${yardId}|mk:${userMakeInput}|md:${model}|yr:${yearInput}|st:${status}`;
+            return generateHash(parameters);
+          };
+
+          return new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(createCustomId('previous'))
+                .setLabel('Previous')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(currentPage === 0 || vehicles.length === 0),
+              new ButtonBuilder()
+                .setCustomId(createCustomId('next'))
+                .setLabel('Next')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(currentPage === totalPages - 1 || vehicles.length === 0),
+              new ButtonBuilder()
+                .setCustomId(createCustomId('save'))
+                .setLabel('Save Search')
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(false)  // Always enabled
+            );
+        } catch (error) {
+          console.error('Error creating custom ID:', error);
+          throw error;
+        }
+      };
 
       const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0, interaction.user.id)], fetchReply: true });
 
       const collector = message.createMessageComponentCollector({ filter: i => i.user.id === interaction.user.id, time: 120000 });
 
       collector.on('collect', async i => {
-        const parts = i.customId.split(':');
-        const action = parts[0];
-        const userId = parts[parts.length - 1];
+        try {
+          const parameters = resolveHash(i.customId);
+          if (!parameters) {
+            await i.reply({ content: 'Invalid or expired interaction.', ephemeral: true });
+            return;
+          }
 
-        if (userId !== i.user.id) {
-          await i.reply({ content: "You do not have permission to perform this action.", ephemeral: true });
-          return;
-        }
+          const parts = parameters.split('|').reduce((acc, part) => {
+            const [key, value] = part.split(':');
+            acc[key] = value;
+            return acc;
+          }, {});
 
-        switch (action) {
-          case 'next':
-          case 'previous':
-            const pageChange = (action === 'next') ? 1 : -1;
-            currentPage += pageChange;
-            await i.update({
-              embeds: [getPage(currentPage)],
-              components: [updateComponents(currentPage, userId)]
-            });
-            break;
+          const action = parts['act'];
+          const userId = parts['uid'];
 
-          case 'save':
-            const yardId = parts[1];
-            const make = parts[2];
-            const model = parts[3];
-            const yearInput = parts[4];
-            const yardName = convertYardIdToLocation(yardId); // Make sure yardName is defined here
+          if (userId !== i.user.id) {
+            await i.reply({ content: "You do not have permission to perform this action.", ephemeral: true });
+            return;
+          }
 
-            console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
+          let currentPage = parseInt(parts['pg']);
+          const yardId = parts['yd'];
+          const make = parts['mk'];
+          const model = parts['md'];
+          const yearInput = parts['yr'];
+          const status = parts['st'];
+          const yardName = convertYardIdToLocation(yardId); // Make sure yardName is defined here
 
-            try {
-              const exists = await checkExistingSearch(i.user.id, yardId, userMakeInput, model, yearInput, status);
-              if (!exists) {
-                await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, userMakeInput, model, yearInput, status, '');
-                await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
-              } else {
-                await i.reply({ content: 'This search has already been saved.', ephemeral: true });
+          switch (action) {
+            case 'next':
+            case 'previous':
+              const pageChange = (action === 'next') ? 1 : -1;
+              currentPage += pageChange;
+              await i.update({
+                embeds: [getPage(currentPage)],
+                components: [updateComponents(currentPage, userId)]
+              });
+              break;
+
+            case 'save':
+              console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
+
+              try {
+                const exists = await checkExistingSearch(i.user.id, yardId, make, model, yearInput, status);
+                if (!exists) {
+                  await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, make, model, yearInput, status, '');
+                  await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
+                } else {
+                  await i.reply({ content: 'This search has already been saved.', ephemeral: true });
+                }
+              } catch (error) {
+                console.error('Error checking for existing search:', error);
+                await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
               }
-            } catch (error) {
-              console.error('Error checking for existing search:', error);
-              await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
-            }
-            break;
+              break;
+          }
+        } catch (error) {
+          console.error('Error processing button interaction:', error);
+          await i.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
         }
       });
 
