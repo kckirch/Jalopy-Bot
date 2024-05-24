@@ -1,6 +1,6 @@
 const { queryVehicles } = require('../../database/vehicleQueryManager');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
+const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
 const { getSavedSearches, deleteSavedSearch, checkExistingSearch, addSavedSearch } = require('../../database/savedSearchManager');
 const crypto = require('crypto');
 
@@ -169,7 +169,7 @@ async function handleSearchCommand(interaction) {
           const model = parts['md'];
           const yearInput = parts['yr'];
           const status = parts['st'];
-          const yardName = convertYardIdToLocation(yardId); // Make sure yardName is defined here
+          const yardName = convertYardIdToLocation(yardId); // Ensure yardName is formatted correctly here
 
           switch (action) {
             case 'next':
@@ -188,7 +188,12 @@ async function handleSearchCommand(interaction) {
               try {
                 const exists = await checkExistingSearch(i.user.id, yardId, make, model, yearInput, status);
                 if (!exists) {
-                  await addSavedSearch(i.user.id, i.user.tag, yardId, yardName, make, model, yearInput, status, '');
+                  let cleanedYardId = yardId;
+                  if (yardId === 'ALL') {
+                    cleanedYardId = Object.values(yardIdMapping).join(',');
+                  }
+                  const cleanedYardName = yardName.replace(/\s{2,}/g, ' ').trim(); // Clean the yard name
+                  await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, make, model, yearInput, status, '');
                   await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
                 } else {
                   await i.reply({ content: 'This search has already been saved.', ephemeral: true });

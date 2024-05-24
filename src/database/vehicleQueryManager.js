@@ -50,7 +50,8 @@ const modelAliases = {
     'IS': ['IS250', 'IS300'],
     'LS': ['LS400', 'LS430'],
     'RX': ['RX300', 'RX350', 'RX400H'],
-    'SC': ['SC300', 'SC430']
+    'SC': ['SC300', 'SC430'],
+    'CR-V': ['CRV', 'CR V'],
 };
 
 
