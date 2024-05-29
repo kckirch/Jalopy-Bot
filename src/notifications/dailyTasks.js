@@ -1,20 +1,23 @@
 const { client } = require('../bot/utils/client');
 const { getAllSavedSearches } = require('../database/savedSearchManager');
-const { queryVehicles, executeQuery } = require('../database/vehicleQueryManager');
+const { queryVehicles } = require('../database/vehicleQueryManager');
 const { EmbedBuilder } = require('discord.js');
 
 const NEW_VEHICLES_CHANNEL_ID = '1239688596080955492';
-
 
 async function processDailySavedSearches() {
     try {
         const savedSearches = await getAllSavedSearches();
         for (const search of savedSearches) {
-            console.log("Processing search for:", search.username);
-            const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
-            if (results.length > 0) {
-                const embeds = formatMessages(results, search);
-                sendNotification(search.user_id, embeds);
+            try {
+                console.log("Processing search for:", search.username);
+                const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
+                if (results.length > 0) {
+                    const embeds = formatMessages(results, search);
+                    sendNotification(search.user_id, embeds);
+                }
+            } catch (error) {
+                console.error(`Error processing search for ${search.username}:`, error);
             }
         }
 
@@ -38,7 +41,6 @@ async function notifyNewVehicles() {
     }
 }
 
-
 function sendNotification(userId, embeds) {
     if (!client || !client.isReady()) {
         console.error('Discord client is not ready. Cannot send messages.');
@@ -46,11 +48,7 @@ function sendNotification(userId, embeds) {
     }
 
     client.users.fetch(userId).then(user => {
-        user.send({ embeds }).then(() => {
-            console.log(`Notification sent to ${user.tag}.`);
-        }).catch(err => {
-            console.error(`Failed to send notification to ${user.tag}:`, err);
-        });
+        sendEmbedChunks(user, embeds);
     }).catch(err => {
         console.error(`Failed to fetch user ${userId}:`, err);
     });
@@ -68,11 +66,19 @@ function sendChannelNotification(channelId, embeds) {
         return;
     }
 
-    channel.send({ embeds }).then(() => {
-        console.log(`Notification sent to channel ${channelId}.`);
-    }).catch(err => {
-        console.error(`Failed to send notification to channel ${channelId}:`, err);
-    });
+    sendEmbedChunks(channel, embeds);
+}
+
+function sendEmbedChunks(target, embeds) {
+    const chunkSize = 10; // Maximum embeds per message
+    for (let i = 0; i < embeds.length; i += chunkSize) {
+        const chunk = embeds.slice(i, i + chunkSize);
+        target.send({ embeds: chunk }).then(() => {
+            console.log(`Notification sent to ${target.id}.`);
+        }).catch(err => {
+            console.error(`Failed to send notification to ${target.id}:`, err);
+        });
+    }
 }
 
 function formatMessages(vehicles, search) {
