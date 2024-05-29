@@ -12,6 +12,7 @@ const { handleSavedSearchCommand } = require('./commands/savedSearchCommand');
 const { handleDailySavedSearchCommand } = require('./commands/dailySavedSearchCommand');
 const { handleRunTestSchedulerCommand } = require('./commands/runTestSchedulerCommand');
 const { handleCommandsCommand } = require('./commands/commandsCommand');
+const { handleManualNotifyNewVehiclesCommand } = require('./commands/manualNotifyNewVehiclesCommand');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -59,6 +60,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleRunTestSchedulerCommand(interaction);
       } else if (commandName === 'commands') {
         await handleCommandsCommand(interaction);
+      } else if (commandName === 'manualnotifynewvehicles') {
+        await handleManualNotifyNewVehiclesCommand(interaction);
       }
     }
 

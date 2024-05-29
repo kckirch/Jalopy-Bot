@@ -94,13 +94,18 @@ const commandsCommand = new SlashCommandBuilder()
 .setName('commands')
 .setDescription('Showcase all user commands with examples');
 
+const manualNotifyNewVehiclesCommand = new SlashCommandBuilder()
+  .setName('manualnotifynewvehicles')
+  .setDescription('Manually notify users of new vehicles');
+
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
   savedSearchCommand.toJSON(),
   dailySearchCommand.toJSON(),
   runTestScheduler.toJSON(),
-  commandsCommand.toJSON()
+  commandsCommand.toJSON(),
+  manualNotifyNewVehiclesCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

@@ -30,11 +30,10 @@ async function processDailySavedSearches() {
 
 async function notifyNewVehicles() {
     try {
-        const today = new Date().toISOString().substring(0, 10);
-        const newVehicles = await queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'NEW', today);
+        const newVehicles = await queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'NEW');
         if (newVehicles.length > 0) {
             const embeds = formatVehicles(newVehicles, 'New Vehicles Added Today');
-            sendChannelNotification(NEW_VEHICLES_CHANNEL_ID, embeds);
+            await sendChannelNotification(NEW_VEHICLES_CHANNEL_ID, embeds);
         }
     } catch (error) {
         console.error('Error notifying new vehicles:', error);
@@ -70,9 +69,27 @@ function sendChannelNotification(channelId, embeds) {
 }
 
 function sendEmbedChunks(target, embeds) {
-    const chunkSize = 10; // Maximum embeds per message
-    for (let i = 0; i < embeds.length; i += chunkSize) {
-        const chunk = embeds.slice(i, i + chunkSize);
+    const maxEmbedSize = 6000; // Maximum size for embeds
+    let currentEmbedSize = 0;
+    let chunk = [];
+
+    for (const embed of embeds) {
+        const embedSize = JSON.stringify(embed).length;
+        if (currentEmbedSize + embedSize > maxEmbedSize) {
+            target.send({ embeds: chunk }).then(() => {
+                console.log(`Notification sent to ${target.id}.`);
+            }).catch(err => {
+                console.error(`Failed to send notification to ${target.id}:`, err);
+            });
+            chunk = [embed];
+            currentEmbedSize = embedSize;
+        } else {
+            chunk.push(embed);
+            currentEmbedSize += embedSize;
+        }
+    }
+
+    if (chunk.length > 0) {
         target.send({ embeds: chunk }).then(() => {
             console.log(`Notification sent to ${target.id}.`);
         }).catch(err => {
@@ -84,9 +101,8 @@ function sendEmbedChunks(target, embeds) {
 function formatMessages(vehicles, search) {
     let embeds = [];
     const chunkSize = 25; // Maximum fields per embed
-    const maxEmbeds = 10; // Maximum number of embeds per message
 
-    for (let i = 0; i < vehicles.length && embeds.length < maxEmbeds; i += chunkSize) {
+    for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()
             .setTitle(`Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name} with ${search.status} status`)
             .setDescription(`Results found: ${vehicles.length}`)
@@ -96,7 +112,7 @@ function formatMessages(vehicles, search) {
         vehicles.slice(i, i + chunkSize).forEach(vehicle => {
             const firstSeenFormatted = new Date(vehicle.first_seen).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
             const lastUpdatedFormatted = new Date(vehicle.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-            
+
             let valueText = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}\nFirst Seen: ${firstSeenFormatted}\nLast Updated: ${lastUpdatedFormatted}`;
             if (vehicle.notes) {
                 valueText += `\nNotes: ${vehicle.notes}`; // Add notes to the value text if present
@@ -118,9 +134,8 @@ function formatMessages(vehicles, search) {
 function formatVehicles(vehicles, title) {
     let embeds = [];
     const chunkSize = 25; // Maximum fields per embed
-    const maxEmbeds = 10; // Maximum number of embeds per message
 
-    for (let i = 0; i < vehicles.length && embeds.length < maxEmbeds; i += chunkSize) {
+    for (let i = 0; i < vehicles.length; i += chunkSize) {
         const embed = new EmbedBuilder()
             .setTitle(title)
             .setDescription(`Results found: ${vehicles.length}`)
@@ -130,7 +145,7 @@ function formatVehicles(vehicles, title) {
         vehicles.slice(i, i + chunkSize).forEach(vehicle => {
             const firstSeenFormatted = new Date(vehicle.first_seen).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
             const lastUpdatedFormatted = new Date(vehicle.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-            
+
             let valueText = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}\nFirst Seen: ${firstSeenFormatted}\nLast Updated: ${lastUpdatedFormatted}`;
             if (vehicle.notes) {
                 valueText += `\nNotes: ${vehicle.notes}`; // Add notes to the value text if present
@@ -149,4 +164,4 @@ function formatVehicles(vehicles, title) {
     return embeds;
 }
 
-module.exports = { processDailySavedSearches };
+module.exports = { processDailySavedSearches, notifyNewVehicles };
