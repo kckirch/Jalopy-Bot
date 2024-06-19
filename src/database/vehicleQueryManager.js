@@ -52,6 +52,8 @@ const modelAliases = {
     'RX': ['RX300', 'RX350', 'RX400H'],
     'SC': ['SC300', 'SC430'],
     'CR-V': ['CRV', 'CR V'],
+    'CHEROKEE': ['CHEROKEE'],
+    'GRAND CHEROKEE': ['GRAND CHEROKEE'],
 };
 
 
@@ -143,7 +145,7 @@ function getModelVariations(model) {
 }
 
 
-function queryVehicles( yardId, make, model, yearInput, status) {
+function queryVehicles(yardId, make, model, yearInput, status) {
     const yardIds = parseYardIds(yardId);
     let params = [];
     let conditions = [];
@@ -181,9 +183,14 @@ function queryVehicles( yardId, make, model, yearInput, status) {
     }
 
     if (model !== 'ANY') {
-        const models = getModelVariations(model);
-        conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
-        params = params.concat(models);
+        if (make.toUpperCase() === 'JEEP' && model.toUpperCase() === 'CHEROKEE') {
+            conditions.push("vehicle_model LIKE ? AND vehicle_model NOT LIKE ?");
+            params.push(`%CHEROKEE%`, `%GRAND CHEROKEE%`);
+        } else {
+            const models = getModelVariations(model);
+            conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
+            params = params.concat(models);
+        }
     } else {
         console.log("Model set to 'Any', skipping model criteria in query.");
     }
