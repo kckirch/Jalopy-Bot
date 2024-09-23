@@ -1,7 +1,9 @@
 // testScheduler.js
-const { webScrape } = require('../scraping/jalopyJungleScraper');
+const { universalWebScrape } = require('../scraping/universalWebScrape');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
+const junkyards = require('../config/junkyards'); // Import the junkyards configuration
+
 
 // Helper function to perform retries with a delay
 function retryOperation(operation, retries, delay) {
@@ -21,17 +23,40 @@ function retryOperation(operation, retries, delay) {
     });
 }
 
-async function performScrape() {
+async function scrapeAllJunkyards(sessionID) {
+    const junkyardKeys = Object.keys(junkyards);
+  
+    for (const junkyardKey of junkyardKeys) {
+      const junkyardConfig = junkyards[junkyardKey];
+      const options = {
+        ...junkyardConfig,
+        make: 'ANY',
+        model: 'ANY',
+        sessionID: sessionID,
+      };
+  
+      try {
+        console.log(`Starting scraping for ${junkyardKey}`);
+        await universalWebScrape(options);
+        console.log(`Scraping completed for ${junkyardKey}`);
+      } catch (error) {
+        console.error(`Error scraping ${junkyardKey}:`, error);
+      }
+    }
+  }
+  
+
+  async function performScrape() {
     console.log('Starting manual scraping test.');
     const sessionID = getSessionID(); // Generate a new session ID for the scrape
-
+  
     try {
-        await retryOperation(() => webScrape('ALL', 'ANY', 'ANY', sessionID), 3, 5000);
-        console.log('Scraping completed successfully.');
+      await retryOperation(() => scrapeAllJunkyards(sessionID), 3, 5000);
+      console.log('Scraping completed successfully.');
     } catch (error) {
-        console.error('Scraping failed after retries:', error);
+      console.error('Scraping failed after retries:', error);
     }
-}
+  }
 
 async function processSearches() {
     console.log('Starting manual processing of saved searches.');

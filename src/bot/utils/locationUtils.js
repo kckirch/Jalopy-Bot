@@ -31,9 +31,10 @@ const yardIdMapping = {
   'GARDENCITY': 1119,
   'NAMPA': 1022,
   'TWINFALLS': 1099,
+  'TRUSTYPICKAPART': 999999,
 };
 
-const treasureValleyYards = [1020, 1119, 1021, 1022];
+const treasureValleyYards = [1020, 1119, 1021, 1022, 999999];
 
 function convertLocationToYardId(location) {
   if (location.toUpperCase() === 'ALL') {

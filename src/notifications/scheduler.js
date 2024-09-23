@@ -2,10 +2,12 @@
 
 
 const cron = require('node-cron');
-const { webScrape } = require('../scraping/jalopyJungleScraper');
+const { universalWebScrape } = require('../scraping/universalWebScrape');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
+const junkyards = require('../config/junkyards'); // Import the junkyards configuration
+
 
 // Helper function to perform retries with a delay
 function retryOperation(operation, retries, delay) {
@@ -25,24 +27,47 @@ function retryOperation(operation, retries, delay) {
     });
 }
 
-function startScheduledTasks() {
+async function scrapeAllJunkyards(sessionID) {
+    const junkyardKeys = Object.keys(junkyards);
+  
+    for (const junkyardKey of junkyardKeys) {
+      const junkyardConfig = junkyards[junkyardKey];
+      const options = {
+        ...junkyardConfig,
+        make: 'ANY',
+        model: 'ANY',
+        sessionID: sessionID,
+      };
+  
+      try {
+        console.log(`Starting scraping for ${junkyardKey}`);
+        await universalWebScrape(options);
+        console.log(`Scraping completed for ${junkyardKey}`);
+      } catch (error) {
+        console.error(`Error scraping ${junkyardKey}:`, error);
+      }
+    }
+  }
+  
+
+  function startScheduledTasks() {
     // Scheduled scraping of all yards every day at the designated UTC time (convert to your timezone)
     cron.schedule('0 5 * * *', () => {
-        try {
-            console.log('Scheduled scraping started.');
-            const sessionID = getSessionID();
-            console.log(`Session ID: ${sessionID}`);
-            retryOperation(() => {
-                console.log('Attempting to scrape...');
-                return webScrape('ALL', 'ANY', 'ANY', sessionID);
-            }, 3, 5000)
-                .then(() => console.log('Scraping completed successfully.'))
-                .catch(error => console.error('Scraping failed after retries:', error));
-        } catch (error) {
-            console.error('Unhandled error in scheduled task:', error);
-        }
+      try {
+        console.log('Scheduled scraping started.');
+        const sessionID = getSessionID();
+        console.log(`Session ID: ${sessionID}`);
+        retryOperation(() => {
+          console.log('Attempting to scrape all junkyards...');
+          return scrapeAllJunkyards(sessionID);
+        }, 3, 5000)
+          .then(() => console.log('Scraping completed successfully.'))
+          .catch(error => console.error('Scraping failed after retries:', error));
+      } catch (error) {
+        console.error('Unhandled error in scheduled task:', error);
+      }
     }, {
-        scheduled: true
+      scheduled: true
     });
     
 
