@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env'});
+require('dotenv').config({ path: '../.env' });
 const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType } = require('discord.js');
 
 // Create command builders
@@ -15,6 +15,7 @@ const scrapeCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'Trusty', value: 'trusty' },  // Added Trusty
       { name: 'All', value: 'all' }
     ))
   .addStringOption(option => 
@@ -39,6 +40,7 @@ const searchCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'Trusty', value: 'trusty' },  // Added Trusty
       { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
       { name: 'All', value: 'all' }
     ))
@@ -64,7 +66,6 @@ const searchCommand = new SlashCommandBuilder()
     )
     .setRequired(false));
 
-
 const savedSearchCommand = new SlashCommandBuilder()
   .setName('savedsearch')
   .setDescription('Send Your Saved Searches to Your DMs!')
@@ -78,6 +79,7 @@ const savedSearchCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
+      { name: 'Trusty', value: 'trusty' },  // Added Trusty
       { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
       { name: 'All', value: 'all' }
     ));
