@@ -1,9 +1,8 @@
 // testScheduler.js
-const { universalWebScrape } = require('../scraping/universalWebScrape');
+
+const { scrapeAllJunkyards } = require('../notifications/scheduler'); // Adjust the path as necessary
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
-const junkyards = require('../config/junkyards'); // Import the junkyards configuration
-
 
 // Helper function to perform retries with a delay
 function retryOperation(operation, retries, delay) {
@@ -23,40 +22,17 @@ function retryOperation(operation, retries, delay) {
     });
 }
 
-async function scrapeAllJunkyards(sessionID) {
-    const junkyardKeys = Object.keys(junkyards);
-  
-    for (const junkyardKey of junkyardKeys) {
-      const junkyardConfig = junkyards[junkyardKey];
-      const options = {
-        ...junkyardConfig,
-        make: 'ANY',
-        model: 'ANY',
-        sessionID: sessionID,
-      };
-  
-      try {
-        console.log(`Starting scraping for ${junkyardKey}`);
-        await universalWebScrape(options);
-        console.log(`Scraping completed for ${junkyardKey}`);
-      } catch (error) {
-        console.error(`Error scraping ${junkyardKey}:`, error);
-      }
-    }
-  }
-  
-
-  async function performScrape() {
+async function performScrape() {
     console.log('Starting manual scraping test.');
     const sessionID = getSessionID(); // Generate a new session ID for the scrape
-  
+
     try {
-      await retryOperation(() => scrapeAllJunkyards(sessionID), 3, 5000);
-      console.log('Scraping completed successfully.');
+        await retryOperation(() => scrapeAllJunkyards(sessionID), 3, 5000);
+        console.log('Scraping completed successfully.');
     } catch (error) {
-      console.error('Scraping failed after retries:', error);
+        console.error('Scraping failed after retries:', error);
     }
-  }
+}
 
 async function processSearches() {
     console.log('Starting manual processing of saved searches.');
@@ -68,9 +44,8 @@ async function processSearches() {
     }
 }
 
-// Expose the test functions for manual invocation
-module.exports = {
-    performScrape,
-    processSearches
-};
-
+// Invoke the functions directly for testing
+(async () => {
+    await performScrape();
+    await processSearches();
+})();
