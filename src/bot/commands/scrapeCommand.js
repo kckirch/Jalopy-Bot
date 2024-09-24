@@ -1,92 +1,119 @@
-const { webScrape } = require('../../scraping/jalopyJungleScraper');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+// src/bot/commands/scrapeCommand.js
+
+const { universalWebScrape } = require('../../scraping/universalWebScrape');
+const { EmbedBuilder } = require('discord.js');
 const { getSessionID } = require('../utils/utils');
-const { vehicleMakes, convertLocationToYardId } = require('../utils/locationUtils');  // Import the function
+const { vehicleMakes, convertLocationToYardId } = require('../utils/locationUtils');
+const junkyards = require('../../config/junkyards');
 
 async function handleScrapeCommand(interaction) {
   let location = interaction.options.getString('location');
-  let make = interaction.options.getString('make') || 'Any';
-  let model = interaction.options.getString('model') || 'Any';
+  let make = interaction.options.getString('make') || 'ANY';
+  let model = interaction.options.getString('model') || 'ANY';
 
   const sessionID = getSessionID();
   console.log(`Session ID: ${sessionID}`);
 
-  if (location && make) {
+  if (location) {
     make = make.toUpperCase();
     model = model.toUpperCase();
-    const yardId = convertLocationToYardId(location);
 
-    console.log(`Starting web scrape with sessionID: ${sessionID}`);
+    if (location === 'all') {
+      // Scrape all junkyards and all their locations
+      await scrapeAllJunkyards(make, model, sessionID);
 
-    webScrape(yardId, make, model, sessionID);
-  }
+      const searchEmbed = new EmbedBuilder()
+        .setTitle('Search Parameters')
+        .setDescription('Scraped all junkyards.')
+        .setColor('Orange');
 
-  if (location && !make) {
-    const makesEmbed = new EmbedBuilder()
-      .setTitle('Available Vehicle Makes in ' + location)
-      .setDescription('Please reply with the make of the vehicle you are interested in.')
-      .addFields({ name: 'Makes', value: vehicleMakes.join(', ') })
-      .setColor('Orange');
-
-    await interaction.reply({ embeds: [makesEmbed] });
-
-    const filter = m => m.author.id === interaction.user.id;
-    messageCollector = interaction.channel.createMessageCollector({ filter, time: 60000 });
-
-    messageCollector.on('collect', async m => {
-      try {
-        const makeInput = m.content.toUpperCase();
-
-        if (vehicleMakes.map(make => make.toUpperCase()).includes(makeInput)) {
-          const resultEmbed = new EmbedBuilder()
-            .setTitle('Search Parameters')
-            .setDescription('Here are your scrape search parameters:')
-            .addFields(
-              { name: 'Location', value: location },
-              { name: 'Make', value: m.content },
-              { name: 'Model', value: 'Any' }
-            )
-            .setColor('Orange');
-
-          await interaction.followUp({ embeds: [resultEmbed] });
-          messageCollector.stop();
-        } else {
-          const quitButton = new ButtonBuilder()
-            .setCustomId('quit')
-            .setLabel('Cancel')
-            .setStyle(ButtonStyle.Danger);
-
-          const row = new ActionRowBuilder().addComponents(quitButton);
-
-          await m.reply({
-            content: `"${makeInput}" is not a valid make. Please choose from the list or cancel the operation.`,
-            components: [row]
-          });
-        }
-      } catch (error) {
-        console.error('Error handling collected make:', error);
-        await m.reply('An error occurred while processing your request.');
+      await interaction.reply({ embeds: [searchEmbed] });
+    } else {
+      // Scrape a specific location
+      const yardId = convertLocationToYardId(location); // Get the specific yard ID for the location
+      if (!yardId) {
+        await interaction.reply(`Unknown location: ${location}`);
+        return;
       }
-    });
 
-    messageCollector.on('end', collected => {
-      if (collected.size === 0) {
-        interaction.followUp('No valid make was provided.');
+      const junkyardKey = location === 'trusty' ? 'trustyJunkyard' : 'jalopyJungle'; // Determine junkyard key
+      const junkyardConfig = junkyards[junkyardKey];
+
+      if (!junkyardConfig) {
+        await interaction.reply(`Unknown junkyard for location: ${location}`);
+        return;
       }
-    });
-  } else if (location && make) {
-    const searchEmbed = new EmbedBuilder()
-      .setTitle('Search Parameters')
-      .setDescription('Here are your search parameters:')
-      .addFields(
-        { name: 'Location', value: location },
-        { name: 'Make', value: make },
-        { name: 'Model', value: model || 'Any' }
-      )
-      .setColor('Orange');
 
-    await interaction.reply({ embeds: [searchEmbed] });
+      // Handle yardId based on whether it's a multi-location yard
+      let finalYardId = yardId;
+      if (junkyardConfig.hasMultipleLocations) {
+        // For multiple-location junkyards, the yardId is the specific yardId
+        finalYardId = yardId;
+      } else {
+        // For single-location junkyards, use the configured yardId
+        finalYardId = junkyardConfig.yardId;
+      }
+
+      const options = {
+        ...junkyardConfig,
+        yardId: finalYardId,
+        make: make,
+        model: model,
+        sessionID: sessionID,
+      };
+
+      console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
+
+      await universalWebScrape(options);
+
+      const searchEmbed = new EmbedBuilder()
+        .setTitle('Search Parameters')
+        .setDescription('Here are your search parameters:')
+        .addFields(
+          { name: 'Location', value: location },
+          { name: 'Make', value: make },
+          { name: 'Model', value: model }
+        )
+        .setColor('Orange');
+
+      await interaction.reply({ embeds: [searchEmbed] });
+    }
+  } else {
+    await interaction.reply('Please provide a location to scrape.');
   }
 }
 
 module.exports = { handleScrapeCommand };
+
+// Helper function to scrape all junkyards
+async function scrapeAllJunkyards(make, model, sessionID) {
+  // Scrape Jalopy Jungle
+  const jalopyConfig = junkyards['jalopyJungle'];
+  for (const yardId in jalopyConfig.locationMapping) {
+    const options = {
+      ...jalopyConfig,
+      yardId: yardId,
+      make: make,
+      model: model,
+      sessionID: sessionID,
+    };
+
+    console.log(`Starting web scrape for Jalopy Jungle yard ID ${yardId} with sessionID: ${sessionID}`);
+
+    await universalWebScrape(options);
+  }
+
+  // Scrape Trusty
+  const trustyConfig = junkyards['trustyJunkyard'];
+  const trustyOptions = {
+    ...trustyConfig,
+    yardId: trustyConfig.yardId,
+    make: make,
+    model: model,
+    sessionID: sessionID,
+  };
+
+  console.log(`Starting web scrape for Trusty yard ID ${trustyConfig.yardId} with sessionID: ${sessionID}`);
+
+  await universalWebScrape(trustyOptions);
+}

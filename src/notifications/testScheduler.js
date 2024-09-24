@@ -1,5 +1,6 @@
 // testScheduler.js
-const { webScrape } = require('../scraping/jalopyJungleScraper');
+
+const { scrapeAllJunkyards } = require('../notifications/scheduler'); // Adjust the path as necessary
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
 
@@ -26,7 +27,7 @@ async function performScrape() {
     const sessionID = getSessionID(); // Generate a new session ID for the scrape
 
     try {
-        await retryOperation(() => webScrape('ALL', 'ANY', 'ANY', sessionID), 3, 5000);
+        await retryOperation(() => scrapeAllJunkyards(sessionID), 3, 5000);
         console.log('Scraping completed successfully.');
     } catch (error) {
         console.error('Scraping failed after retries:', error);
@@ -43,9 +44,8 @@ async function processSearches() {
     }
 }
 
-// Expose the test functions for manual invocation
-module.exports = {
-    performScrape,
-    processSearches
-};
-
+// Invoke the functions directly for testing
+(async () => {
+    await performScrape();
+    await processSearches();
+})();
