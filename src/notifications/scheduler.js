@@ -91,7 +91,7 @@ async function scrapeAllJunkyards(sessionID) {
     });
 }
 
-module.exports = { startScheduledTasks };
+module.exports = { startScheduledTasks, scrapeAllJunkyards };
 
 
 
