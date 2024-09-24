@@ -14,15 +14,16 @@ const {db} = require('./database');
 const sqlite3 = require('sqlite3').verbose();
 
 function getYardNameById(yardId) {
-    const yardMapping = {
-        1020: 'BOISE',
-        1021: 'CALDWELL',
-        1119: 'GARDENCITY',
-        1022: 'NAMPA',
-        1099: 'TWINFALLS'
+    const yardNames = {
+        '1020': 'Boise',
+        '1021': 'Nampa',
+        '1022': 'Caldwell',
+        '1119': 'Garden City',
+        '999999': 'Trusty Pick-A-Part' // Add your single-location yard here
     };
-    return yardMapping[yardId] || 'Unknown';
+    return yardNames[yardId] || 'Unknown Yard';
 }
+
 
 
 
@@ -45,16 +46,20 @@ function markInactiveVehicles(sessionID) {
 
 
 function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes, sessionID) {
-    // console.log(`Inserting or updating vehicle with session ID: ${sessionID}`);
+    console.log(`Processing vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID}`);
 
     const yardName = getYardNameById(yardId);
+    if (!yardName || yardName === 'Unknown Yard') {
+        console.warn(`Warning: Yard name not found for Yard ID ${yardId}`);
+    }
+
     const findSQL = `
         SELECT id, session_id, strftime('%Y%m%d', first_seen) AS first_seen_date FROM vehicles
         WHERE yard_id = ? AND vehicle_make = ? AND vehicle_model = ? AND vehicle_year = ? AND row_number = ?
     `;
     db.get(findSQL, [yardId, make, model, year, rowNumber], function(err, row) {
         if (err) {
-            console.error('Error searching for existing vehicle', err.message);
+            console.error('Error searching for existing vehicle:', err.message);
             return;
         }
         if (row) {
@@ -71,9 +76,9 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
             `;
             db.run(updateSQL, [finalStatus, sessionID, row.id], function(err) {
                 if (err) {
-                    console.error('Error updating existing vehicle:', err.message);
+                    console.error('Error updating existing vehicle with ID', row.id, ':', err.message);
                 } else {
-                    console.log(`Updated existing vehicle with ID ${row.id} to status ${finalStatus} and session ID ${sessionID}`);
+                    console.log(`Updated existing vehicle with ID ${row.id} to status '${finalStatus}' and session ID ${sessionID}`);
                 }
             });
         } else {
@@ -96,16 +101,17 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = ''
                 )
                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'), ?)
             `;
-            db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes,sessionID], function(err) {
+            db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes, sessionID], function(err) {
                 if (err) {
-                    console.error('Error inserting new vehicle', err.message);
+                    console.error('Error inserting new vehicle:', err.message);
                 } else {
-                    console.log(`🆕Inserted new vehicle with status 'NEW' and session ID ${sessionID}🆕`);
+                    console.log(`🆕 Inserted new vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID} 🆕`);
                 }
             });
         }
     });
 }
+
 
 
 
