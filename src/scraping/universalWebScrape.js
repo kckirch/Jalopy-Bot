@@ -39,33 +39,42 @@ async function universalWebScrape(options) {
         .setChromeService(serviceBuilder)
         .build();
 
-    try {
-        console.log('🔍 Scraping for:');
-        console.log(`   🏞️ Yard ID: ${options.yardId}`);
-        console.log(`   🚗 Make: ${options.make}`);
-        console.log(`   📋 Model: ${options.model}`);
-
-        await driver.get(options.inventoryUrl);
-
-        // Handle if the yard has multiple locations
-        if (options.hasMultipleLocations) {
-            await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
-            let yardOptions = await driver.findElements(By.css('#yard-id option'));
-            for (let i = 1; i < yardOptions.length; i++) {  // Start from 1 to skip default/placeholder option
+        try {
+            console.log('🔍 Scraping for:');
+            console.log(`   🏞️ Yard ID: ${options.yardId || 'ALL'}`);
+            console.log(`   🚗 Make: ${options.make}`);
+            console.log(`   📋 Model: ${options.model}`);
+    
+            await driver.get(options.inventoryUrl);
+    
+            // Handle if the yard has multiple locations
+            if (options.hasMultipleLocations) {
                 await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
-                yardOptions = await driver.findElements(By.css('#yard-id option'));
-                let currentYardId = await yardOptions[i].getAttribute('value');
-                if (currentYardId) {
-                    await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
+    
+                if (options.yardId) {
+                    // Only scrape the specified yardId
+                    await driver.executeScript(`document.getElementById('yard-id').value = '${options.yardId}';`);
                     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
-                    await scrapeYardMakeModel(driver, currentYardId, options.make, options.model, options.sessionID, options.hasMultipleLocations);
+                    await scrapeYardMakeModel(driver, options.yardId, options.make, options.model, options.sessionID, options.hasMultipleLocations);
+                } else {
+                    // Scrape all yards
+                    let yardOptions = await driver.findElements(By.css('#yard-id option'));
+                    for (let i = 1; i < yardOptions.length; i++) {  // Start from 1 to skip default/placeholder option
+                        await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
+                        yardOptions = await driver.findElements(By.css('#yard-id option'));
+                        let currentYardId = await yardOptions[i].getAttribute('value');
+                        if (currentYardId) {
+                            await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
+                            await driver.executeScript(`document.getElementById('searchinventory').submit();`);
+                            await scrapeYardMakeModel(driver, currentYardId, options.make, options.model, options.sessionID, options.hasMultipleLocations);
+                        }
+                    }
                 }
+            } else {
+                // For single location yard, proceed without changing yard selection
+                await scrapeYardMakeModel(driver, options.yardId, options.make, options.model, options.sessionID, options.hasMultipleLocations);
             }
-        } else {
-            // For single location yard, proceed without changing yard selection
-            await scrapeYardMakeModel(driver, options.yardId, options.make, options.model, options.sessionID, options.hasMultipleLocations);
-        }
-    } catch (error) {
+        } catch (error) {
         if (error.message.includes('spawn') && error.message.includes('ENOENT')) {
             console.error('Error: Chromedriver not found. Please ensure the path to chromedriver is correct.');
         } else if (error.message.includes('session not created')) {

@@ -3,8 +3,43 @@
 const { universalWebScrape } = require('../../scraping/universalWebScrape');
 const { EmbedBuilder } = require('discord.js');
 const { getSessionID } = require('../utils/utils');
-const { vehicleMakes, convertLocationToYardId } = require('../utils/locationUtils');
+const { convertLocationToYardId } = require('../utils/locationUtils');
 const junkyards = require('../../config/junkyards');
+
+// Helper function to scrape all junkyards
+async function scrapeAllJunkyards(make, model, sessionID) {
+  // Scrape Jalopy Jungle
+  const jalopyConfig = junkyards['jalopyJungle'];
+  const yardIds = Object.keys(jalopyConfig.locationMapping);
+
+  for (const yardId of yardIds) {
+    const options = {
+      ...jalopyConfig,
+      yardId: yardId,
+      make: make,
+      model: model,
+      sessionID: sessionID,
+    };
+
+    console.log(`Starting web scrape for Jalopy Jungle yard ID ${yardId} with sessionID: ${sessionID}`);
+
+    await universalWebScrape(options);
+  }
+
+  // Scrape Trusty
+  const trustyConfig = junkyards['trustyJunkyard'];
+  const trustyOptions = {
+    ...trustyConfig,
+    yardId: trustyConfig.yardId,
+    make: make,
+    model: model,
+    sessionID: sessionID,
+  };
+
+  console.log(`Starting web scrape for Trusty yard ID ${trustyConfig.yardId} with sessionID: ${sessionID}`);
+
+  await universalWebScrape(trustyOptions);
+}
 
 async function handleScrapeCommand(interaction) {
   let location = interaction.options.getString('location');
@@ -18,7 +53,7 @@ async function handleScrapeCommand(interaction) {
     make = make.toUpperCase();
     model = model.toUpperCase();
 
-    if (location === 'all') {
+    if (location.toLowerCase() === 'all') {
       // Scrape all junkyards and all their locations
       await scrapeAllJunkyards(make, model, sessionID);
 
@@ -28,15 +63,17 @@ async function handleScrapeCommand(interaction) {
         .setColor('Orange');
 
       await interaction.reply({ embeds: [searchEmbed] });
+
+      return; // Prevent further execution
     } else {
       // Scrape a specific location
-      const yardId = convertLocationToYardId(location); // Get the specific yard ID for the location
+      const yardId = convertLocationToYardId(location);
       if (!yardId) {
         await interaction.reply(`Unknown location: ${location}`);
         return;
       }
 
-      const junkyardKey = location === 'trusty' ? 'trustyJunkyard' : 'jalopyJungle'; // Determine junkyard key
+      const junkyardKey = location.toLowerCase() === 'trusty' ? 'trustyJunkyard' : 'jalopyJungle';
       const junkyardConfig = junkyards[junkyardKey];
 
       if (!junkyardConfig) {
@@ -44,15 +81,8 @@ async function handleScrapeCommand(interaction) {
         return;
       }
 
-      // Handle yardId based on whether it's a multi-location yard
-      let finalYardId = yardId;
-      if (junkyardConfig.hasMultipleLocations) {
-        // For multiple-location junkyards, the yardId is the specific yardId
-        finalYardId = yardId;
-      } else {
-        // For single-location junkyards, use the configured yardId
-        finalYardId = junkyardConfig.yardId;
-      }
+      // Determine the final yardId
+      let finalYardId = junkyardConfig.hasMultipleLocations ? yardId : junkyardConfig.yardId;
 
       const options = {
         ...junkyardConfig,
@@ -84,36 +114,3 @@ async function handleScrapeCommand(interaction) {
 }
 
 module.exports = { handleScrapeCommand };
-
-// Helper function to scrape all junkyards
-async function scrapeAllJunkyards(make, model, sessionID) {
-  // Scrape Jalopy Jungle
-  const jalopyConfig = junkyards['jalopyJungle'];
-  for (const yardId in jalopyConfig.locationMapping) {
-    const options = {
-      ...jalopyConfig,
-      yardId: yardId,
-      make: make,
-      model: model,
-      sessionID: sessionID,
-    };
-
-    console.log(`Starting web scrape for Jalopy Jungle yard ID ${yardId} with sessionID: ${sessionID}`);
-
-    await universalWebScrape(options);
-  }
-
-  // Scrape Trusty
-  const trustyConfig = junkyards['trustyJunkyard'];
-  const trustyOptions = {
-    ...trustyConfig,
-    yardId: trustyConfig.yardId,
-    make: make,
-    model: model,
-    sessionID: sessionID,
-  };
-
-  console.log(`Starting web scrape for Trusty yard ID ${trustyConfig.yardId} with sessionID: ${sessionID}`);
-
-  await universalWebScrape(trustyOptions);
-}
