@@ -15,11 +15,12 @@ const sqlite3 = require('sqlite3').verbose();
 
 function getYardNameById(yardId) {
     const yardNames = {
-        '1020': 'Boise',
-        '1021': 'Nampa',
-        '1022': 'Caldwell',
-        '1119': 'Garden City',
-        '999999': 'Trusty Pick-A-Part' // Add your single-location yard here
+        1020: 'BOISE',
+        1021: 'CALDWELL',
+        1119: 'GARDENCITY',
+        1022: 'NAMPA',
+        1099: 'TWINFALLS',
+        999999: 'TRUSTYPICKAPART',
     };
     return yardNames[yardId] || 'Unknown Yard';
 }
@@ -48,6 +49,10 @@ function markInactiveVehicles(sessionID) {
 function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes, sessionID) {
     console.log(`Processing vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID}`);
 
+
+      // Log yardId type and value
+      console.log(`Yard ID type: ${typeof yardId}, Yard ID value: ${yardId}`);
+      
     const yardName = getYardNameById(yardId);
     if (!yardName || yardName === 'Unknown Yard') {
         console.warn(`Warning: Yard name not found for Yard ID ${yardId}`);
