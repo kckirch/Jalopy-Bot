@@ -15,7 +15,7 @@ const scrapeCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty', value: 'trusty' },  // Added Trusty
+      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
       { name: 'All', value: 'all' }
     ))
   .addStringOption(option => 
@@ -40,7 +40,7 @@ const searchCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty', value: 'trusty' },  // Added Trusty
+      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
       { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
       { name: 'All', value: 'all' }
     ))
@@ -79,7 +79,7 @@ const savedSearchCommand = new SlashCommandBuilder()
       { name: 'Nampa', value: 'nampa' },
       { name: 'Caldwell', value: 'caldwell' },
       { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty', value: 'trusty' },  // Added Trusty
+      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
       { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
       { name: 'All', value: 'all' }
     ));
