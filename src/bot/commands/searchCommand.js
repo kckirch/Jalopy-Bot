@@ -56,7 +56,7 @@ async function handleSearchCommand(interaction) {
 
   if (location) {
     const yardId = convertLocationToYardId(location);
-
+    
     try {
       let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput, status);
       vehicles.sort((a, b) => {
@@ -89,7 +89,8 @@ async function handleSearchCommand(interaction) {
             const lastUpdated = new Date(v.last_updated);
             const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
             const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-            let vehicleDescription = `Yard: ${yardId === 'ALL' || Array.isArray(yardId) ? v.yard_name : ''}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
+            let vehicleDescription = `Yard: ${v.yard_name}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
+
 
             if (v.notes) {
               vehicleDescription += `\nNotes: ${v.notes}`;
