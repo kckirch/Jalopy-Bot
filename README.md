@@ -1,6 +1,7 @@
 # JalopyBot
 
 JalopyBot is a Discord bot that provides timely notifications for your favorite vehicles at Jalopy Jungle Junkyard in Boise, Idaho. This bot empowers users with custom notifications, advanced search capabilities, and a streamlined user experience to help you stay updated with the latest additions to the junkyard.
+Want to use the tool without running it, join the Discord Group, https://JalopyBot.com
 
 ## Features
 
