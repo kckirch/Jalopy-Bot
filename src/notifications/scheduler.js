@@ -6,92 +6,85 @@ const { universalWebScrape } = require('../scraping/universalWebScrape');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
-const junkyards = require('../config/junkyards'); // Import the junkyards configuration
+const junkyards = require('../config/junkyards');
+const { pushToScrapedData } = require('./pushToScrapedData'); // Import the push function
 
-
-// Helper function to perform retries with a delay
+// Helper function for retries
 function retryOperation(operation, retries, delay) {
-    return new Promise((resolve, reject) => {
-        operation()
-            .then(resolve)
-            .catch((error) => {
-                if (retries > 0) {
-                    console.log(`Retrying after error: ${error}. ${retries} retries left.`);
-                    setTimeout(() => {
-                        retryOperation(operation, retries - 1, delay).then(resolve).catch(reject);
-                    }, delay);
-                } else {
-                    reject('Max retries reached. ' + error);
-                }
-            });
-    });
+  return new Promise((resolve, reject) => {
+    operation()
+      .then(resolve)
+      .catch((error) => {
+        if (retries > 0) {
+          console.log(`Retrying after error: ${error}. ${retries} retries left.`);
+          setTimeout(() => {
+            retryOperation(operation, retries - 1, delay).then(resolve).catch(reject);
+          }, delay);
+        } else {
+          reject('Max retries reached. ' + error);
+        }
+      });
+  });
 }
 
 async function scrapeAllJunkyards(sessionID) {
-    const junkyardKeys = Object.keys(junkyards);
-  
-    for (const junkyardKey of junkyardKeys) {
-      const junkyardConfig = junkyards[junkyardKey];
-      const options = {
-        ...junkyardConfig,
-        make: 'ANY',
-        model: 'ANY',
-        sessionID: sessionID,
-      };
-  
-      try {
-        console.log(`Starting scraping for ${junkyardKey}`);
-        await universalWebScrape(options);
-        console.log(`Scraping completed for ${junkyardKey}`);
-      } catch (error) {
-        console.error(`Error scraping ${junkyardKey}:`, error);
-      }
+  const junkyardKeys = Object.keys(junkyards);
+  for (const junkyardKey of junkyardKeys) {
+    const junkyardConfig = junkyards[junkyardKey];
+    const options = {
+      ...junkyardConfig,
+      make: 'ANY',
+      model: 'ANY',
+      sessionID: sessionID,
+    };
+
+    try {
+      console.log(`Starting scraping for ${junkyardKey}`);
+      await universalWebScrape(options);
+      console.log(`Scraping completed for ${junkyardKey}`);
+    } catch (error) {
+      console.error(`Error scraping ${junkyardKey}:`, error);
     }
   }
-  
+}
 
-  function startScheduledTasks() {
-    // Scheduled scraping of all yards every day at the designated UTC time (convert to your timezone)
-    cron.schedule('0 5 * * *', () => {
-      try {
-        console.log('Scheduled scraping started.');
-        const sessionID = getSessionID();
-        console.log(`Session ID: ${sessionID}`);
-        retryOperation(() => {
-          console.log('Attempting to scrape all junkyards...');
-          return scrapeAllJunkyards(sessionID);
-        }, 3, 5000)
-          .then(() => console.log('Scraping completed successfully.'))
-          .catch(error => console.error('Scraping failed after retries:', error));
-      } catch (error) {
-        console.error('Unhandled error in scheduled task:', error);
+function startScheduledTasks() {
+  // Scheduled scraping every day at the designated UTC time
+  cron.schedule('0 5 * * *', () => {
+    try {
+      console.log('Scheduled scraping started.');
+      const sessionID = getSessionID();
+      console.log(`Session ID: ${sessionID}`);
+      retryOperation(() => {
+        console.log('Attempting to scrape all junkyards...');
+        return scrapeAllJunkyards(sessionID);
+      }, 3, 5000)
+        .then(() => {
+          console.log('Scraping completed successfully.');
+          // After scraping, push updated data to scraped-data branch
+          pushToScrapedData();
+        })
+        .catch(error => console.error('Scraping failed after retries:', error));
+    } catch (error) {
+      console.error('Unhandled error in scheduled task:', error);
+    }
+  }, { scheduled: true });
+
+  // Scheduled processing of saved searches
+  cron.schedule('45 5 * * *', async () => {
+    console.log('Checking sessions and processing saved searches.');
+    try {
+      const sessionUpdated = await checkSessionUpdates();
+      if (sessionUpdated) {
+        await processDailySavedSearches();
+        console.log('Daily saved searches processed successfully.');
+      } else {
+        console.log('Session not updated recently; skipping processing of saved searches.');
       }
-    }, {
-      scheduled: true
-    });
-    
-
-    // Check session and process saved searches at a slightly later time to ensure data integrity
-    cron.schedule('45 5 * * *', async () => {
-        console.log('Checking sessions and processing saved searches.');
-
-        try {
-            const sessionUpdated = await checkSessionUpdates();
-            if (sessionUpdated) {
-                await processDailySavedSearches();
-                console.log('Daily saved searches processed successfully.');
-            } else {
-                console.log('Session not updated recently; skipping processing of saved searches.');
-            }
-        } catch (error) {
-            console.error('Error during processing daily saved searches:', error);
-        }
-    }, {
-        scheduled: true
-    });
+    } catch (error) {
+      console.error('Error during processing daily saved searches:', error);
+    }
+  }, { scheduled: true });
 }
 
 module.exports = { startScheduledTasks, scrapeAllJunkyards };
-
-
-
