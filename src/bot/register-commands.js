@@ -100,6 +100,10 @@ const manualNotifyNewVehiclesCommand = new SlashCommandBuilder()
   .setName('manualnotifynewvehicles')
   .setDescription('Manually notify users of new vehicles');
 
+const testGitPushDBCommand = new SlashCommandBuilder()
+  .setName('testgitpushdb')
+  .setDescription('Test the git push to database function');
+
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
@@ -107,7 +111,8 @@ const commands = [
   dailySearchCommand.toJSON(),
   runTestScheduler.toJSON(),
   commandsCommand.toJSON(),
-  manualNotifyNewVehiclesCommand.toJSON()
+  manualNotifyNewVehiclesCommand.toJSON(),
+  testGitPushDBCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
