@@ -13,7 +13,7 @@ const { handleDailySavedSearchCommand } = require('./commands/dailySavedSearchCo
 const { handleRunTestSchedulerCommand } = require('./commands/runTestSchedulerCommand');
 const { handleCommandsCommand } = require('./commands/commandsCommand');
 const { handleManualNotifyNewVehiclesCommand } = require('./commands/manualNotifyNewVehiclesCommand');
-const { handleTestGitPushDBCommand } = require('./commands/testGitPushDBCommand');
+const { handleTestGitPushDBCommand } = require('./commands/testGitPushDB');
 
 // Initialize database
 setupDatabase().then(() => {
