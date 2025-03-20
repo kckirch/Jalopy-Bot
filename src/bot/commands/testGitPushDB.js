@@ -3,7 +3,7 @@ async function handleRunTestGitPushDBCommand(interaction) {
     await interaction.deferReply();
   
     try {
-      const { pushToDatabase } = require('../../notifications/testGitPushDB');
+      const { pushToDatabase } = require('../../notifications/pushToScrapedData');
       await pushToDatabase();
       await interaction.editReply('Test Git Push DB function has been executed successfully.');
     } catch (error) {
