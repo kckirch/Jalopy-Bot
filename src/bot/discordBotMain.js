@@ -13,6 +13,7 @@ const { handleDailySavedSearchCommand } = require('./commands/dailySavedSearchCo
 const { handleRunTestSchedulerCommand } = require('./commands/runTestSchedulerCommand');
 const { handleCommandsCommand } = require('./commands/commandsCommand');
 const { handleManualNotifyNewVehiclesCommand } = require('./commands/manualNotifyNewVehiclesCommand');
+const { handleTestGitPushDBCommand } = require('./commands/testGitPushDBCommand');
 
 // Initialize database
 setupDatabase().then(() => {
@@ -62,6 +63,8 @@ client.on('interactionCreate', async (interaction) => {
         await handleCommandsCommand(interaction);
       } else if (commandName === 'manualnotifynewvehicles') {
         await handleManualNotifyNewVehiclesCommand(interaction);
+      } else if (commandName === 'testgitpushdb') {
+        await handleTestGitPushDBCommand(interaction);
       }
     }
 
