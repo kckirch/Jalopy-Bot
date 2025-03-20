@@ -15,7 +15,7 @@ async function pushToScrapedData() {
 
     // Add the updated database file.
     // Adjust the file path if necessary.
-    await git.add(['src/bot/vehicleInventory.db']);
+    await git.add(['vehicleInventory.db']);
 
     // Commit the changes with a message.
     await git.commit('Auto-update scraped data', undefined, ['--allow-empty']);
