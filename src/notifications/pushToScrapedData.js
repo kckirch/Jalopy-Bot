@@ -8,6 +8,7 @@ const git = simpleGit();
 const dbFilePath = path.resolve(__dirname, '../../src/bot/vehicleInventory.db');
 
 async function pushToScrapedData() {
+  console.log('pushToScrapedData: function started.');
   try {
     // Retrieve local branch information.
     const branches = await git.branchLocal();
