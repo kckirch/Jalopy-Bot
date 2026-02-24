@@ -76,12 +76,43 @@ function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
 
 
 function updateSavedSearch(id, updates) {
-    // Assume updates is an object containing key-value pairs of columns to update
-    const setPart = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const sql = `UPDATE saved_searches SET ${setPart} WHERE id = ?;`;
-    db.run(sql, [...Object.values(updates), id], function(err) {
-        if (err) console.error('Error updating saved search:', err);
-        else console.log('Saved search updated successfully');
+    return new Promise((resolve, reject) => {
+        const updateKeys = Object.keys(updates || {});
+        if (updateKeys.length === 0) {
+            resolve();
+            return;
+        }
+
+        // Assume updates is an object containing key-value pairs of columns to update
+        const setPart = updateKeys.map(key => `${key} = ?`).join(', ');
+        const sql = `UPDATE saved_searches SET ${setPart} WHERE id = ?;`;
+        db.run(sql, [...Object.values(updates), id], function(err) {
+            if (err) {
+                console.error('Error updating saved search:', err);
+                reject(err);
+            } else {
+                console.log('Saved search updated successfully');
+                resolve();
+            }
+        });
+    });
+}
+
+function setSavedSearchFrequency(searchId, frequency) {
+    return new Promise((resolve, reject) => {
+        const sql = `
+            UPDATE saved_searches
+            SET frequency = ?, update_date = CURRENT_TIMESTAMP
+            WHERE id = ?;
+        `;
+        db.run(sql, [frequency, searchId], function(err) {
+            if (err) {
+                console.error('Error updating saved search frequency:', err);
+                reject(err);
+            } else {
+                resolve();
+            }
+        });
     });
 }
 
@@ -140,4 +171,13 @@ function getSavedSearches(userId, yardId = null) {
 }
 
 
-module.exports = { setupSavedSearchesTable, getSavedSearches, getAllSavedSearches, addSavedSearch, checkExistingSearch, updateSavedSearch, deleteSavedSearch};
+module.exports = {
+    setupSavedSearchesTable,
+    getSavedSearches,
+    getAllSavedSearches,
+    addSavedSearch,
+    checkExistingSearch,
+    updateSavedSearch,
+    setSavedSearchFrequency,
+    deleteSavedSearch
+};

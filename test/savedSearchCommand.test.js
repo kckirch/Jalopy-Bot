@@ -5,7 +5,6 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..');
 const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
 const savedSearchManagerPath = path.join(repoRoot, 'src/database/savedSearchManager.js');
-const clientPath = path.join(repoRoot, 'src/bot/utils/client.js');
 const vehicleQueryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
 
 class FakeCollector {
@@ -36,7 +35,16 @@ class FakeCollector {
   }
 }
 
+function getButtonByLabel(payload, label) {
+  return payload.components[0].components.find((button) => button.data.label === label);
+}
+
 function makeInteraction(userId = 'user-1', location = null) {
+  const collector = new FakeCollector();
+  const replyMessage = {
+    createMessageComponentCollector: () => collector,
+  };
+
   return {
     user: {
       id: userId,
@@ -56,13 +64,16 @@ function makeInteraction(userId = 'user-1', location = null) {
     async editReply(payload) {
       this.editReplyCalls.push(payload);
     },
+    async fetchReply() {
+      return replyMessage;
+    },
+    __collector: collector,
   };
 }
 
 async function withSavedSearchCommandMocks(mocks, runTest) {
   const previousSavedSearchCommand = require.cache[savedSearchCommandPath];
   const previousSavedSearchManager = require.cache[savedSearchManagerPath];
-  const previousClient = require.cache[clientPath];
   const previousVehicleQueryManager = require.cache[vehicleQueryManagerPath];
 
   require.cache[savedSearchManagerPath] = {
@@ -70,20 +81,12 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
     filename: savedSearchManagerPath,
     loaded: true,
     exports: {
-      getSavedSearches: mocks.getSavedSearches,
-      deleteSavedSearch: mocks.deleteSavedSearch,
-      checkExistingSearch: async () => false,
-      addSavedSearch: async () => {},
+      getSavedSearches: mocks.getSavedSearches || (async () => []),
+      deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
+      setSavedSearchFrequency: mocks.setSavedSearchFrequency || (async () => {}),
     },
   };
-  require.cache[clientPath] = {
-    id: clientPath,
-    filename: clientPath,
-    loaded: true,
-    exports: {
-      client: mocks.client,
-    },
-  };
+
   require.cache[vehicleQueryManagerPath] = {
     id: vehicleQueryManagerPath,
     filename: vehicleQueryManagerPath,
@@ -92,6 +95,7 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
       queryVehicles: mocks.queryVehicles || (async () => []),
     },
   };
+
   delete require.cache[savedSearchCommandPath];
 
   try {
@@ -104,9 +108,6 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
     if (previousSavedSearchManager) require.cache[savedSearchManagerPath] = previousSavedSearchManager;
     else delete require.cache[savedSearchManagerPath];
 
-    if (previousClient) require.cache[clientPath] = previousClient;
-    else delete require.cache[clientPath];
-
     if (previousVehicleQueryManager) require.cache[vehicleQueryManagerPath] = previousVehicleQueryManager;
     else delete require.cache[vehicleQueryManagerPath];
   }
@@ -114,23 +115,10 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
 
 test('savedsearch command replies with no-results message when user has no saved searches', async () => {
   const interaction = makeInteraction('user-empty');
-  let dmSendCount = 0;
 
   await withSavedSearchCommandMocks(
     {
       getSavedSearches: async () => [],
-      deleteSavedSearch: async () => {},
-      client: {
-        users: {
-          fetch: async () => ({
-            createDM: async () => ({
-              send: async () => {
-                dmSendCount += 1;
-              },
-            }),
-          }),
-        },
-      },
     },
     async (handleSavedSearchCommand) => {
       await handleSavedSearchCommand(interaction);
@@ -141,127 +129,43 @@ test('savedsearch command replies with no-results message when user has no saved
   assert.equal(interaction.deferReplyCalls[0].ephemeral, true);
   assert.equal(interaction.editReplyCalls.length, 1);
   assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
-  assert.equal(dmSendCount, 0);
 });
 
-test('savedsearch command sends DM when searches exist and confirms in interaction reply', async () => {
+test('savedsearch command renders in-channel carousel with requested actions', async () => {
   const interaction = makeInteraction('user-has-searches');
-  const dmPayloads = [];
-  let collector;
-  let dmEditCalls = [];
 
   await withSavedSearchCommandMocks(
     {
       getSavedSearches: async () => [
         {
           id: 1,
+          yard_id: '1020',
           yard_name: 'BOISE',
           make: 'TOYOTA',
           model: 'CAMRY',
           year_range: '2000-2005',
           status: 'ACTIVE',
+          frequency: 'daily',
           create_date: new Date().toISOString(),
           update_date: new Date().toISOString(),
         },
       ],
-      deleteSavedSearch: async () => {},
-      client: {
-        users: {
-          fetch: async () => ({
-            createDM: async () => ({
-              send: async (payload) => {
-                dmPayloads.push(payload);
-                return {
-                  edit: async (editPayload) => {
-                    dmEditCalls.push(editPayload);
-                  },
-                  createMessageComponentCollector: () => {
-                    collector = new FakeCollector();
-                    return collector;
-                  },
-                };
-              },
-            }),
-          }),
-        },
-      },
     },
     async (handleSavedSearchCommand) => {
       await handleSavedSearchCommand(interaction);
-      await collector.emitEnd();
     }
   );
 
-  assert.equal(dmPayloads.length, 1);
-  assert.ok(Array.isArray(dmPayloads[0].embeds));
   assert.equal(interaction.editReplyCalls.length, 1);
-  assert.match(interaction.editReplyCalls[0].content, /check your DMs/i);
-  assert.equal(dmEditCalls.length, 1);
-  assert.deepEqual(dmEditCalls[0].components, []);
+  const initialPayload = interaction.editReplyCalls[0];
+  assert.ok(Array.isArray(initialPayload.embeds));
+  assert.ok(Array.isArray(initialPayload.components));
+  const labels = initialPayload.components[0].components.map((button) => button.data.label);
+  assert.deepEqual(labels, ['Prev Saved', 'Next Saved', 'Run', 'Delete', 'Pause Alerts']);
 });
 
-test('delete button removes saved search and updates DM state', async () => {
-  const interaction = makeInteraction('user-delete-test');
-  const deleteCalls = [];
-  let collector;
-  let updatedPayload;
-
-  await withSavedSearchCommandMocks(
-    {
-      getSavedSearches: async () => [
-        {
-          id: 42,
-          yard_name: 'BOISE',
-          make: 'HONDA',
-          model: 'CIVIC',
-          year_range: 'ANY',
-          status: 'ACTIVE',
-          create_date: new Date().toISOString(),
-          update_date: new Date().toISOString(),
-        },
-      ],
-      deleteSavedSearch: async (id) => {
-        deleteCalls.push(id);
-      },
-      client: {
-        users: {
-          fetch: async () => ({
-            createDM: async () => ({
-              send: async () => ({
-                edit: async () => {},
-                createMessageComponentCollector: () => {
-                  collector = new FakeCollector();
-                  return collector;
-                },
-              }),
-            }),
-          }),
-        },
-      },
-    },
-    async (handleSavedSearchCommand) => {
-      await handleSavedSearchCommand(interaction);
-
-      const buttonInteraction = {
-        customId: 'delete:0',
-        user: { id: 'user-delete-test' },
-        async update(payload) {
-          updatedPayload = payload;
-        },
-        async reply() {},
-      };
-      await collector.emitCollect(buttonInteraction);
-    }
-  );
-
-  assert.deepEqual(deleteCalls, [42]);
-  assert.match(updatedPayload.content, /all saved searches have been deleted/i);
-  assert.deepEqual(updatedPayload.components, []);
-});
-
-test('check-matches button updates saved-search embed with current DB match summary', async () => {
-  const interaction = makeInteraction('user-check-test');
-  let collector;
+test('run button updates saved-search embed with current DB match summary', async () => {
+  const interaction = makeInteraction('user-run-test');
   let updatedPayload;
 
   await withSavedSearchCommandMocks(
@@ -275,11 +179,11 @@ test('check-matches button updates saved-search embed with current DB match summ
           model: 'CAMRY',
           year_range: 'ANY',
           status: 'ACTIVE',
+          frequency: 'daily',
           create_date: new Date().toISOString(),
           update_date: new Date().toISOString(),
         },
       ],
-      deleteSavedSearch: async () => {},
       queryVehicles: async () => [
         {
           vehicle_year: 2005,
@@ -290,33 +194,19 @@ test('check-matches button updates saved-search embed with current DB match summ
           last_updated: new Date().toISOString(),
         },
       ],
-      client: {
-        users: {
-          fetch: async () => ({
-            createDM: async () => ({
-              send: async () => ({
-                edit: async () => {},
-                createMessageComponentCollector: () => {
-                  collector = new FakeCollector();
-                  return collector;
-                },
-              }),
-            }),
-          }),
-        },
-      },
     },
     async (handleSavedSearchCommand) => {
       await handleSavedSearchCommand(interaction);
+      const runCustomId = getButtonByLabel(interaction.editReplyCalls[0], 'Run').data.custom_id;
 
-      const buttonInteraction = {
-        customId: 'check:0',
-        user: { id: 'user-check-test' },
+      await interaction.__collector.emitCollect({
+        customId: runCustomId,
+        user: { id: 'user-run-test' },
         async update(payload) {
           updatedPayload = payload;
         },
-      };
-      await collector.emitCollect(buttonInteraction);
+        async reply() {},
+      });
     }
   );
 
@@ -326,71 +216,186 @@ test('check-matches button updates saved-search embed with current DB match summ
   assert.ok(embedData.fields.some((field) => /Current DB Matches/i.test(field.name)));
 });
 
-test('delete-all button removes every saved search and clears DM controls', async () => {
-  const interaction = makeInteraction('user-delete-all-test');
-  const deleted = [];
-  let collector;
+test('pause button toggles alerts and persists paused frequency', async () => {
+  const interaction = makeInteraction('user-pause-test');
+  const frequencyUpdates = [];
   let updatedPayload;
 
   await withSavedSearchCommandMocks(
     {
       getSavedSearches: async () => [
         {
-          id: 1,
+          id: 55,
+          yard_id: '1020',
           yard_name: 'BOISE',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: 'ANY',
-          status: 'ACTIVE',
-          create_date: new Date().toISOString(),
-          update_date: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          yard_name: 'CALDWELL',
           make: 'HONDA',
           model: 'CIVIC',
           year_range: 'ANY',
           status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+      setSavedSearchFrequency: async (searchId, frequency) => {
+        frequencyUpdates.push([searchId, frequency]);
+      },
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      const pauseCustomId = getButtonByLabel(interaction.editReplyCalls[0], 'Pause Alerts').data.custom_id;
+
+      await interaction.__collector.emitCollect({
+        customId: pauseCustomId,
+        user: { id: 'user-pause-test' },
+        async update(payload) {
+          updatedPayload = payload;
+        },
+        async reply() {},
+      });
+    }
+  );
+
+  assert.deepEqual(frequencyUpdates, [[55, 'paused']]);
+  const pauseButton = getButtonByLabel(updatedPayload, 'Resume Alerts');
+  assert.ok(pauseButton);
+  assert.match(updatedPayload.embeds[0].data.description, /alerts:\s+paused/i);
+});
+
+test('delete button removes saved search and clears message when last item is deleted', async () => {
+  const interaction = makeInteraction('user-delete-test');
+  const deleteCalls = [];
+  let updatedPayload;
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 42,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'HONDA',
+          model: 'CIVIC',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
           create_date: new Date().toISOString(),
           update_date: new Date().toISOString(),
         },
       ],
       deleteSavedSearch: async (id) => {
-        deleted.push(id);
-      },
-      client: {
-        users: {
-          fetch: async () => ({
-            createDM: async () => ({
-              send: async () => ({
-                edit: async () => {},
-                createMessageComponentCollector: () => {
-                  collector = new FakeCollector();
-                  return collector;
-                },
-              }),
-            }),
-          }),
-        },
+        deleteCalls.push(id);
       },
     },
     async (handleSavedSearchCommand) => {
       await handleSavedSearchCommand(interaction);
+      const deleteCustomId = getButtonByLabel(interaction.editReplyCalls[0], 'Delete').data.custom_id;
 
-      const buttonInteraction = {
-        customId: 'deleteall',
-        user: { id: 'user-delete-all-test' },
+      await interaction.__collector.emitCollect({
+        customId: deleteCustomId,
+        user: { id: 'user-delete-test' },
         async update(payload) {
           updatedPayload = payload;
         },
         async reply() {},
-      };
-      await collector.emitCollect(buttonInteraction);
+      });
     }
   );
 
-  assert.deepEqual(deleted.sort((a, b) => a - b), [1, 2]);
+  assert.deepEqual(deleteCalls, [42]);
   assert.match(updatedPayload.content, /all saved searches have been deleted/i);
   assert.deepEqual(updatedPayload.components, []);
+});
+
+test('next and previous buttons cycle through saved searches in place', async () => {
+  const interaction = makeInteraction('user-nav-test');
+  const updates = [];
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 1,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          yard_id: '1021',
+          yard_name: 'CALDWELL',
+          make: 'HONDA',
+          model: 'ACCORD',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+
+      const nextCustomId = getButtonByLabel(interaction.editReplyCalls[0], 'Next Saved').data.custom_id;
+      await interaction.__collector.emitCollect({
+        customId: nextCustomId,
+        user: { id: 'user-nav-test' },
+        async update(payload) {
+          updates.push(payload);
+        },
+        async reply() {},
+      });
+
+      const prevCustomId = getButtonByLabel(updates[0], 'Prev Saved').data.custom_id;
+      await interaction.__collector.emitCollect({
+        customId: prevCustomId,
+        user: { id: 'user-nav-test' },
+        async update(payload) {
+          updates.push(payload);
+        },
+        async reply() {},
+      });
+    }
+  );
+
+  assert.equal(updates.length, 2);
+  assert.match(updates[0].embeds[0].data.title, /HONDA ACCORD/i);
+  assert.match(updates[1].embeds[0].data.title, /TOYOTA CAMRY/i);
+});
+
+test('carousel collector end disables components on the ephemeral reply', async () => {
+  const interaction = makeInteraction('user-end-test');
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 1,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      await interaction.__collector.emitEnd([], 'time');
+    }
+  );
+
+  assert.equal(interaction.editReplyCalls.length, 2);
+  assert.deepEqual(interaction.editReplyCalls[1].components, []);
 });

@@ -10,6 +10,11 @@ async function processDailySavedSearches() {
         const savedSearches = await getAllSavedSearches();
         for (const search of savedSearches) {
             try {
+                const frequency = String(search.frequency || 'daily').trim().toLowerCase();
+                if (frequency === 'paused') {
+                    continue;
+                }
+
                 console.log("Processing search for:", search.username);
                 const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
                 if (results.length > 0) {

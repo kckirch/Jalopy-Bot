@@ -15,6 +15,7 @@ let parameterStoreMaxEntries = 5000;
 let parameterStoreTtlMs = 10 * 60 * 1000;
 let nowProvider = () => Date.now();
 const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
+const QUICK_ACTION_PREFIX = 'sq:';
 
 const SEARCH_LOCATION_OPTIONS = [
   { label: 'Boise', value: 'boise' },
@@ -104,6 +105,221 @@ function resolveHash(hash) {
     return undefined;
   }
   return entry.parameters;
+}
+
+function encodeParamValue(value) {
+  return encodeURIComponent(String(value ?? ''));
+}
+
+function decodeParamValue(value) {
+  try {
+    return decodeURIComponent(String(value ?? ''));
+  } catch (error) {
+    return String(value ?? '');
+  }
+}
+
+function serializeActionPayload(payload) {
+  return Object.entries(payload)
+    .map(([key, value]) => `${key}:${encodeParamValue(value)}`)
+    .join('|');
+}
+
+function deserializeActionPayload(serializedPayload) {
+  return String(serializedPayload || '')
+    .split('|')
+    .reduce((accumulator, pair) => {
+      const separatorIndex = pair.indexOf(':');
+      if (separatorIndex === -1) {
+        return accumulator;
+      }
+      const key = pair.slice(0, separatorIndex);
+      const value = pair.slice(separatorIndex + 1);
+      accumulator[key] = decodeParamValue(value);
+      return accumulator;
+    }, {});
+}
+
+function buildQuickActionCustomId(action, payload) {
+  const serialized = serializeActionPayload({
+    ...payload,
+    sa: action,
+  });
+  const hash = generateHash(serialized);
+  return `${QUICK_ACTION_PREFIX}${hash}`;
+}
+
+function normalizeLocationName(location, yardId) {
+  if (location && location.trim() !== '') {
+    return location;
+  }
+  return convertYardIdToLocation(yardId).replace(/\s{2,}/g, ' ').trim();
+}
+
+function buildQuickActionButtons(payload) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(buildQuickActionCustomId('delete', payload))
+      .setLabel('Delete This Search')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(buildQuickActionCustomId('view', payload))
+      .setLabel('See Saved')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(buildQuickActionCustomId('next', payload))
+      .setLabel('Next Saved')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(buildQuickActionCustomId('run', payload))
+      .setLabel('Run This Search')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(buildQuickActionCustomId('close', payload))
+      .setLabel('Close')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function createQuickActionPayload({
+  userId,
+  location,
+  yardId,
+  make,
+  model,
+  yearRange,
+  status,
+  savedSearchId,
+  savedIndex = 0,
+}) {
+  const canonicalYardId = canonicalizeYardIdForSavedSearch(yardId);
+  return {
+    uid: userId,
+    lc: normalizeLocationName(location, canonicalYardId),
+    yd: canonicalYardId,
+    mk: make,
+    md: model,
+    yr: yearRange,
+    st: status,
+    sid: savedSearchId || '',
+    idx: Number.isInteger(savedIndex) && savedIndex >= 0 ? savedIndex : 0,
+  };
+}
+
+function matchesSavedSearchWithPayload(savedSearch, payload) {
+  const savedYard = canonicalizeYardIdForSavedSearch(savedSearch.yard_id);
+  const payloadYard = canonicalizeYardIdForSavedSearch(payload.yd);
+  return (
+    normalizeSearchValue(savedYard) === normalizeSearchValue(payloadYard) &&
+    normalizeSearchValue(savedSearch.make) === normalizeSearchValue(payload.mk) &&
+    normalizeSearchValue(savedSearch.model) === normalizeSearchValue(payload.md) &&
+    normalizeSearchValue(savedSearch.year_range) === normalizeSearchValue(payload.yr) &&
+    normalizeSearchValue(savedSearch.status) === normalizeSearchValue(payload.st)
+  );
+}
+
+function buildSavedSearchActionEmbed({
+  title,
+  message,
+  payload,
+  savedCount,
+  selectedPosition = null,
+}) {
+  const embed = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setTitle(title)
+    .setDescription(message)
+    .addFields(
+      { name: 'Location', value: payload.lc || 'Any', inline: true },
+      { name: 'Make', value: payload.mk || 'ANY', inline: true },
+      { name: 'Model', value: payload.md || 'ANY', inline: true },
+      { name: 'Year', value: payload.yr || 'ANY', inline: true },
+      { name: 'Status', value: payload.st || 'ACTIVE', inline: true }
+    );
+
+  if (Number.isInteger(savedCount)) {
+    const positionText = Number.isInteger(selectedPosition) ? ` (showing ${selectedPosition} of ${savedCount})` : '';
+    embed.addFields({
+      name: 'Saved Searches',
+      value: `${savedCount}${positionText}`,
+      inline: true,
+    });
+  }
+
+  return embed;
+}
+
+function buildRunNowEmbed(payload, vehicles) {
+  const embed = new EmbedBuilder()
+    .setColor(0x0099FF)
+    .setTitle('Run This Search')
+    .setDescription(`Current match count: **${vehicles.length}**`)
+    .addFields(
+      { name: 'Location', value: payload.lc || 'Any', inline: true },
+      { name: 'Make', value: payload.mk || 'ANY', inline: true },
+      { name: 'Model', value: payload.md || 'ANY', inline: true },
+      { name: 'Year', value: payload.yr || 'ANY', inline: true },
+      { name: 'Status', value: payload.st || 'ACTIVE', inline: true }
+    );
+
+  const previewRows = vehicles.slice(0, 5);
+  if (previewRows.length > 0) {
+    const preview = previewRows
+      .map((vehicle) => `${vehicle.vehicle_year} ${vehicle.vehicle_make} ${vehicle.vehicle_model} | ${vehicle.yard_name} Row ${vehicle.row_number}`)
+      .join('\n')
+      .slice(0, 1024);
+    embed.addFields({ name: 'Top Matches', value: preview });
+  } else {
+    embed.addFields({ name: 'Top Matches', value: 'No active matches right now.' });
+  }
+
+  if (vehicles.length > previewRows.length) {
+    embed.setFooter({ text: `Showing ${previewRows.length} of ${vehicles.length} matches` });
+  }
+
+  return embed;
+}
+
+async function buildSavedSearchActionMessage({
+  userId,
+  location,
+  yardId,
+  make,
+  model,
+  yearRange,
+  status,
+  savedSearchId = '',
+  savedIndex = 0,
+  title,
+  message,
+}) {
+  const payload = createQuickActionPayload({
+    userId,
+    location,
+    yardId,
+    make,
+    model,
+    yearRange,
+    status,
+    savedSearchId,
+    savedIndex,
+  });
+
+  const savedSearches = await getSavedSearches(userId);
+  const selectedPosition = savedSearches.length > 0 ? (payload.idx + 1) : null;
+  const embed = buildSavedSearchActionEmbed({
+    title,
+    message,
+    payload,
+    savedCount: savedSearches.length,
+    selectedPosition,
+  });
+
+  return {
+    embeds: [embed],
+    components: [buildQuickActionButtons(payload)],
+    ephemeral: true,
+  };
 }
 
 function normalizeSearchValue(value) {
@@ -351,16 +567,33 @@ async function handleSearchCommand(interaction) {
 
                 const exists = await checkExistingSearch(i.user.id, cleanedYardId, userMakeInput, model, yearInput, status);
                 if (!exists) {
-                  await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, userMakeInput, model, yearInput, status, '');
-                  await i.reply({
-                    content: 'Search saved successfully! Use **Delete Saved** or **My Saved Searches** below for quick actions.',
-                    ephemeral: true,
+                  const savedSearchId = await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, userMakeInput, model, yearInput, status, '');
+                  const responsePayload = await buildSavedSearchActionMessage({
+                    userId: i.user.id,
+                    location: searchState.location,
+                    yardId: cleanedYardId,
+                    make: userMakeInput,
+                    model,
+                    yearRange: yearInput,
+                    status,
+                    savedSearchId,
+                    title: 'Search Saved',
+                    message: 'Saved this search. Use the buttons below to keep working without retyping.',
                   });
+                  await i.reply(responsePayload);
                 } else {
-                  await i.reply({
-                    content: 'This search has already been saved. Use **Delete Saved** below if you want to remove it.',
-                    ephemeral: true,
+                  const responsePayload = await buildSavedSearchActionMessage({
+                    userId: i.user.id,
+                    location: searchState.location,
+                    yardId: cleanedYardId,
+                    make: userMakeInput,
+                    model,
+                    yearRange: yearInput,
+                    status,
+                    title: 'Search Already Saved',
+                    message: 'This search is already in your saved list. You can run it now, jump through saved searches, or delete it.',
                   });
+                  await i.reply(responsePayload);
                 }
               } catch (error) {
                 console.error('Error checking for existing search:', error);
@@ -482,12 +715,155 @@ async function handleSearchCommand(interaction) {
   }
 }
 
+async function handleSavedSearchQuickActionButton(interaction, quickHash) {
+  const serializedPayload = resolveHash(quickHash);
+  if (!serializedPayload) {
+    await interaction.reply({ content: 'This action expired. Please save the search again.', ephemeral: true });
+    return;
+  }
+
+  const payload = deserializeActionPayload(serializedPayload);
+  const action = payload.sa;
+
+  if (payload.uid && payload.uid !== interaction.user.id) {
+    await interaction.reply({ content: 'You do not have permission to use this action.', ephemeral: true });
+    return;
+  }
+
+  const currentLocation = payload.lc || normalizeLocationName(payload.yd, payload.yd);
+  const currentYardId = payload.yd;
+  const currentMake = payload.mk || 'ANY';
+  const currentModel = payload.md || 'ANY';
+  const currentYearRange = payload.yr || 'ANY';
+  const currentStatus = payload.st || 'ACTIVE';
+  const currentIndex = Number.parseInt(payload.idx, 10);
+  const normalizedIndex = Number.isInteger(currentIndex) && currentIndex >= 0 ? currentIndex : 0;
+
+  if (action === 'close') {
+    await interaction.update({ content: 'Saved search actions closed.', embeds: [], components: [] });
+    return;
+  }
+
+  if (action === 'run') {
+    const vehicles = await queryVehicles(currentYardId, currentMake, currentModel, currentYearRange, currentStatus);
+    const runNowEmbed = buildRunNowEmbed(payload, vehicles);
+    const refreshedPayload = createQuickActionPayload({
+      userId: interaction.user.id,
+      location: currentLocation,
+      yardId: currentYardId,
+      make: currentMake,
+      model: currentModel,
+      yearRange: currentYearRange,
+      status: currentStatus,
+      savedSearchId: payload.sid || '',
+      savedIndex: normalizedIndex,
+    });
+    await interaction.update({
+      embeds: [runNowEmbed],
+      components: [buildQuickActionButtons(refreshedPayload)],
+    });
+    return;
+  }
+
+  const savedSearches = await getSavedSearches(interaction.user.id);
+  if (savedSearches.length === 0) {
+    await interaction.update({ content: 'You have no saved searches.', embeds: [], components: [] });
+    return;
+  }
+
+  if (action === 'delete') {
+    let deletedCount = 0;
+    if (payload.sid) {
+      await deleteSavedSearch(payload.sid);
+      deletedCount = 1;
+    } else {
+      const matches = savedSearches.filter((savedSearch) => matchesSavedSearchWithPayload(savedSearch, payload));
+      for (const savedSearch of matches) {
+        await deleteSavedSearch(savedSearch.id);
+      }
+      deletedCount = matches.length;
+    }
+
+    const remainingSavedSearches = await getSavedSearches(interaction.user.id);
+    if (remainingSavedSearches.length === 0) {
+      await interaction.update({
+        content: `Deleted ${deletedCount} saved search${deletedCount === 1 ? '' : 'es'}. You have no saved searches left.`,
+        embeds: [],
+        components: [],
+      });
+      return;
+    }
+
+    const nextIndex = Math.min(normalizedIndex, remainingSavedSearches.length - 1);
+    const nextSaved = remainingSavedSearches[nextIndex];
+    const nextPayload = createQuickActionPayload({
+      userId: interaction.user.id,
+      location: normalizeLocationName(convertYardIdToLocation(nextSaved.yard_id), nextSaved.yard_id),
+      yardId: nextSaved.yard_id,
+      make: nextSaved.make,
+      model: nextSaved.model,
+      yearRange: nextSaved.year_range,
+      status: nextSaved.status,
+      savedSearchId: nextSaved.id,
+      savedIndex: nextIndex,
+    });
+    const embed = buildSavedSearchActionEmbed({
+      title: 'Saved Search Deleted',
+      message: `Deleted ${deletedCount} saved search${deletedCount === 1 ? '' : 'es'}.`,
+      payload: nextPayload,
+      savedCount: remainingSavedSearches.length,
+      selectedPosition: nextIndex + 1,
+    });
+    await interaction.update({
+      embeds: [embed],
+      components: [buildQuickActionButtons(nextPayload)],
+    });
+    return;
+  }
+
+  if (action === 'view' || action === 'next') {
+    const selectedIndex = action === 'next'
+      ? (normalizedIndex + 1) % savedSearches.length
+      : Math.min(normalizedIndex, savedSearches.length - 1);
+    const selectedSavedSearch = savedSearches[selectedIndex];
+    const selectedPayload = createQuickActionPayload({
+      userId: interaction.user.id,
+      location: normalizeLocationName(convertYardIdToLocation(selectedSavedSearch.yard_id), selectedSavedSearch.yard_id),
+      yardId: selectedSavedSearch.yard_id,
+      make: selectedSavedSearch.make,
+      model: selectedSavedSearch.model,
+      yearRange: selectedSavedSearch.year_range,
+      status: selectedSavedSearch.status,
+      savedSearchId: selectedSavedSearch.id,
+      savedIndex: selectedIndex,
+    });
+    const embed = buildSavedSearchActionEmbed({
+      title: 'Saved Search',
+      message: 'Browse your saved searches with buttons and run or delete directly.',
+      payload: selectedPayload,
+      savedCount: savedSearches.length,
+      selectedPosition: selectedIndex + 1,
+    });
+    await interaction.update({
+      embeds: [embed],
+      components: [buildQuickActionButtons(selectedPayload)],
+    });
+    return;
+  }
+
+  await interaction.reply({ content: 'Unsupported quick action.', ephemeral: true });
+}
+
 module.exports = {
   handleSearchCommand,
+  handleSavedSearchQuickActionButton,
   __testables: {
+    QUICK_ACTION_PREFIX,
     canonicalizeYardIdForSavedSearch,
     generateHash,
     resolveHash,
+    buildQuickActionCustomId,
+    deserializeActionPayload,
     pruneParameterStore,
     resetParameterStore: () => parameterStore.clear(),
     getParameterStoreSize: () => parameterStore.size,
