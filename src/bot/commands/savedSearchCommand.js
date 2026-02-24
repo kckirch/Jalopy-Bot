@@ -1,10 +1,10 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
+const { getSavedSearches, deleteSavedSearch, setSavedSearchFrequency } = require('../../database/savedSearchManager');
 const { convertLocationToYardId } = require('../utils/locationUtils');
 const { queryVehicles } = require('../../database/vehicleQueryManager');
-const { client } = require('../utils/client');
 
 const MATCH_PREVIEW_LIMIT = 5;
+const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
 
 function sortVehiclesByMostRecent(rows) {
   return [...rows].sort((a, b) => {
@@ -37,22 +37,61 @@ function buildMatchSummary(search, vehicles) {
   };
 }
 
-function buildSavedSearchComponents(currentIndex, totalCount) {
-  const navigationRow = new ActionRowBuilder()
+function normalizeFrequency(frequency) {
+  const normalized = String(frequency || 'daily').trim().toLowerCase();
+  return normalized === 'paused' ? 'paused' : 'daily';
+}
+
+function formatSavedSearchDate(rawDate) {
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Unknown';
+  }
+  return parsed.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+}
+
+function buildSavedSearchComponents(currentIndex, totalCount, currentSearch) {
+  const isPaused = normalizeFrequency(currentSearch.frequency) === 'paused';
+  const buttonRow = new ActionRowBuilder()
     .addComponents(
-      new ButtonBuilder().setCustomId(`prev:${currentIndex}`).setLabel('Previous').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === 0),
-      new ButtonBuilder().setCustomId(`next:${currentIndex}`).setLabel('Next').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === totalCount - 1),
-      new ButtonBuilder().setCustomId(`delete:${currentIndex}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`prev:${currentIndex}`).setLabel('Prev Saved').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === 0),
+      new ButtonBuilder().setCustomId(`next:${currentIndex}`).setLabel('Next Saved').setStyle(ButtonStyle.Primary).setDisabled(currentIndex === totalCount - 1),
+      new ButtonBuilder().setCustomId(`run:${currentIndex}`).setLabel('Run').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`delete:${currentIndex}`).setLabel('Delete').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`pause:${currentIndex}`)
+        .setLabel(isPaused ? 'Resume Alerts' : 'Pause Alerts')
+        .setStyle(ButtonStyle.Secondary)
     );
 
-  const quickActionsRow = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder().setCustomId(`check:${currentIndex}`).setLabel('Check Matches').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('deleteall').setLabel('Delete All').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('close').setLabel('Close').setStyle(ButtonStyle.Secondary)
-    );
+  return [buttonRow];
+}
 
-  return [navigationRow, quickActionsRow];
+function buildSavedSearchEmbed(search, currentIndex, totalCount, matchSummary = null) {
+  const createDate = formatSavedSearchDate(search.create_date);
+  const lastUpdatedDate = formatSavedSearchDate(search.update_date);
+  const alertsState = normalizeFrequency(search.frequency) === 'paused' ? 'Paused' : 'Active';
+
+  const embed = new EmbedBuilder()
+    .setColor(0x0099FF)
+    .setTitle(`Saved Search: ${search.make} ${search.model} (${search.year_range})`)
+    .setDescription(
+      `Yard: ${search.yard_name}\n` +
+      `Status: ${search.status}\n` +
+      `Alerts: ${alertsState}\n` +
+      `Created: ${createDate}\n` +
+      `Last Updated: ${lastUpdatedDate}`
+    )
+    .setFooter({ text: `Viewing ${currentIndex + 1} of ${totalCount}` });
+
+  if (matchSummary && matchSummary.fieldName && matchSummary.fieldValue) {
+    embed.addFields({
+      name: matchSummary.fieldName,
+      value: matchSummary.fieldValue,
+    });
+  }
+
+  return embed;
 }
 
 async function handleSavedSearchCommand(interaction) {
@@ -66,110 +105,111 @@ async function handleSavedSearchCommand(interaction) {
     await interaction.deferReply({ ephemeral: true });
     const savedSearches = await getSavedSearches(userId, yardId);
     console.log('Retrieved saved searches successfully.');
-    
-    if (savedSearches.length > 0) {
-      let currentIndex = 0;
-      let currentMatchSummary = null;
 
-      const updateEmbedAndComponents = (index) => {
-        const search = savedSearches[index];
-        const createDate = new Date(search.create_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-        const lastUpdatedDate = new Date(search.update_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-
-        const embed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle(`Saved Search: ${search.make} ${search.model} (${search.year_range})`)
-          .setDescription(`Yard: ${search.yard_name}\nStatus: ${search.status}\nCreated: ${createDate}\nLast Updated: ${lastUpdatedDate}`)
-          .setFooter({ text: `Viewing ${index + 1} of ${savedSearches.length}` });
-
-        if (currentMatchSummary && currentMatchSummary.fieldName && currentMatchSummary.fieldValue) {
-          embed.addFields({
-            name: currentMatchSummary.fieldName,
-            value: currentMatchSummary.fieldValue,
-          });
-        }
-
-        const components = buildSavedSearchComponents(currentIndex, savedSearches.length);
-
-        return { embed, components };
-      };
-
-      const initialMessage = updateEmbedAndComponents(currentIndex);
-      const user = await client.users.fetch(userId);
-      const dmChannel = await user.createDM();
-      const dmMessage = await dmChannel.send({ embeds: [initialMessage.embed], components: [initialMessage.components] });
-
-      const filter = i => i.user.id === interaction.user.id;
-      const collector = dmMessage.createMessageComponentCollector({ filter, time: 60000 });
-
-      collector.on('collect', async i => {
-        try {
-          const [action, index] = i.customId.split(':');
-
-          if (action === 'next' || action === 'prev') {
-            const newIndex = action === 'next' ? parseInt(index, 10) + 1 : parseInt(index, 10) - 1;
-            currentIndex = newIndex;
-            currentMatchSummary = null;
-            const update = updateEmbedAndComponents(currentIndex);
-            await i.update({ embeds: [update.embed], components: update.components });
-          } else if (action === 'delete') {
-            await deleteSavedSearch(savedSearches[currentIndex].id);
-            savedSearches.splice(currentIndex, 1);
-            currentMatchSummary = null;
-
-            if (savedSearches.length === 0) {
-              await i.update({ content: 'All saved searches have been deleted.', components: [], embeds: [] });
-              collector.stop('all_deleted');
-              return;
-            }
-
-            currentIndex = Math.min(currentIndex, savedSearches.length - 1);
-            const update = updateEmbedAndComponents(currentIndex);
-            await i.update({ embeds: [update.embed], components: update.components });
-          } else if (action === 'check') {
-            const currentSearch = savedSearches[currentIndex];
-            const vehicles = await queryVehicles(
-              currentSearch.yard_id,
-              currentSearch.make || 'ANY',
-              currentSearch.model || 'ANY',
-              currentSearch.year_range || 'ANY',
-              currentSearch.status || 'ACTIVE'
-            );
-            currentMatchSummary = buildMatchSummary(currentSearch, vehicles);
-            const update = updateEmbedAndComponents(currentIndex);
-            await i.update({ embeds: [update.embed], components: update.components });
-          } else if (action === 'deleteall') {
-            const idsToDelete = savedSearches.map((savedSearch) => savedSearch.id);
-            for (const searchId of idsToDelete) {
-              await deleteSavedSearch(searchId);
-            }
-            savedSearches.splice(0, savedSearches.length);
-            currentMatchSummary = null;
-            await i.update({ content: 'All saved searches have been deleted.', components: [], embeds: [] });
-            collector.stop('all_deleted');
-          } else if (action === 'close') {
-            await i.update({ content: 'Saved search session closed.', components: [], embeds: [] });
-            collector.stop('closed');
-          } else {
-            await i.reply({ content: 'Unknown action.' });
-          }
-        } catch (collectorError) {
-          console.error('Saved search interaction failed:', collectorError);
-          await i.reply({ content: 'Unable to process that saved-search action right now.' });
-        }
-      });
-
-      collector.on('end', async (_collected, reason) => {
-        if (dmMessage && reason !== 'all_deleted' && reason !== 'closed') {
-          await dmMessage.edit({ components: [] });
-        }
-      });
-
-      await interaction.editReply({ content: 'Check your DMs for your saved searches.' });
-
-    } else {
+    if (savedSearches.length === 0) {
       await interaction.editReply({ content: 'You have no saved searches matching the criteria.' });
+      return;
     }
+
+    let currentIndex = 0;
+    const matchSummariesById = new Map();
+
+    const buildViewPayload = () => {
+      const currentSearch = savedSearches[currentIndex];
+      const matchSummary = matchSummariesById.get(currentSearch.id) || null;
+      const embed = buildSavedSearchEmbed(currentSearch, currentIndex, savedSearches.length, matchSummary);
+      const components = buildSavedSearchComponents(currentIndex, savedSearches.length, currentSearch);
+      return { embeds: [embed], components };
+    };
+
+    await interaction.editReply(buildViewPayload());
+
+    const replyMessage = await interaction.fetchReply();
+    const collector = replyMessage.createMessageComponentCollector({
+      filter: (i) => i.user.id === interaction.user.id,
+      time: SAVED_SEARCH_SESSION_MS,
+    });
+
+    collector.on('collect', async (i) => {
+      try {
+        const [action, rawIndex] = String(i.customId || '').split(':');
+        const parsedIndex = Number.parseInt(rawIndex, 10);
+        const requestedIndex = Number.isInteger(parsedIndex) ? parsedIndex : currentIndex;
+        const baseIndex = Math.min(Math.max(requestedIndex, 0), savedSearches.length - 1);
+
+        if (action === 'next') {
+          currentIndex = Math.min(baseIndex + 1, savedSearches.length - 1);
+          await i.update(buildViewPayload());
+          return;
+        }
+
+        if (action === 'prev') {
+          currentIndex = Math.max(baseIndex - 1, 0);
+          await i.update(buildViewPayload());
+          return;
+        }
+
+        if (action === 'run') {
+          const currentSearch = savedSearches[baseIndex];
+          const vehicles = await queryVehicles(
+            currentSearch.yard_id,
+            currentSearch.make || 'ANY',
+            currentSearch.model || 'ANY',
+            currentSearch.year_range || 'ANY',
+            currentSearch.status || 'ACTIVE'
+          );
+          matchSummariesById.set(currentSearch.id, buildMatchSummary(currentSearch, vehicles));
+          currentIndex = baseIndex;
+          await i.update(buildViewPayload());
+          return;
+        }
+
+        if (action === 'delete') {
+          const currentSearch = savedSearches[baseIndex];
+          await deleteSavedSearch(currentSearch.id);
+          savedSearches.splice(baseIndex, 1);
+          matchSummariesById.delete(currentSearch.id);
+
+          if (savedSearches.length === 0) {
+            await i.update({ content: 'All saved searches have been deleted.', embeds: [], components: [] });
+            collector.stop('all_deleted');
+            return;
+          }
+
+          currentIndex = Math.min(baseIndex, savedSearches.length - 1);
+          await i.update(buildViewPayload());
+          return;
+        }
+
+        if (action === 'pause') {
+          const currentSearch = savedSearches[baseIndex];
+          const currentFrequency = normalizeFrequency(currentSearch.frequency);
+          const nextFrequency = currentFrequency === 'paused' ? 'daily' : 'paused';
+          await setSavedSearchFrequency(currentSearch.id, nextFrequency);
+          currentSearch.frequency = nextFrequency;
+          currentSearch.update_date = new Date().toISOString();
+          currentIndex = baseIndex;
+          await i.update(buildViewPayload());
+          return;
+        }
+
+        await i.reply({ content: 'Unknown action.', ephemeral: true });
+      } catch (collectorError) {
+        console.error('Saved search interaction failed:', collectorError);
+        await i.reply({ content: 'Unable to process that saved-search action right now.', ephemeral: true });
+      }
+    });
+
+    collector.on('end', async (_collected, reason) => {
+      if (reason !== 'all_deleted') {
+        try {
+          await interaction.editReply({ components: [] });
+        } catch (editError) {
+          console.error('Unable to disable saved-search carousel buttons:', editError);
+        }
+      }
+    });
+
   } catch (error) {
     console.error('Error retrieving saved searches:', error);
     await interaction.editReply({ content: 'Failed to retrieve saved searches.' });

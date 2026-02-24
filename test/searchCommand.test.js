@@ -236,7 +236,12 @@ test('save-search button flow calls checkExistingSearch and addSavedSearch', asy
       assert.equal(addSavedSearchCalls[0][5], 'CAMRY');
       assert.equal(addSavedSearchCalls[0][6], '2005');
       assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.match(buttonInteraction.replyCalls[0].content, /saved successfully/i);
+      assert.equal(buttonInteraction.replyCalls[0].ephemeral, true);
+      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].embeds));
+      assert.match(buttonInteraction.replyCalls[0].embeds[0].data.title, /search saved/i);
+      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].components));
+      assert.equal(buttonInteraction.replyCalls[0].components[0].components.length, 5);
+      assert.ok(buttonInteraction.replyCalls[0].components[0].components.every((button) => button.data.custom_id.startsWith('sq:')));
     }
   );
 });
@@ -348,7 +353,10 @@ test('duplicate saved search does not call addSavedSearch', async () => {
   );
 
   assert.equal(addCalls, 0);
-  assert.match(duplicateReply.content, /already been saved/i);
+  assert.ok(Array.isArray(duplicateReply.embeds));
+  assert.match(duplicateReply.embeds[0].data.title, /already saved/i);
+  assert.ok(Array.isArray(duplicateReply.components));
+  assert.equal(duplicateReply.components[0].components.length, 5);
 });
 
 test('delete-saved quick action removes matching saved search criteria', async () => {
@@ -556,6 +564,58 @@ test('location dropdown reruns search with same filters in selected location', a
       assert.deepEqual(queriedYardIds, [1020, 1021]);
       assert.equal(selectInteraction.updates.length, 1);
       assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
+    }
+  );
+});
+
+test('saved-search quick action run updates interaction with current match summary', async () => {
+  const now = new Date().toISOString();
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [
+        {
+          yard_name: 'BOISE',
+          row_number: 7,
+          vehicle_make: 'TOYOTA',
+          vehicle_model: 'CAMRY',
+          vehicle_year: 2005,
+          first_seen: now,
+          last_updated: now,
+          notes: '',
+        },
+      ],
+      getSavedSearches: async () => [],
+    },
+    async ({ handleSavedSearchQuickActionButton, __testables }) => {
+      const quickCustomId = __testables.buildQuickActionCustomId('run', {
+        uid: 'user-1',
+        lc: 'boise',
+        yd: '1020',
+        mk: 'TOYOTA',
+        md: 'CAMRY',
+        yr: '2005',
+        st: 'ACTIVE',
+        sid: '',
+        idx: 0,
+      });
+
+      const interaction = {
+        user: { id: 'user-1' },
+        updates: [],
+        async update(payload) {
+          this.updates.push(payload);
+        },
+        async reply() {},
+      };
+
+      await handleSavedSearchQuickActionButton(interaction, quickCustomId.slice(3));
+
+      assert.equal(interaction.updates.length, 1);
+      assert.ok(Array.isArray(interaction.updates[0].embeds));
+      assert.match(interaction.updates[0].embeds[0].data.title, /run this search/i);
+      assert.ok(Array.isArray(interaction.updates[0].components));
+      assert.equal(interaction.updates[0].components[0].components.length, 5);
     }
   );
 });

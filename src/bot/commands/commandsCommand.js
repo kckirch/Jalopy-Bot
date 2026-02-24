@@ -17,7 +17,7 @@ async function handleCommandsCommand(interaction) {
       },
       {
         name: '3) Manage Saved Searches',
-        value: '`/savedsearch` opens DM controls:\n`Check Matches`, `Delete`, `Delete All`, and `Close`',
+        value: '`/savedsearch` opens an in-channel carousel:\n`Prev Saved`, `Next Saved`, `Run`, `Delete`, and `Pause Alerts`',
       },
       {
         name: 'Tip',

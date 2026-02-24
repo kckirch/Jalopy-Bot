@@ -344,3 +344,58 @@ test('processDailySavedSearches is safe when Discord client is not ready', async
   assert.equal(dmSends.length, 0);
   assert.equal(channelSends.length, 0);
 });
+
+test('processDailySavedSearches skips saved searches with paused frequency', async () => {
+  const dmSends = [];
+  const queryCalls = [];
+
+  const client = {
+    isReady: () => true,
+    users: {
+      fetch: async (id) => ({
+        id,
+        send: async (payload) => {
+          dmSends.push({ id, payload });
+        },
+      }),
+    },
+    channels: {
+      cache: {
+        get: () => null,
+      },
+    },
+  };
+
+  await withDailyTasksMocks(
+    {
+      client,
+      getAllSavedSearches: async () => [
+        {
+          user_id: 'user-paused',
+          username: 'user#paused',
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'paused',
+        },
+      ],
+      queryVehicles: async (...args) => {
+        queryCalls.push(args);
+        return [];
+      },
+    },
+    async ({ processDailySavedSearches }) => {
+      await processDailySavedSearches();
+      await tick();
+      await tick();
+    }
+  );
+
+  assert.equal(dmSends.length, 0);
+  // Only NEW-vehicle summary query should run when all saved searches are paused.
+  assert.equal(queryCalls.length, 1);
+  assert.equal(queryCalls[0][4], 'NEW');
+});
