@@ -88,10 +88,10 @@ async function withSearchCommandMocks(mocks, runTest) {
     filename: savedSearchManagerPath,
     loaded: true,
     exports: {
-      getSavedSearches: async () => [],
-      deleteSavedSearch: async () => {},
-      checkExistingSearch: mocks.checkExistingSearch,
-      addSavedSearch: mocks.addSavedSearch,
+      getSavedSearches: mocks.getSavedSearches || (async () => []),
+      deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
+      checkExistingSearch: mocks.checkExistingSearch || (async () => false),
+      addSavedSearch: mocks.addSavedSearch || (async () => {}),
     },
   };
   delete require.cache[searchCommandPath];
@@ -349,6 +349,215 @@ test('duplicate saved search does not call addSavedSearch', async () => {
 
   assert.equal(addCalls, 0);
   assert.match(duplicateReply.content, /already been saved/i);
+});
+
+test('delete-saved quick action removes matching saved search criteria', async () => {
+  const now = new Date().toISOString();
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  const deletedSearchIds = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [
+        {
+          yard_name: 'BOISE',
+          row_number: 2,
+          vehicle_make: 'TOYOTA',
+          vehicle_model: 'CAMRY',
+          vehicle_year: 2005,
+          first_seen: now,
+          last_updated: now,
+          notes: '',
+        },
+      ],
+      getSavedSearches: async () => [
+        {
+          id: 123,
+          yard_id: '1020',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+      ],
+      deleteSavedSearch: async (id) => {
+        deletedSearchIds.push(id);
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+
+      const deleteButtonCustomId = interaction.replies[0].components[1].components[0].data.custom_id;
+      const buttonInteraction = {
+        customId: deleteButtonCustomId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      await interaction.message.collector.emitCollect(buttonInteraction);
+
+      assert.deepEqual(deletedSearchIds, [123]);
+      assert.equal(buttonInteraction.replyCalls.length, 1);
+      assert.match(buttonInteraction.replyCalls[0].content, /Removed 1 matching saved search/i);
+    }
+  );
+});
+
+test('my-saved-searches quick action sends a DM summary', async () => {
+  const now = new Date().toISOString();
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  const dmMessages = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [
+        {
+          yard_name: 'BOISE',
+          row_number: 2,
+          vehicle_make: 'TOYOTA',
+          vehicle_model: 'CAMRY',
+          vehicle_year: 2005,
+          first_seen: now,
+          last_updated: now,
+          notes: '',
+        },
+      ],
+      getSavedSearches: async () => [
+        {
+          id: 1,
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+        {
+          id: 2,
+          yard_name: 'TRUSTYPICKAPART',
+          make: 'HONDA',
+          model: 'ACCORD',
+          year_range: '2010',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+
+      const mySavedSearchesCustomId = interaction.replies[0].components[1].components[1].data.custom_id;
+      const buttonInteraction = {
+        customId: mySavedSearchesCustomId,
+        user: {
+          id: 'user-1',
+          tag: 'user-1#0001',
+          async send(payload) {
+            dmMessages.push(payload);
+          },
+        },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      await interaction.message.collector.emitCollect(buttonInteraction);
+
+      assert.equal(dmMessages.length, 1);
+      assert.match(dmMessages[0].content, /Your saved searches \(2\)/i);
+      assert.equal(buttonInteraction.replyCalls.length, 1);
+      assert.match(buttonInteraction.replyCalls[0].content, /Sent 2 saved search\(es\) to your DMs/i);
+    }
+  );
+});
+
+test('location dropdown reruns search with same filters in selected location', async () => {
+  const now = new Date().toISOString();
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  const queriedYardIds = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async (yardId) => {
+        queriedYardIds.push(yardId);
+        if (yardId === 1020) {
+          return [
+            {
+              yard_name: 'BOISE',
+              row_number: 2,
+              vehicle_make: 'TOYOTA',
+              vehicle_model: 'CAMRY',
+              vehicle_year: 2005,
+              first_seen: now,
+              last_updated: now,
+              notes: '',
+            },
+          ];
+        }
+        if (yardId === 1021) {
+          return [
+            {
+              yard_name: 'CALDWELL',
+              row_number: 10,
+              vehicle_make: 'TOYOTA',
+              vehicle_model: 'CAMRY',
+              vehicle_year: 2006,
+              first_seen: now,
+              last_updated: now,
+              notes: '',
+            },
+          ];
+        }
+        return [];
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+
+      const relocateCustomId = interaction.replies[0].components[2].components[0].data.custom_id;
+      const selectInteraction = {
+        customId: relocateCustomId,
+        values: ['caldwell'],
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        updates: [],
+        async update(payload) {
+          this.updates.push(payload);
+        },
+        async reply() {},
+      };
+
+      await interaction.message.collector.emitCollect(selectInteraction);
+
+      assert.deepEqual(queriedYardIds, [1020, 1021]);
+      assert.equal(selectInteraction.updates.length, 1);
+      assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
+    }
+  );
 });
 
 test('parameterStore enforces TTL and max-entry limits', async () => {

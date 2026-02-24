@@ -1,13 +1,31 @@
 const { queryVehicles } = require('../../database/vehicleQueryManager');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+} = require('discord.js');
 const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
-const { checkExistingSearch, addSavedSearch } = require('../../database/savedSearchManager');
+const { checkExistingSearch, addSavedSearch, getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
 const crypto = require('crypto');
 
 const parameterStore = new Map();
 let parameterStoreMaxEntries = 5000;
 let parameterStoreTtlMs = 10 * 60 * 1000;
 let nowProvider = () => Date.now();
+const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
+
+const SEARCH_LOCATION_OPTIONS = [
+  { label: 'Boise', value: 'boise' },
+  { label: 'Garden City', value: 'gardencity' },
+  { label: 'Nampa', value: 'nampa' },
+  { label: 'Caldwell', value: 'caldwell' },
+  { label: 'Twin Falls', value: 'twinfalls' },
+  { label: 'Trusty Pick A Part', value: 'trustypickapart' },
+  { label: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
+  { label: 'All', value: 'all' },
+];
 
 function canonicalizeYardIdForSavedSearch(yardId) {
   const normalizeIds = (input) => {
@@ -88,6 +106,30 @@ function resolveHash(hash) {
   return entry.parameters;
 }
 
+function normalizeSearchValue(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function serializeYardId(yardId) {
+  if (Array.isArray(yardId)) {
+    return yardId.join(',');
+  }
+  return String(yardId);
+}
+
+function formatSavedSearchPreview(savedSearches) {
+  const previewRows = savedSearches.slice(0, SAVED_SEARCH_DM_PREVIEW_LIMIT);
+  const lines = previewRows.map((search) =>
+    `- ${search.yard_name} | ${search.make} ${search.model} (${search.year_range}) | ${search.status}`
+  );
+
+  if (savedSearches.length > SAVED_SEARCH_DM_PREVIEW_LIMIT) {
+    lines.push(`- ...and ${savedSearches.length - SAVED_SEARCH_DM_PREVIEW_LIMIT} more`);
+  }
+
+  return lines.join('\n');
+}
+
 async function handleSearchCommand(interaction) {
   const location = interaction.options.getString('location');
   let userMakeInput = (interaction.options.getString('make') || 'Any').toUpperCase();
@@ -127,35 +169,47 @@ async function handleSearchCommand(interaction) {
   }
 
   if (location) {
-    const yardId = convertLocationToYardId(location);
-    
     try {
-      let vehicles = await queryVehicles(yardId, userMakeInput, model, yearInput, status);
-      vehicles.sort((a, b) => {
+      const itemsPerPage = 20;
+      const sortVehicles = (rows) => rows.sort((a, b) => {
         const firstSeenA = new Date(a.first_seen);
         const firstSeenB = new Date(b.first_seen);
         return firstSeenB - firstSeenA || a.vehicle_model.localeCompare(b.vehicle_model);
       });
 
-      const itemsPerPage = 20;
-      let currentPage = 0;
-      const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+      const runSearchForLocation = async (targetLocation) => {
+        const targetYardId = convertLocationToYardId(targetLocation);
+        const targetVehicles = await queryVehicles(targetYardId, userMakeInput, model, yearInput, status);
+        sortVehicles(targetVehicles);
+        return {
+          location: targetLocation,
+          yardId: targetYardId,
+          vehicles: targetVehicles,
+          currentPage: 0,
+          totalPages: Math.ceil(targetVehicles.length / itemsPerPage),
+        };
+      };
 
-      const getPage = (page) => {
-        const start = page * itemsPerPage;
+      let searchState = await runSearchForLocation(location);
+
+      const getPage = (state) => {
+        const safePage = state.vehicles.length === 0
+          ? 0
+          : Math.min(Math.max(state.currentPage, 0), state.totalPages - 1);
+        const start = safePage * itemsPerPage;
         const end = start + itemsPerPage;
-        const pageItems = vehicles.slice(start, end);
+        const pageItems = state.vehicles.slice(start, end);
 
         const embed = new EmbedBuilder()
           .setColor(0x0099FF)
-          .setTitle(`Database search results for ${location} ${userMakeInput || 'Any'} ${model} (${yearInput}) ${status}`)
+          .setTitle(`Database search results for ${state.location} ${userMakeInput || 'Any'} ${model} (${yearInput}) ${status}`)
           .setTimestamp();
 
-        if (vehicles.length === 0) {
+        if (state.vehicles.length === 0) {
           embed.setDescription('No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)')
             .setFooter({ text: 'Page 0 of 0' });
         } else {
-          embed.setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+          embed.setFooter({ text: `Page ${safePage + 1} of ${state.totalPages}` });
           pageItems.forEach(v => {
             const firstSeen = new Date(v.first_seen);
             const lastUpdated = new Date(v.last_updated);
@@ -179,38 +233,75 @@ async function handleSearchCommand(interaction) {
         return embed;
       };
 
-      const updateComponents = (currentPage, userId) => {
+      const updateComponents = (state, userId) => {
         try {
           const createCustomId = (action) => {
-            const parameters = `pg:${currentPage}|act:${action}|uid:${userId}|yd:${yardId}|mk:${userMakeInput}|md:${model}|yr:${yearInput}|st:${status}`;
+            const serializedYardId = serializeYardId(state.yardId);
+            const parameters = `pg:${state.currentPage}|act:${action}|uid:${userId}|lc:${state.location}|yd:${serializedYardId}|mk:${userMakeInput}|md:${model}|yr:${yearInput}|st:${status}`;
             return generateHash(parameters);
           };
 
-          return new ActionRowBuilder()
+          const pagingRow = new ActionRowBuilder()
             .addComponents(
               new ButtonBuilder()
                 .setCustomId(createCustomId('previous'))
                 .setLabel('Previous')
                 .setStyle(ButtonStyle.Primary)
-                .setDisabled(currentPage === 0 || vehicles.length === 0),
+                .setDisabled(state.currentPage === 0 || state.vehicles.length === 0),
               new ButtonBuilder()
                 .setCustomId(createCustomId('next'))
                 .setLabel('Next')
                 .setStyle(ButtonStyle.Primary)
-                .setDisabled(currentPage === totalPages - 1 || vehicles.length === 0),
+                .setDisabled(
+                  state.vehicles.length === 0 || state.currentPage >= state.totalPages - 1
+                ),
               new ButtonBuilder()
                 .setCustomId(createCustomId('save'))
                 .setLabel('Save Search')
                 .setStyle(ButtonStyle.Success)
-                .setDisabled(false)  // Always enabled
+                .setDisabled(false)
             );
+
+          const savedSearchActionsRow = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(createCustomId('unsave'))
+                .setLabel('Delete Saved')
+                .setStyle(ButtonStyle.Danger),
+              new ButtonBuilder()
+                .setCustomId(createCustomId('savedlist'))
+                .setLabel('My Saved Searches')
+                .setStyle(ButtonStyle.Secondary)
+            );
+
+          const locationRow = new ActionRowBuilder()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(createCustomId('relocate'))
+                .setPlaceholder('Run this search in another location')
+                .setMinValues(1)
+                .setMaxValues(1)
+                .addOptions(
+                  SEARCH_LOCATION_OPTIONS.map((option) => ({
+                    label: option.label,
+                    value: option.value,
+                    default: option.value === state.location,
+                  }))
+                )
+            );
+
+          return [pagingRow, savedSearchActionsRow, locationRow];
         } catch (error) {
           console.error('Error creating custom ID:', error);
           throw error;
         }
       };
 
-      const message = await interaction.reply({ embeds: [getPage(0)], components: [updateComponents(0, interaction.user.id)], fetchReply: true });
+      const message = await interaction.reply({
+        embeds: [getPage(searchState)],
+        components: updateComponents(searchState, interaction.user.id),
+        fetchReply: true,
+      });
 
       const collector = message.createMessageComponentCollector({ filter: i => i.user.id === interaction.user.id, time: 120000 });
 
@@ -236,42 +327,137 @@ async function handleSearchCommand(interaction) {
             return;
           }
 
-          let currentPage = parseInt(parts['pg']);
-          const yardId = parts['yd'];
-          const make = parts['mk'];
-          const model = parts['md'];
-          const yearInput = parts['yr'];
-          const status = parts['st'];
-
           switch (action) {
             case 'next':
             case 'previous':
-              const pageChange = (action === 'next') ? 1 : -1;
-              currentPage += pageChange;
+              if (action === 'next' && searchState.currentPage < searchState.totalPages - 1) {
+                searchState.currentPage += 1;
+              }
+              if (action === 'previous' && searchState.currentPage > 0) {
+                searchState.currentPage -= 1;
+              }
               await i.update({
-                embeds: [getPage(currentPage)],
-                components: [updateComponents(currentPage, userId)]
+                embeds: [getPage(searchState)],
+                components: updateComponents(searchState, userId)
               });
               break;
 
             case 'save':
-              console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
+              console.log(`Attempting to save or check existing search: YardID=${searchState.yardId}, Make=${userMakeInput}, Model=${model}, Year=${yearInput}, Status=${status}`);
 
               try {
-                const cleanedYardId = canonicalizeYardIdForSavedSearch(yardId);
+                const cleanedYardId = canonicalizeYardIdForSavedSearch(searchState.yardId);
                 const cleanedYardName = convertYardIdToLocation(cleanedYardId).replace(/\s{2,}/g, ' ').trim();
 
-                const exists = await checkExistingSearch(i.user.id, cleanedYardId, make, model, yearInput, status);
+                const exists = await checkExistingSearch(i.user.id, cleanedYardId, userMakeInput, model, yearInput, status);
                 if (!exists) {
-                  await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, make, model, yearInput, status, '');
-                  await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
+                  await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, userMakeInput, model, yearInput, status, '');
+                  await i.reply({
+                    content: 'Search saved successfully! Use **Delete Saved** or **My Saved Searches** below for quick actions.',
+                    ephemeral: true,
+                  });
                 } else {
-                  await i.reply({ content: 'This search has already been saved.', ephemeral: true });
+                  await i.reply({
+                    content: 'This search has already been saved. Use **Delete Saved** below if you want to remove it.',
+                    ephemeral: true,
+                  });
                 }
               } catch (error) {
                 console.error('Error checking for existing search:', error);
                 await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
               }
+              break;
+            case 'unsave':
+              try {
+                const cleanedYardId = canonicalizeYardIdForSavedSearch(searchState.yardId);
+                const savedSearches = await getSavedSearches(i.user.id);
+                const matchingSearches = savedSearches.filter((savedSearch) => {
+                  const savedYardId = canonicalizeYardIdForSavedSearch(savedSearch.yard_id);
+                  return (
+                    normalizeSearchValue(savedYardId) === normalizeSearchValue(cleanedYardId) &&
+                    normalizeSearchValue(savedSearch.make) === normalizeSearchValue(userMakeInput) &&
+                    normalizeSearchValue(savedSearch.model) === normalizeSearchValue(model) &&
+                    normalizeSearchValue(savedSearch.year_range) === normalizeSearchValue(yearInput) &&
+                    normalizeSearchValue(savedSearch.status) === normalizeSearchValue(status)
+                  );
+                });
+
+                if (matchingSearches.length === 0) {
+                  await i.reply({
+                    content: 'This search is not currently saved.',
+                    ephemeral: true,
+                  });
+                  break;
+                }
+
+                for (const savedSearch of matchingSearches) {
+                  await deleteSavedSearch(savedSearch.id);
+                }
+
+                const pluralSuffix = matchingSearches.length === 1 ? '' : 'es';
+                await i.reply({
+                  content: `Removed ${matchingSearches.length} matching saved search${pluralSuffix}.`,
+                  ephemeral: true,
+                });
+              } catch (error) {
+                console.error('Error deleting saved search from quick action:', error);
+                await i.reply({
+                  content: 'Error deleting saved search.',
+                  ephemeral: true,
+                });
+              }
+              break;
+            case 'savedlist':
+              try {
+                const savedSearches = await getSavedSearches(i.user.id);
+                if (savedSearches.length === 0) {
+                  await i.reply({
+                    content: 'You currently have no saved searches.',
+                    ephemeral: true,
+                  });
+                  break;
+                }
+
+                const previewText = formatSavedSearchPreview(savedSearches);
+                try {
+                  await i.user.send({
+                    content: `Your saved searches (${savedSearches.length}):\n${previewText}\n\nUse /savedsearch to page through and delete specific entries.`,
+                  });
+                  await i.reply({
+                    content: `Sent ${savedSearches.length} saved search(es) to your DMs.`,
+                    ephemeral: true,
+                  });
+                } catch (dmError) {
+                  console.error('Unable to DM saved searches:', dmError);
+                  await i.reply({
+                    content: 'I could not DM you. Please enable DMs or use /savedsearch.',
+                    ephemeral: true,
+                  });
+                }
+              } catch (error) {
+                console.error('Error listing saved searches from quick action:', error);
+                await i.reply({
+                  content: 'Error retrieving saved searches.',
+                  ephemeral: true,
+                });
+              }
+              break;
+            case 'relocate': {
+              const selectedLocation = Array.isArray(i.values) ? i.values[0] : null;
+              if (!selectedLocation) {
+                await i.reply({ content: 'No location selected.', ephemeral: true });
+                break;
+              }
+
+              searchState = await runSearchForLocation(selectedLocation);
+              await i.update({
+                embeds: [getPage(searchState)],
+                components: updateComponents(searchState, userId),
+              });
+              break;
+            }
+            default:
+              await i.reply({ content: 'Unsupported action.', ephemeral: true });
               break;
           }
         } catch (error) {

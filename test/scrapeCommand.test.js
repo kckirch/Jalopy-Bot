@@ -11,6 +11,8 @@ const utilsPath = path.join(repoRoot, 'src/bot/utils/utils.js');
 function createInteraction({ location, make, model }) {
   const values = { location, make, model };
   const replies = [];
+  const deferReplyCalls = [];
+  const editReplyCalls = [];
 
   return {
     user: { id: 'user-1' },
@@ -28,8 +30,21 @@ function createInteraction({ location, make, model }) {
       replies.push(payload);
       return payload;
     },
+    async deferReply(payload) {
+      deferReplyCalls.push(payload);
+    },
+    async editReply(payload) {
+      editReplyCalls.push(payload);
+      return payload;
+    },
     get replies() {
       return replies;
+    },
+    get deferReplyCalls() {
+      return deferReplyCalls;
+    },
+    get editReplyCalls() {
+      return editReplyCalls;
     },
   };
 }
@@ -95,7 +110,8 @@ test('location=all triggers scrape of all configured yards with normalized make/
   assert.ok(scrapeCalls.every((call) => call.model === 'CAMRY'));
   assert.ok(scrapeCalls.every((call) => call.sessionID === '20260101'));
   assert.ok(scrapeCalls.every((call) => call.shouldMarkInactive === false));
-  assert.equal(interaction.replies.length, 1);
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 1);
 });
 
 test('specific location routes to a single scrape call', async () => {
@@ -121,6 +137,8 @@ test('specific location routes to a single scrape call', async () => {
   assert.equal(scrapeCalls[0].sessionID, '20260101');
   assert.equal(scrapeCalls[0].inventoryUrl, 'https://inventory.pickapartjalopyjungle.com/');
   assert.equal(scrapeCalls[0].shouldMarkInactive, false);
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 1);
 });
 
 test('specific location full scrape (ANY/ANY) enables inactive reconciliation for scoped yard', async () => {
@@ -144,6 +162,8 @@ test('specific location full scrape (ANY/ANY) enables inactive reconciliation fo
   assert.equal(scrapeCalls[0].make, 'ANY');
   assert.equal(scrapeCalls[0].model, 'ANY');
   assert.equal(scrapeCalls[0].shouldMarkInactive, true);
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 1);
 });
 
 test('location=trustypickapart routes to trusty config', async () => {
@@ -166,6 +186,8 @@ test('location=trustypickapart routes to trusty config', async () => {
   assert.equal(scrapeCalls[0].inventoryUrl, 'https://inventory.trustypickapart.com/');
   assert.equal(scrapeCalls[0].yardId, '999999');
   assert.equal(scrapeCalls[0].shouldMarkInactive, false);
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 1);
 });
 
 test('scrape command denies requests without elevated permissions', async () => {
@@ -188,6 +210,8 @@ test('scrape command denies requests without elevated permissions', async () => 
 
   assert.equal(scrapeCalls.length, 0);
   assert.equal(interaction.replies.length, 1);
+  assert.equal(interaction.deferReplyCalls.length, 0);
+  assert.equal(interaction.editReplyCalls.length, 0);
   assert.deepEqual(interaction.replies[0], {
     content: 'You do not have permission to use this command.',
     ephemeral: true,
@@ -215,7 +239,7 @@ test('scrape command reports busy state when another scrape is already in progre
   });
 
   assert.equal(scrapeCalls.length, 0);
-  assert.equal(interaction.replies.length, 1);
-  assert.equal(interaction.replies[0].ephemeral, true);
-  assert.match(interaction.replies[0].content, /already running/i);
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 1);
+  assert.match(interaction.editReplyCalls[0].content, /already running/i);
 });
