@@ -1,19 +1,91 @@
 const { queryVehicles } = require('../../database/vehicleQueryManager');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
-const { getSavedSearches, deleteSavedSearch, checkExistingSearch, addSavedSearch } = require('../../database/savedSearchManager');
+const { checkExistingSearch, addSavedSearch } = require('../../database/savedSearchManager');
 const crypto = require('crypto');
 
 const parameterStore = new Map();
+let parameterStoreMaxEntries = 5000;
+let parameterStoreTtlMs = 10 * 60 * 1000;
+let nowProvider = () => Date.now();
+
+function canonicalizeYardIdForSavedSearch(yardId) {
+  const normalizeIds = (input) => {
+    if (Array.isArray(input)) {
+      return input;
+    }
+    if (typeof input === 'string' && input.includes(',')) {
+      return input.split(',').map((id) => id.trim());
+    }
+    if (typeof input === 'number') {
+      return [input];
+    }
+    if (typeof input === 'string' && input.trim() !== '') {
+      return [input.trim()];
+    }
+    return [];
+  };
+
+  if (yardId === 'ALL') {
+    const allYardIds = Object.values(yardIdMapping);
+    return [...new Set(allYardIds)].sort((a, b) => a - b).join(',');
+  }
+
+  const normalized = normalizeIds(yardId)
+    .map((id) => parseInt(id, 10))
+    .filter((id) => !Number.isNaN(id));
+  const uniqueSorted = [...new Set(normalized)].sort((a, b) => a - b);
+
+  if (uniqueSorted.length > 0) {
+    return uniqueSorted.join(',');
+  }
+
+  if (typeof yardId === 'string') {
+    return yardId.replace(/\s+/g, '').trim();
+  }
+
+  return String(yardId);
+}
+
+function pruneParameterStore() {
+  const now = nowProvider();
+
+  for (const [hash, entry] of parameterStore.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      parameterStore.delete(hash);
+    }
+  }
+
+  while (parameterStore.size > parameterStoreMaxEntries) {
+    const oldestKey = parameterStore.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    parameterStore.delete(oldestKey);
+  }
+}
 
 function generateHash(parameters) {
+  pruneParameterStore();
   const hash = crypto.createHash('md5').update(parameters).digest('hex');
-  parameterStore.set(hash, parameters);
+  parameterStore.set(hash, {
+    parameters,
+    expiresAt: nowProvider() + parameterStoreTtlMs,
+  });
+  pruneParameterStore();
   return hash;
 }
 
 function resolveHash(hash) {
-  return parameterStore.get(hash);
+  const entry = parameterStore.get(hash);
+  if (!entry) {
+    return undefined;
+  }
+  if (entry.expiresAt <= nowProvider()) {
+    parameterStore.delete(hash);
+    return undefined;
+  }
+  return entry.parameters;
 }
 
 async function handleSearchCommand(interaction) {
@@ -170,7 +242,6 @@ async function handleSearchCommand(interaction) {
           const model = parts['md'];
           const yearInput = parts['yr'];
           const status = parts['st'];
-          const yardName = convertYardIdToLocation(yardId); // Ensure yardName is formatted correctly here
 
           switch (action) {
             case 'next':
@@ -187,13 +258,11 @@ async function handleSearchCommand(interaction) {
               console.log(`Attempting to save or check existing search: YardID=${yardId}, Make=${make}, Model=${model}, Year=${yearInput}, Status=${status}`);
 
               try {
-                const exists = await checkExistingSearch(i.user.id, yardId, make, model, yearInput, status);
+                const cleanedYardId = canonicalizeYardIdForSavedSearch(yardId);
+                const cleanedYardName = convertYardIdToLocation(cleanedYardId).replace(/\s{2,}/g, ' ').trim();
+
+                const exists = await checkExistingSearch(i.user.id, cleanedYardId, make, model, yearInput, status);
                 if (!exists) {
-                  let cleanedYardId = yardId;
-                  if (yardId === 'ALL') {
-                    cleanedYardId = Object.values(yardIdMapping).join(',');
-                  }
-                  const cleanedYardName = yardName.replace(/\s{2,}/g, ' ').trim(); // Clean the yard name
                   await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, make, model, yearInput, status, '');
                   await i.reply({ content: 'Search saved successfully! To remove Saved Search Use /savedsearch', ephemeral: true });
                 } else {
@@ -227,4 +296,28 @@ async function handleSearchCommand(interaction) {
   }
 }
 
-module.exports = { handleSearchCommand };
+module.exports = {
+  handleSearchCommand,
+  __testables: {
+    canonicalizeYardIdForSavedSearch,
+    generateHash,
+    resolveHash,
+    pruneParameterStore,
+    resetParameterStore: () => parameterStore.clear(),
+    getParameterStoreSize: () => parameterStore.size,
+    setParameterStoreConfig: ({ maxEntries, ttlMs } = {}) => {
+      if (Number.isInteger(maxEntries) && maxEntries > 0) {
+        parameterStoreMaxEntries = maxEntries;
+      }
+      if (Number.isInteger(ttlMs) && ttlMs > 0) {
+        parameterStoreTtlMs = ttlMs;
+      }
+    },
+    setNowProvider: (fn) => {
+      nowProvider = typeof fn === 'function' ? fn : () => Date.now();
+    },
+    resetNowProvider: () => {
+      nowProvider = () => Date.now();
+    },
+  },
+};

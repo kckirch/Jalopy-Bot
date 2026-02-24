@@ -14,7 +14,7 @@ async function processDailySavedSearches() {
                 const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
                 if (results.length > 0) {
                     const embeds = formatMessages(results, search);
-                    sendNotification(search.user_id, embeds);
+                    await sendNotification(search.user_id, embeds);
                 }
             } catch (error) {
                 console.error(`Error processing search for ${search.username}:`, error);
@@ -40,20 +40,22 @@ async function notifyNewVehicles() {
     }
 }
 
-function sendNotification(userId, embeds) {
+async function sendNotification(userId, embeds) {
     if (!client || !client.isReady()) {
         console.error('Discord client is not ready. Cannot send messages.');
         return;
     }
 
-    client.users.fetch(userId).then(user => {
-        sendEmbedChunks(user, embeds);
-    }).catch(err => {
+    try {
+        const user = await client.users.fetch(userId);
+        await sendEmbedChunks(user, embeds);
+    } catch (err) {
         console.error(`Failed to fetch user ${userId}:`, err);
-    });
+        throw err;
+    }
 }
 
-function sendChannelNotification(channelId, embeds) {
+async function sendChannelNotification(channelId, embeds) {
     if (!client || !client.isReady()) {
         console.error('Discord client is not ready. Cannot send messages.');
         return;
@@ -65,10 +67,10 @@ function sendChannelNotification(channelId, embeds) {
         return;
     }
 
-    sendEmbedChunks(channel, embeds);
+    await sendEmbedChunks(channel, embeds);
 }
 
-function sendEmbedChunks(target, embeds) {
+async function sendEmbedChunks(target, embeds) {
     const maxEmbedSize = 6000; // Maximum size for embeds
     let currentEmbedSize = 0;
     let chunk = [];
@@ -76,11 +78,13 @@ function sendEmbedChunks(target, embeds) {
     for (const embed of embeds) {
         const embedSize = JSON.stringify(embed).length;
         if (currentEmbedSize + embedSize > maxEmbedSize) {
-            target.send({ embeds: chunk }).then(() => {
+            try {
+                await target.send({ embeds: chunk });
                 console.log(`Notification sent to ${target.id}.`);
-            }).catch(err => {
+            } catch (err) {
                 console.error(`Failed to send notification to ${target.id}:`, err);
-            });
+                throw err;
+            }
             chunk = [embed];
             currentEmbedSize = embedSize;
         } else {
@@ -90,11 +94,13 @@ function sendEmbedChunks(target, embeds) {
     }
 
     if (chunk.length > 0) {
-        target.send({ embeds: chunk }).then(() => {
+        try {
+            await target.send({ embeds: chunk });
             console.log(`Notification sent to ${target.id}.`);
-        }).catch(err => {
+        } catch (err) {
             console.error(`Failed to send notification to ${target.id}:`, err);
-        });
+            throw err;
+        }
     }
 }
 

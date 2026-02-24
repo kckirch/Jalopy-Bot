@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <div class="container body-content">
+      <div class="col-md-12">
+        <h1>Jalopy Jungle <label>Vehicle Inventory Search</label></h1>
+        <p class="lead">New vehicles added DAILY!</p>
+        <form action="/" enctype="multipart/form-data" id="searchinventory" method="post">
+          <select class="form-control" id="yard-id" name="YardId">
+            <option value="">Select Location</option>
+            <option selected="selected" value="1020">BOISE</option>
+            <option value="1021">CALDWELL</option>
+          </select>
+          <br>
+          <select class="form-control" id="car-make" name="VehicleMake">
+            <option value="">Select Make</option>
+            <option value="TOYOTA">TOYOTA</option>
+            <option value="HONDA">HONDA</option>
+          </select>
+          <br>
+          <select class="form-control" id="car-model" name="VehicleModel">
+            <option value="">Select Model</option>
+            <option value="CAMRY">CAMRY</option>
+          </select>
+          <br>
+          <input type="submit" value="SEARCH" class="btn btn-primary">
+        </form>
+
+        <div class="table-responsive">
+          <table class="table">
+            <tbody>
+              <tr>
+                <th>YEAR</th>
+                <th>MAKE</th>
+                <th>MODEL</th>
+                <th>ROW</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

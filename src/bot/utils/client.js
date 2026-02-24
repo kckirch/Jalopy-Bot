@@ -9,8 +9,6 @@ const client = new Client({
     ]
 });
 
-const retryDelay = 5000; // Delay in ms before retrying connection
-
 client.on('error', (error) => {
     console.error('WebSocket encountered an error:', error);
 });
@@ -20,8 +18,7 @@ client.on('shardError', (error) => {
 });
 
 client.on('disconnect', (event) => {
-    console.warn(`Disconnected from Discord with code ${event.code}. Attempting to reconnect...`);
-    setTimeout(() => client.login(process.env.TOKEN), retryDelay);
+    console.warn(`Disconnected from Discord with code ${event.code}.`);
 });
 
 client.on('reconnecting', () => {
@@ -29,15 +26,7 @@ client.on('reconnecting', () => {
 });
 
 client.on('shardDisconnect', (event, id) => {
-    console.warn(`Shard ${id} disconnected with code ${event.code}. Attempting to reconnect...`);
-    setTimeout(() => client.login(process.env.TOKEN), retryDelay);
-});
-
-client.login(process.env.TOKEN).then(() => {
-    console.log('Client logged in successfully.');
-}).catch(error => {
-    console.error('Failed to login:', error);
-    setTimeout(() => client.login(process.env.TOKEN), retryDelay);
+    console.warn(`Shard ${id} disconnected with code ${event.code}.`);
 });
 
 module.exports = { client };

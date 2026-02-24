@@ -1,9 +1,9 @@
 const { notifyNewVehicles } = require('../../notifications/dailyTasks');
+const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
 async function handleManualNotifyNewVehiclesCommand(interaction) {
   try {
-    if (!interaction.member.roles.cache.some(role => role.name === 'Admin')) {
-      await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    if (!(await ensureElevatedCommandAccess(interaction, 'manualnotifynewvehicles'))) {
       return;
     }
 

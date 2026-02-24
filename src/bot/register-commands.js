@@ -1,10 +1,12 @@
-require('dotenv').config({ path: '../.env' });
-const { REST, Routes, SlashCommandBuilder, ApplicationCommandOptionType } = require('discord.js');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 // Create command builders
 const scrapeCommand = new SlashCommandBuilder()
   .setName('scrape')
   .setDescription('Scrape the website for DB data!')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addStringOption(option => 
     option.setName('location')
     .setDescription('The location to search in')
@@ -87,10 +89,12 @@ const savedSearchCommand = new SlashCommandBuilder()
 const dailySearchCommand = new SlashCommandBuilder()
   .setName('dailysavedsearch')
   .setDescription('Manually Force a daily saved searches to send to users')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 
 const runTestScheduler = new SlashCommandBuilder()
   .setName('runtestscheduler')
   .setDescription('Run the test scheduler')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 
 const commandsCommand = new SlashCommandBuilder()
 .setName('commands')
@@ -98,11 +102,13 @@ const commandsCommand = new SlashCommandBuilder()
 
 const manualNotifyNewVehiclesCommand = new SlashCommandBuilder()
   .setName('manualnotifynewvehicles')
-  .setDescription('Manually notify users of new vehicles');
+  .setDescription('Manually notify users of new vehicles')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 const testGitPushDBCommand = new SlashCommandBuilder()
   .setName('testgitpushdb')
-  .setDescription('Test the git push to database function');
+  .setDescription('Test the git push to database function')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 const commands = [
   scrapeCommand.toJSON(),

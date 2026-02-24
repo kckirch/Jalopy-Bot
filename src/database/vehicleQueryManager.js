@@ -13,11 +13,12 @@
  */
 
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+const { VEHICLE_DB_PATH } = require('./dbPath');
+const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
         console.error('Error when connecting to the database', err);
     } else {
-        console.log('VehicleDB Database connection established to vehicleInventory.db');
+        console.log(`VehicleDB Database connection established to ${VEHICLE_DB_PATH}`);
     }
 });
 

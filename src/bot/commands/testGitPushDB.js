@@ -1,5 +1,10 @@
+const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
+
 async function handleRunTestGitPushDBCommand(interaction) {
     console.log('Test Git Push DB command received.');
+    if (!(await ensureElevatedCommandAccess(interaction, 'testgitpushdb'))) {
+      return;
+    }
     await interaction.deferReply();
   
     try {
@@ -11,5 +16,6 @@ async function handleRunTestGitPushDBCommand(interaction) {
       console.error('Error running Test Git Push DB:', error);
       await interaction.editReply('An error occurred while running the Test Git Push DB function.');
     }
-}module.exports = { handleRunTestGitPushDBCommand };
+}
 
+module.exports = { handleRunTestGitPushDBCommand };

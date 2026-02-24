@@ -1,14 +1,12 @@
-async function handleButtonClick(interaction, buttonId) {
+async function handleButtonClick(interaction, buttonId, messageCollector = null) {
     if (buttonId === 'quit') {
-      if (messageCollector) {
+      if (messageCollector && typeof messageCollector.stop === 'function') {
         messageCollector.stop();
-        messageCollector = null;
       }
       await interaction.update({ content: 'Operation cancelled.', components: [] });
-    } else {
-      // Handle other button clicks here
+      return;
     }
-  }
-  
-  module.exports = { handleButtonClick };
+}
+
+module.exports = { handleButtonClick };
   
