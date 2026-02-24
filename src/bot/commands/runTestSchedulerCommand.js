@@ -5,7 +5,7 @@ async function handleRunTestSchedulerCommand(interaction) {
     if (!(await ensureElevatedCommandAccess(interaction, 'runtestscheduler'))) {
       return;
     }
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
   
     try {
       const { performScrape, processSearches } = require('../../notifications/testScheduler');

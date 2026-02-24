@@ -224,8 +224,51 @@ function queryVehicles(yardId, make, model, yearInput, status) {
     });
 }
 
+function getModelSuggestions(make = 'ANY', partialModel = '', limit = 25) {
+    const normalizedMake = String(make || 'ANY').trim().toUpperCase();
+    const normalizedPartialModel = String(partialModel || '').trim().toUpperCase();
+    const normalizedLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 25) : 25;
+
+    let sql = `
+        SELECT vehicle_model AS model, COUNT(*) AS count
+        FROM vehicles
+        WHERE vehicle_status != 'INACTIVE'
+    `;
+    const params = [];
+
+    if (normalizedMake !== 'ANY' && normalizedMake !== '') {
+        sql += ` AND UPPER(vehicle_make) = ?`;
+        params.push(normalizedMake);
+    }
+
+    if (normalizedPartialModel !== '') {
+        sql += ` AND UPPER(vehicle_model) LIKE ?`;
+        params.push(`%${normalizedPartialModel}%`);
+    }
+
+    sql += `
+        GROUP BY vehicle_model
+        ORDER BY count DESC, vehicle_model ASC
+        LIMIT ?
+    `;
+    params.push(normalizedLimit);
+
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) {
+                console.error('Failed to query model suggestions:', err);
+                reject(err);
+            } else {
+                resolve(rows || []);
+            }
+        });
+    });
+}
+
 
 
 module.exports = {
-    queryVehicles, db
+    queryVehicles,
+    getModelSuggestions,
+    db
 };

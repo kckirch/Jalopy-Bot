@@ -8,6 +8,7 @@ const clientPath = path.join(repoRoot, 'src/bot/utils/client.js');
 const databasePath = path.join(repoRoot, 'src/database/database.js');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
 const buttonHandlerPath = path.join(repoRoot, 'src/bot/handlers/buttonClickHandler.js');
+const autocompleteHandlerPath = path.join(repoRoot, 'src/bot/handlers/autocompleteHandler.js');
 const scrapeCommandPath = path.join(repoRoot, 'src/bot/commands/scrapeCommand.js');
 const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
 const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
@@ -26,6 +27,7 @@ async function withDiscordBotMainMocks(runTest) {
     databasePath,
     schedulerPath,
     buttonHandlerPath,
+    autocompleteHandlerPath,
     scrapeCommandPath,
     searchCommandPath,
     savedSearchCommandPath,
@@ -92,6 +94,12 @@ async function withDiscordBotMainMocks(runTest) {
     filename: buttonHandlerPath,
     loaded: true,
     exports: { handleButtonClick: noopHandler },
+  };
+  require.cache[autocompleteHandlerPath] = {
+    id: autocompleteHandlerPath,
+    filename: autocompleteHandlerPath,
+    loaded: true,
+    exports: { handleAutocompleteInteraction: noopHandler },
   };
 
   require.cache[scrapeCommandPath] = {

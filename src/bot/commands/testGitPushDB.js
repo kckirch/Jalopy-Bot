@@ -5,7 +5,7 @@ async function handleRunTestGitPushDBCommand(interaction) {
     if (!(await ensureElevatedCommandAccess(interaction, 'testgitpushdb'))) {
       return;
     }
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
   
     try {
       console.log('Running Test Git Push DB function...');

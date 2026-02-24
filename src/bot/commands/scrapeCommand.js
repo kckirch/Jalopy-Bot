@@ -57,86 +57,88 @@ async function handleScrapeCommand(interaction) {
   const sessionID = getSessionID();
   console.log(`Session ID: ${sessionID}`);
 
-  if (location) {
-    make = make.toUpperCase();
-    model = model.toUpperCase();
+  if (!location) {
+    await interaction.reply('Please provide a location to scrape.');
+    return;
+  }
 
-    const scrapeLabel = `manual:${interaction.user?.id || 'unknown'}:${location.toLowerCase()}:${sessionID}`;
+  make = make.toUpperCase();
+  model = model.toUpperCase();
+  await interaction.deferReply({ ephemeral: true });
 
-    try {
-      await withScrapeLock(scrapeLabel, async () => {
-        if (location.toLowerCase() === 'all') {
-          // Scrape all junkyards and all their locations
-          await scrapeAllJunkyards(make, model, sessionID);
+  const scrapeLabel = `manual:${interaction.user?.id || 'unknown'}:${location.toLowerCase()}:${sessionID}`;
 
-          const searchEmbed = new EmbedBuilder()
-            .setTitle('Search Parameters')
-            .setDescription('Scraped all junkyards.')
-            .setColor('Orange');
-
-          await interaction.reply({ embeds: [searchEmbed] });
-          return;
-        }
-
-        // Scrape a specific location
-        const yardId = convertLocationToYardId(location);
-        if (!yardId) {
-          await interaction.reply(`Unknown location: ${location}`);
-          return;
-        }
-
-        const normalizedLocation = location.toLowerCase();
-        const junkyardKey = normalizedLocation === 'trusty' || normalizedLocation === 'trustypickapart'
-          ? 'trustyJunkyard'
-          : 'jalopyJungle';
-        const junkyardConfig = junkyards[junkyardKey];
-
-        if (!junkyardConfig) {
-          await interaction.reply(`Unknown junkyard for location: ${location}`);
-          return;
-        }
-
-        // Determine the final yardId
-        let finalYardId = junkyardConfig.hasMultipleLocations ? yardId : junkyardConfig.yardId;
-
-        const options = {
-          ...junkyardConfig,
-          yardId: finalYardId,
-          make: make,
-          model: model,
-          sessionID: sessionID,
-          shouldMarkInactive: make === 'ANY' && model === 'ANY',
-        };
-
-        console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
-
-        await universalWebScrape(options);
+  try {
+    await withScrapeLock(scrapeLabel, async () => {
+      if (location.toLowerCase() === 'all') {
+        await scrapeAllJunkyards(make, model, sessionID);
 
         const searchEmbed = new EmbedBuilder()
-          .setTitle('Search Parameters')
-          .setDescription('Here are your search parameters:')
+          .setTitle('Scrape Complete')
+          .setDescription('Finished scraping all configured junkyards.')
           .addFields(
-            { name: 'Location', value: location },
-            { name: 'Make', value: make },
-            { name: 'Model', value: model }
+            { name: 'Make', value: make, inline: true },
+            { name: 'Model', value: model, inline: true },
+            { name: 'Session ID', value: sessionID, inline: true }
           )
           .setColor('Orange');
 
-        await interaction.reply({ embeds: [searchEmbed] });
-      });
-    } catch (error) {
-      if (error && error.code === 'SCRAPE_IN_PROGRESS') {
-        const runningLabel = error.activeScrapeLabel ? ` (${error.activeScrapeLabel})` : '';
-        await interaction.reply({
-          content: `A scrape is already running${runningLabel}. Please wait for it to finish and try again.`,
-          ephemeral: true,
-        });
+        await interaction.editReply({ embeds: [searchEmbed] });
         return;
       }
-      throw error;
+
+      const yardId = convertLocationToYardId(location);
+      if (!yardId) {
+        await interaction.editReply({ content: `Unknown location: ${location}` });
+        return;
+      }
+
+      const normalizedLocation = location.toLowerCase();
+      const junkyardKey = normalizedLocation === 'trusty' || normalizedLocation === 'trustypickapart'
+        ? 'trustyJunkyard'
+        : 'jalopyJungle';
+      const junkyardConfig = junkyards[junkyardKey];
+
+      if (!junkyardConfig) {
+        await interaction.editReply({ content: `Unknown junkyard for location: ${location}` });
+        return;
+      }
+
+      const finalYardId = junkyardConfig.hasMultipleLocations ? yardId : junkyardConfig.yardId;
+      const options = {
+        ...junkyardConfig,
+        yardId: finalYardId,
+        make: make,
+        model: model,
+        sessionID: sessionID,
+        shouldMarkInactive: make === 'ANY' && model === 'ANY',
+      };
+
+      console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
+      await universalWebScrape(options);
+
+      const searchEmbed = new EmbedBuilder()
+        .setTitle('Scrape Complete')
+        .setDescription('Scrape finished with these parameters:')
+        .addFields(
+          { name: 'Location', value: location, inline: true },
+          { name: 'Make', value: make, inline: true },
+          { name: 'Model', value: model, inline: true },
+          { name: 'Session ID', value: sessionID, inline: true }
+        )
+        .setColor('Orange');
+
+      await interaction.editReply({ embeds: [searchEmbed] });
+    });
+  } catch (error) {
+    if (error && error.code === 'SCRAPE_IN_PROGRESS') {
+      const runningLabel = error.activeScrapeLabel ? ` (${error.activeScrapeLabel})` : '';
+      await interaction.editReply({
+        content: `A scrape is already running${runningLabel}. Please wait for it to finish and try again.`,
+      });
+      return;
     }
-  } else {
-    await interaction.reply('Please provide a location to scrape.');
+    throw error;
   }
 }
 

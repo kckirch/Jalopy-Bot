@@ -23,11 +23,13 @@ const scrapeCommand = new SlashCommandBuilder()
   .addStringOption(option => 
     option.setName('make')
     .setDescription('The make of the vehicle')
-    .setRequired(false))
+    .setRequired(false)
+    .setAutocomplete(true))
   .addStringOption(option => 
     option.setName('model')
     .setDescription('The model of the vehicle')
-    .setRequired(false));
+    .setRequired(false)
+    .setAutocomplete(true));
 
 const searchCommand = new SlashCommandBuilder()
   .setName('search')
@@ -49,11 +51,13 @@ const searchCommand = new SlashCommandBuilder()
   .addStringOption(option => 
     option.setName('make')
     .setDescription('The make of the vehicle')
-    .setRequired(false))
+    .setRequired(false)
+    .setAutocomplete(true))
   .addStringOption(option => 
     option.setName('model')
     .setDescription('The model of the vehicle')
-    .setRequired(false))
+    .setRequired(false)
+    .setAutocomplete(true))
   .addStringOption(option =>
     option.setName('year')
     .setDescription('The year(s) of the vehicle (comma-separated list or range)')

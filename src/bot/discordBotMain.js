@@ -5,6 +5,7 @@ const { client } = require('./utils/client.js');
 const { setupDatabase } = require('../database/database');
 const { startScheduledTasks } = require('../notifications/scheduler');
 const { handleButtonClick } = require('./handlers/buttonClickHandler');
+const { handleAutocompleteInteraction } = require('./handlers/autocompleteHandler');
 
 const { handleScrapeCommand } = require('./commands/scrapeCommand');
 const { handleSearchCommand } = require('./commands/searchCommand');
@@ -44,6 +45,11 @@ client.on('interactionCreate', async (interaction) => {
   try {
     const user = interaction.user.tag;
     const channelId = interaction.channelId;
+
+    if (interaction.isAutocomplete()) {
+      await handleAutocompleteInteraction(interaction);
+      return;
+    }
 
     if (interaction.isCommand()) {
       const commandName = interaction.commandName;
