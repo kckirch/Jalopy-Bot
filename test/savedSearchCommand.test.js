@@ -93,6 +93,7 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
     loaded: true,
     exports: {
       queryVehicles: mocks.queryVehicles || (async () => []),
+      getModelSuggestionsForNoResults: mocks.getModelSuggestionsForNoResults || (async () => []),
     },
   };
 

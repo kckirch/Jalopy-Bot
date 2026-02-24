@@ -81,6 +81,7 @@ async function withSearchCommandMocks(mocks, runTest) {
     loaded: true,
     exports: {
       queryVehicles: mocks.queryVehicles,
+      getModelSuggestionsForNoResults: mocks.getModelSuggestionsForNoResults || (async () => []),
     },
   };
   require.cache[savedSearchManagerPath] = {
@@ -175,6 +176,33 @@ test('no-result search responds with no-results embed and disabled pagination', 
   await interaction.message.collector.emitEnd();
   assert.equal(interaction.message.edits.length, 1);
   assert.deepEqual(interaction.message.edits[0].components, []);
+});
+
+test('no-result search with specific model includes DB-driven model suggestions', async () => {
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'MAZDA',
+    model: 'RX7',
+    year: 'ANY',
+    status: 'ACTIVE',
+  });
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [],
+      getModelSuggestionsForNoResults: async () => ['RX-7', 'RX 7', 'RX8'],
+      checkExistingSearch: async () => false,
+      addSavedSearch: async () => {},
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+    }
+  );
+
+  assert.equal(interaction.replies.length, 1);
+  const payload = interaction.replies[0];
+  assert.match(payload.embeds[0].data.description, /Possible model names we have seen/i);
+  assert.match(payload.embeds[0].data.description, /RX-7/);
 });
 
 test('save-search button flow calls checkExistingSearch and addSavedSearch', async () => {

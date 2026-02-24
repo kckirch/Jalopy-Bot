@@ -1,7 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getSavedSearches, deleteSavedSearch, setSavedSearchFrequency } = require('../../database/savedSearchManager');
 const { convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
-const { queryVehicles } = require('../../database/vehicleQueryManager');
+const { queryVehicles, getModelSuggestionsForNoResults } = require('../../database/vehicleQueryManager');
 
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
 const RESULTS_ITEMS_PER_PAGE = 20;
@@ -133,7 +133,7 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount) {
   return embed;
 }
 
-function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalPages) {
+function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalPages, suggestedModels = []) {
   const make = search.make || 'Any';
   const model = search.model || 'Any';
   const yearRange = search.year_range || 'Any';
@@ -145,8 +145,12 @@ function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalP
     .setTimestamp();
 
   if (vehicles.length === 0) {
+    let description = 'No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)';
+    if (Array.isArray(suggestedModels) && suggestedModels.length > 0) {
+      description += `\n\nPossible model names we have seen: ${suggestedModels.slice(0, 8).join(', ')}`;
+    }
     embed
-      .setDescription('No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)')
+      .setDescription(description)
       .setFooter({ text: 'Page 0 of 0' });
     return embed;
   }
@@ -213,7 +217,8 @@ async function handleSavedSearchCommand(interaction) {
         resultsState.location,
         resultsState.vehicles,
         resultsState.currentPage,
-        resultsState.totalPages
+        resultsState.totalPages,
+        resultsState.suggestedModels
       );
       const components = buildSearchResultsComponents(
         resultsState.currentPage,
@@ -266,12 +271,17 @@ async function handleSavedSearchCommand(interaction) {
           );
           const sortedVehicles = sortVehiclesForSearchView(vehicles);
           const totalPages = Math.ceil(sortedVehicles.length / RESULTS_ITEMS_PER_PAGE);
+          const normalizedModelInput = String(currentSearch.model || 'ANY').toUpperCase();
+          const suggestedModels = (sortedVehicles.length === 0 && normalizedModelInput !== 'ANY')
+            ? await getModelSuggestionsForNoResults(currentSearch.make || 'ANY', normalizedModelInput, currentSearch.yard_id, 8)
+            : [];
           resultsState = {
             searchId: currentSearch.id,
             location: inferSearchLocation(currentSearch.yard_id),
             vehicles: sortedVehicles,
             currentPage: 0,
             totalPages,
+            suggestedModels,
           };
           currentIndex = baseIndex;
           await i.update(buildResultsViewPayload());
