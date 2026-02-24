@@ -5,6 +5,8 @@ const { EmbedBuilder } = require('discord.js');
 const { getSessionID } = require('../utils/utils');
 const { convertLocationToYardId } = require('../utils/locationUtils');
 const junkyards = require('../../config/junkyards');
+const { withScrapeLock } = require('../../scraping/scrapeLock');
+const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
 // Helper function to scrape all junkyards
 async function scrapeAllJunkyards(make, model, sessionID) {
@@ -19,6 +21,7 @@ async function scrapeAllJunkyards(make, model, sessionID) {
       make: make,
       model: model,
       sessionID: sessionID,
+      shouldMarkInactive: make === 'ANY' && model === 'ANY',
     };
 
     console.log(`Starting web scrape for Jalopy Jungle yard ID ${yardId} with sessionID: ${sessionID}`);
@@ -34,6 +37,7 @@ async function scrapeAllJunkyards(make, model, sessionID) {
     make: make,
     model: model,
     sessionID: sessionID,
+    shouldMarkInactive: make === 'ANY' && model === 'ANY',
   };
 
   console.log(`Starting web scrape for Trusty yard ID ${trustyConfig.yardId} with sessionID: ${sessionID}`);
@@ -42,6 +46,10 @@ async function scrapeAllJunkyards(make, model, sessionID) {
 }
 
 async function handleScrapeCommand(interaction) {
+  if (!(await ensureElevatedCommandAccess(interaction, 'scrape'))) {
+    return;
+  }
+
   let location = interaction.options.getString('location');
   let make = interaction.options.getString('make') || 'ANY';
   let model = interaction.options.getString('model') || 'ANY';
@@ -53,60 +61,79 @@ async function handleScrapeCommand(interaction) {
     make = make.toUpperCase();
     model = model.toUpperCase();
 
-    if (location.toLowerCase() === 'all') {
-      // Scrape all junkyards and all their locations
-      await scrapeAllJunkyards(make, model, sessionID);
+    const scrapeLabel = `manual:${interaction.user?.id || 'unknown'}:${location.toLowerCase()}:${sessionID}`;
 
-      const searchEmbed = new EmbedBuilder()
-        .setTitle('Search Parameters')
-        .setDescription('Scraped all junkyards.')
-        .setColor('Orange');
+    try {
+      await withScrapeLock(scrapeLabel, async () => {
+        if (location.toLowerCase() === 'all') {
+          // Scrape all junkyards and all their locations
+          await scrapeAllJunkyards(make, model, sessionID);
 
-      await interaction.reply({ embeds: [searchEmbed] });
+          const searchEmbed = new EmbedBuilder()
+            .setTitle('Search Parameters')
+            .setDescription('Scraped all junkyards.')
+            .setColor('Orange');
 
-      return; // Prevent further execution
-    } else {
-      // Scrape a specific location
-      const yardId = convertLocationToYardId(location);
-      if (!yardId) {
-        await interaction.reply(`Unknown location: ${location}`);
+          await interaction.reply({ embeds: [searchEmbed] });
+          return;
+        }
+
+        // Scrape a specific location
+        const yardId = convertLocationToYardId(location);
+        if (!yardId) {
+          await interaction.reply(`Unknown location: ${location}`);
+          return;
+        }
+
+        const normalizedLocation = location.toLowerCase();
+        const junkyardKey = normalizedLocation === 'trusty' || normalizedLocation === 'trustypickapart'
+          ? 'trustyJunkyard'
+          : 'jalopyJungle';
+        const junkyardConfig = junkyards[junkyardKey];
+
+        if (!junkyardConfig) {
+          await interaction.reply(`Unknown junkyard for location: ${location}`);
+          return;
+        }
+
+        // Determine the final yardId
+        let finalYardId = junkyardConfig.hasMultipleLocations ? yardId : junkyardConfig.yardId;
+
+        const options = {
+          ...junkyardConfig,
+          yardId: finalYardId,
+          make: make,
+          model: model,
+          sessionID: sessionID,
+          shouldMarkInactive: make === 'ANY' && model === 'ANY',
+        };
+
+        console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
+
+        await universalWebScrape(options);
+
+        const searchEmbed = new EmbedBuilder()
+          .setTitle('Search Parameters')
+          .setDescription('Here are your search parameters:')
+          .addFields(
+            { name: 'Location', value: location },
+            { name: 'Make', value: make },
+            { name: 'Model', value: model }
+          )
+          .setColor('Orange');
+
+        await interaction.reply({ embeds: [searchEmbed] });
+      });
+    } catch (error) {
+      if (error && error.code === 'SCRAPE_IN_PROGRESS') {
+        const runningLabel = error.activeScrapeLabel ? ` (${error.activeScrapeLabel})` : '';
+        await interaction.reply({
+          content: `A scrape is already running${runningLabel}. Please wait for it to finish and try again.`,
+          ephemeral: true,
+        });
         return;
       }
-
-      const junkyardKey = location.toLowerCase() === 'trusty' ? 'trustyJunkyard' : 'jalopyJungle';
-      const junkyardConfig = junkyards[junkyardKey];
-
-      if (!junkyardConfig) {
-        await interaction.reply(`Unknown junkyard for location: ${location}`);
-        return;
-      }
-
-      // Determine the final yardId
-      let finalYardId = junkyardConfig.hasMultipleLocations ? yardId : junkyardConfig.yardId;
-
-      const options = {
-        ...junkyardConfig,
-        yardId: finalYardId,
-        make: make,
-        model: model,
-        sessionID: sessionID,
-      };
-
-      console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
-
-      await universalWebScrape(options);
-
-      const searchEmbed = new EmbedBuilder()
-        .setTitle('Search Parameters')
-        .setDescription('Here are your search parameters:')
-        .addFields(
-          { name: 'Location', value: location },
-          { name: 'Make', value: make },
-          { name: 'Model', value: model }
-        )
-        .setColor('Orange');
-
-      await interaction.reply({ embeds: [searchEmbed] });
+      throw error;
     }
   } else {
     await interaction.reply('Please provide a location to scrape.');

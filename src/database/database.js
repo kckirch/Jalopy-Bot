@@ -1,11 +1,12 @@
 // database.js
 const sqlite3 = require('sqlite3').verbose();
+const { VEHICLE_DB_PATH } = require('./dbPath');
 
-const db = new sqlite3.Database('./vehicleInventory.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
+const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
         console.error('Error when connecting to the database', err);
     } else {
-        console.log('Database connection established.');
+        console.log(`Database connection established at ${VEHICLE_DB_PATH}.`);
     }
 });
 
@@ -33,7 +34,9 @@ const createSavedSearchesTableSQL = `
     CREATE TABLE IF NOT EXISTS saved_searches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
+        username TEXT,
         yard_id TEXT,
+        yard_name TEXT,
         make TEXT,
         model TEXT,
         year_range TEXT,
@@ -48,27 +51,59 @@ const createSavedSearchesTableSQL = `
     );
 `;
 
+const requiredSavedSearchColumns = [
+    { name: 'username', definition: 'TEXT' },
+    { name: 'yard_name', definition: 'TEXT' },
+];
+
+function runSQL(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+            if (err) return reject(err);
+            resolve(this);
+        });
+    });
+}
+
+function getTableColumns(tableName) {
+    return new Promise((resolve, reject) => {
+        db.all(`PRAGMA table_info(${tableName});`, (err, rows) => {
+            if (err) return reject(err);
+            resolve(rows || []);
+        });
+    });
+}
+
+async function ensureSavedSearchColumns() {
+    const columns = await getTableColumns('saved_searches');
+    const existing = new Set(columns.map((column) => column.name));
+
+    for (const column of requiredSavedSearchColumns) {
+        if (!existing.has(column.name)) {
+            console.log(`Adding missing saved_searches column: ${column.name}`);
+            await runSQL(`ALTER TABLE saved_searches ADD COLUMN ${column.name} ${column.definition};`);
+        }
+    }
+}
+
 // Function to set up the database
 function setupDatabase() {
     return new Promise((resolve, reject) => {
-        db.serialize(() => {
-            db.run(createVehiclesTableSQL, err => {
-                if (err) {
-                    console.error('Error creating vehicles table in vehicleInventory.db', err);
-                    return reject(err);
-                }
-                console.log('Vehicles table setup complete in vehicleInventory.db');
-            });
+        db.serialize(async () => {
+            try {
+                await runSQL(createVehiclesTableSQL);
+                console.log(`Vehicles table setup complete in ${VEHICLE_DB_PATH}`);
 
-            db.run(createSavedSearchesTableSQL, err => {
-                if (err) {
-                    console.error('Error creating saved_searches table in vehicleInventory.db', err);
-                    return reject(err);
-                }
-                console.log('Saved searches table setup complete in vehicleInventory.db');
-            });
+                await runSQL(createSavedSearchesTableSQL);
+                console.log(`Saved searches table setup complete in ${VEHICLE_DB_PATH}`);
 
-            resolve(); // Resolve the promise after all tables are set up
+                await ensureSavedSearchColumns();
+
+                resolve();
+            } catch (error) {
+                console.error('Database setup failed:', error);
+                reject(error);
+            }
         });
     });
 }

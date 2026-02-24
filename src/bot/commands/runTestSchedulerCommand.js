@@ -1,5 +1,10 @@
+const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
+
 async function handleRunTestSchedulerCommand(interaction) {
     console.log('Test scheduler command received.');
+    if (!(await ensureElevatedCommandAccess(interaction, 'runtestscheduler'))) {
+      return;
+    }
     await interaction.deferReply();
   
     try {

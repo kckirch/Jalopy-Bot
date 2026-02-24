@@ -27,18 +27,36 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
     npm install
     ```
 
-3. Ensure you have [Chromedriver](https://sites.google.com/chromium.org/driver/) installed and set up in your system's PATH. You can download Chromedriver from [here](https://sites.google.com/chromium.org/driver/downloads).
+3. Configure scraper engine mode with `SCRAPER_ENGINE`:
+    - `http` (recommended): Uses HTTP + HTML parsing, no chromedriver required.
+    - `selenium`: Uses Selenium + Chrome/Chromedriver.
+    - `auto` (default): Uses Selenium when chromedriver is available, otherwise HTTP.
 
 4. Configure environment variables. Create a `.env` file in the root directory with the following variables:
     ```env
     TOKEN=your_discord_token
     GUILD_ID=your_guild_id
     CLIENT_ID=your_client_id
+    SCRAPER_ENGINE=http
+    SCHEDULER_TIMEZONE=Etc/GMT+7
+    SCRAPE_LOG_MODE=summary
     ```
 
-5. Start the bot:
+    `SCHEDULER_TIMEZONE` defaults to `Etc/GMT+7` (fixed MST). Daily jobs run at `05:00` (scrape) and `05:45` (saved-search notifications) in that timezone.
+
+5. Register slash commands (run on deploys or when command definitions change):
+    ```bash
+    npm run register:commands
+    ```
+
+6. Start the bot:
     ```bash
     npm start
+    ```
+
+    Or use one command for production cutovers:
+    ```bash
+    npm run start:prod
     ```
 
 ## Usage
@@ -105,8 +123,16 @@ The database contains the following tables:
     ```bash
     npm install
     ```
-4. Ensure you have [Chromedriver](https://sites.google.com/chromium.org/driver/) installed and set up in your system's PATH.
-5. Start the bot:
+4. Set `SCRAPER_ENGINE` in your env:
+   - `SCRAPER_ENGINE=http` for chromedriver-free scraping.
+   - `SCRAPER_ENGINE=selenium` to keep the existing Selenium flow.
+   - `SCRAPER_ENGINE=auto` to choose at runtime based on chromedriver availability.
+   Set `SCRAPE_LOG_MODE=summary` for concise yard/make logs, or `SCRAPE_LOG_MODE=full` for per-vehicle insert/update logs.
+5. Register slash commands when needed:
+    ```bash
+    npm run register:commands
+    ```
+6. Start the bot:
     ```bash
     npm start
     ```
@@ -116,3 +142,14 @@ The database contains the following tables:
 To run the tests, use:
 ```bash
 npm test
+```
+
+Run fixture-based parser replay tests (no live network calls):
+```bash
+npm test -- test/httpInventoryReplayFixtures.test.js
+```
+
+Run the live scrape smoke test against an isolated temporary DB:
+```bash
+npm run smoke:live -- --engine http
+```

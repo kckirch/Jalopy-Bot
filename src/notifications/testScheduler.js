@@ -44,8 +44,12 @@ async function processSearches() {
     }
 }
 
-// Invoke the functions directly for testing
-(async () => {
-    await performScrape();
-    await processSearches();
-})();
+if (require.main === module) {
+    // Invoke the functions directly only when this file is executed directly.
+    (async () => {
+        await performScrape();
+        await processSearches();
+    })();
+}
+
+module.exports = { performScrape, processSearches };

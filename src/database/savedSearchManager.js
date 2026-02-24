@@ -36,12 +36,16 @@ function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRa
     `;
     const params = [userId, username, yardId, yard_name, make, model, yearRange, status, notes];
     console.log("Attempting to add saved search with parameters:", params);
-    db.run(sql, params, function(err) {
-        if (err) {
-            console.error('Error adding new saved search:', err);
-        } else {
-            console.log('Saved search added successfully with ID:', this.lastID);
-        }
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+            if (err) {
+                console.error('Error adding new saved search:', err);
+                reject(err);
+            } else {
+                console.log('Saved search added successfully with ID:', this.lastID);
+                resolve(this.lastID);
+            }
+        });
     });
 }
 

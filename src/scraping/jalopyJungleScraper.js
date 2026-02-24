@@ -13,15 +13,14 @@
 
 const { Builder, By, until } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
-const os = require('os');
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
+const { resolveChromedriverPath } = require('./chromedriverResolver');
 
-// Determine the Chromedriver path based on the operating system
-const isWindows = os.platform() === 'win32';
-const chromedriverPath = isWindows ? 'C:/Program Files/chromedriver-win64/chromedriver.exe' : '/usr/local/bin/chromedriver'; //your paths for chromedriver
+const chromedriverPath = resolveChromedriverPath();
 
 async function webScrape(yardId, make, model, sessionID) {
     const startTime = Date.now();  // Capture start time
+    const scrapedYardIds = new Set();
 
     let options = new chrome.Options();
     options.addArguments('--ignore-certificate-errors');
@@ -31,13 +30,19 @@ async function webScrape(yardId, make, model, sessionID) {
     options.addArguments('--ignore-certificate-errors');
     options.addArguments('--allow-running-insecure-content');
 
-    let serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);
-
-    let driver = await new Builder()
+    let builder = new Builder()
         .forBrowser('chrome')
-        .setChromeOptions(options)
-        .setChromeService(serviceBuilder)
-        .build();
+        .setChromeOptions(options);
+
+    if (chromedriverPath) {
+        console.log(`Using chromedriver at: ${chromedriverPath}`);
+        let serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);
+        builder = builder.setChromeService(serviceBuilder);
+    } else {
+        console.warn('Chromedriver not found in known locations. Attempting to use Selenium default driver resolution.');
+    }
+
+    let driver = await builder.build();
 
     try {
         console.log('🔍 Scraping for:');
@@ -56,12 +61,14 @@ async function webScrape(yardId, make, model, sessionID) {
                 yardOptions = await driver.findElements(By.css('#yard-id option'));
                 let currentYardId = await yardOptions[i].getAttribute('value');
                 if (currentYardId) {
+                    scrapedYardIds.add(parseInt(currentYardId, 10));
                     await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
                     await driver.executeScript(`document.getElementById('searchinventory').submit();`);
                     await scrapeYardMakeModel(driver, currentYardId, make, model, sessionID);
                 }
             }
         } else {
+            scrapedYardIds.add(parseInt(yardId, 10));
             await scrapeYardMakeModel(driver, yardId, make, model, sessionID);
         }
     } catch (error) {
@@ -73,7 +80,16 @@ async function webScrape(yardId, make, model, sessionID) {
             console.error('Scraping failed:', error);
         }
     } finally {
-        markInactiveVehicles(sessionID);
+        try {
+            if (make === 'ANY' && model === 'ANY' && scrapedYardIds.size > 0) {
+                await markInactiveVehicles(sessionID, { yardIds: [...scrapedYardIds] });
+            } else {
+                console.log(`Skipping inactive reconciliation. Full inventory scrape required. make=${make}, model=${model}, scopedYards=${scrapedYardIds.size}`);
+            }
+        } catch (markInactiveError) {
+            console.error('Error during inactive reconciliation:', markInactiveError);
+        }
+
         console.log('🛑 Closing browser');
         await driver.quit();
 
@@ -124,7 +140,7 @@ async function scrapeMakeModel(driver, yardId, make, model, sessionID) {
     for (let row of rows) {
         let cols = await row.findElements(By.tagName('td'));
         if (cols.length >= 4) {
-            insertOrUpdateVehicle(
+            await insertOrUpdateVehicle(
                 yardId,
                 await cols[1].getText(), // make
                 await cols[2].getText(), // model

@@ -1,10 +1,10 @@
-require('dotenv').config({ path: '../.env' });
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const { client } = require('./utils/client.js');
 const { setupDatabase } = require('../database/database');
 const { startScheduledTasks } = require('../notifications/scheduler');
 const { handleButtonClick } = require('./handlers/buttonClickHandler');
-const { getSessionID } = require('./utils/utils'); // Ensure getSessionID is imported
 
 const { handleScrapeCommand } = require('./commands/scrapeCommand');
 const { handleSearchCommand } = require('./commands/searchCommand');
@@ -14,6 +14,8 @@ const { handleRunTestSchedulerCommand } = require('./commands/runTestSchedulerCo
 const { handleCommandsCommand } = require('./commands/commandsCommand');
 const { handleManualNotifyNewVehiclesCommand } = require('./commands/manualNotifyNewVehiclesCommand');
 const { handleRunTestGitPushDBCommand } = require('./commands/testGitPushDB');
+const { ensureElevatedCommandAccess } = require('./utils/commandPermissions');
+let readyHandled = false;
 
 // Initialize database
 setupDatabase().then(() => {
@@ -24,12 +26,17 @@ setupDatabase().then(() => {
 
 client.on('ready', async (c) => {
   console.log(`✅   ${c.user.tag} is online.  ✅`);
-  try {
-    startScheduledTasks();
-    console.log('Scheduled tasks started.');
-    console.log("Current server time:", new Date().toLocaleString());
-  } catch (error) {
-    console.error('Failed to start scheduled tasks:', error);
+  if (!readyHandled) {
+    readyHandled = true;
+    try {
+      startScheduledTasks();
+      console.log('Scheduled tasks started.');
+      console.log("Current server time:", new Date().toLocaleString());
+    } catch (error) {
+      console.error('Failed to start scheduled tasks:', error);
+    }
+  } else {
+    console.log('Ready event received again; scheduled tasks already initialized.');
   }
 });
 
@@ -43,6 +50,10 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`\n\n\nCommand received: ${commandName} from ${user} in channel ${channelId}`);
       const options = interaction.options.data.map(opt => `${opt.name}: ${opt.value}`).join(', ');
       console.log(`Options: ${options}`);
+
+      if (!(await ensureElevatedCommandAccess(interaction, commandName))) {
+        return;
+      }
 
       // Fetch the member and log their roles
       const member = await interaction.guild.members.fetch(interaction.user.id);
@@ -76,8 +87,14 @@ client.on('interactionCreate', async (interaction) => {
 
   } catch (error) {
     console.error('Error processing interaction:', error);
-    await interaction.reply('An error occurred while processing your request.');
+    if (interaction.deferred || interaction.replied) {
+      await interaction.followUp({ content: 'An error occurred while processing your request.', ephemeral: true });
+    } else {
+      await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
+    }
   }
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN).catch((error) => {
+  console.error('Failed to login:', error);
+});

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <div class="container body-content">
+      <div class="col-md-12">
+        <h1>Jalopy Jungle <label>Vehicle Inventory Search</label></h1>
+        <p class="lead">New vehicles added DAILY!</p>
+        <form action="/" enctype="multipart/form-data" id="searchinventory" method="post">
+          <select class="form-control" id="yard-id" name="YardId">
+            <option value="">Select Location</option>
+            <option selected="selected" value="1020">BOISE</option>
+            <option value="1021">CALDWELL</option>
+          </select>
+          <br>
+          <select class="form-control" id="car-make" name="VehicleMake">
+            <option value="">Select Make</option>
+            <option selected="selected" value="TOYOTA">TOYOTA</option>
+            <option value="HONDA">HONDA</option>
+          </select>
+          <br>
+          <select class="form-control" id="car-model" name="VehicleModel">
+            <option value="">Select Model</option>
+            <option selected="selected" value="CAMRY">CAMRY</option>
+            <option value="COROLLA">COROLLA</option>
+          </select>
+          <br>
+          <input type="submit" value="SEARCH" class="btn btn-primary">
+        </form>
+
+        <div class="table-responsive">
+          <table class="table">
+            <tbody>
+              <tr>
+                <th>YEAR</th>
+                <th>MAKE</th>
+                <th>MODEL</th>
+                <th>ROW</th>
+              </tr>
+              <tr><td>2007</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>57</td></tr>
+              <tr><td>2002</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>56</td></tr>
+              <tr><td>2000</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>56</td></tr>
+              <tr><td>1997</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>58</td></tr>
+              <tr><td>2005</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>59</td></tr>
+              <tr><td>2002</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>30</td></tr>
+              <tr><td>2000</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>32</td></tr>
+              <tr><td>1999</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>33</td></tr>
+              <tr><td>2004</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>35</td></tr>
+              <tr><td>2010</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>34</td></tr>
+              <tr><td>1997</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>40</td></tr>
+              <tr><td>1996</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>41</td></tr>
+              <tr><td>1995</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>45</td></tr>
+              <tr><td>1999</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>47</td></tr>
+              <tr><td>2001</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>47</td></tr>
+              <tr><td>2005</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>50</td></tr>
+              <tr><td>2003</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>50</td></tr>
+              <tr><td>2003</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>50</td></tr>
+              <tr><td>2013</td><td style="font-weight: 700">TOYOTA</td><td style="font-weight: 700">CAMRY</td><td>49</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
