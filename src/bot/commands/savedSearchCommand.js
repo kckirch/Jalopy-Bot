@@ -1,45 +1,72 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getSavedSearches, deleteSavedSearch, setSavedSearchFrequency } = require('../../database/savedSearchManager');
-const { convertLocationToYardId } = require('../utils/locationUtils');
+const { convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
 const { queryVehicles } = require('../../database/vehicleQueryManager');
 
-const MATCH_PREVIEW_LIMIT = 5;
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
-
-function sortVehiclesByMostRecent(rows) {
-  return [...rows].sort((a, b) => {
-    const lastUpdatedA = new Date(a.last_updated);
-    const lastUpdatedB = new Date(b.last_updated);
-    return lastUpdatedB - lastUpdatedA;
-  });
-}
-
-function buildMatchSummary(search, vehicles) {
-  if (!vehicles || vehicles.length === 0) {
-    return {
-      fieldName: 'Current DB Matches',
-      fieldValue: `No matches right now for ${search.make} ${search.model} (${search.year_range}) ${search.status}.`,
-    };
-  }
-
-  const topRows = sortVehiclesByMostRecent(vehicles).slice(0, MATCH_PREVIEW_LIMIT);
-  const lines = topRows.map((vehicle) =>
-    `${vehicle.vehicle_year} ${vehicle.vehicle_make} ${vehicle.vehicle_model} | ${vehicle.yard_name} Row ${vehicle.row_number}`
-  );
-  const remaining = vehicles.length - topRows.length;
-  if (remaining > 0) {
-    lines.push(`...and ${remaining} more`);
-  }
-
-  return {
-    fieldName: `Current DB Matches (${vehicles.length})`,
-    fieldValue: lines.join('\n').slice(0, 1024),
-  };
-}
+const RESULTS_ITEMS_PER_PAGE = 20;
+const ALL_YARD_IDS_CANONICAL = ['1020', '1021', '1022', '1099', '1119', '999999'];
+const TREASURE_VALLEY_YARD_IDS_CANONICAL = ['1020', '1021', '1022', '1119', '999999'];
+const SINGLE_YARD_LOCATION_BY_ID = {
+  '1020': 'boise',
+  '1021': 'caldwell',
+  '1119': 'gardencity',
+  '1022': 'nampa',
+  '1099': 'twinfalls',
+  '999999': 'trustypickapart',
+};
 
 function normalizeFrequency(frequency) {
   const normalized = String(frequency || 'daily').trim().toLowerCase();
   return normalized === 'paused' ? 'paused' : 'daily';
+}
+
+function normalizeYardIds(yardId) {
+  if (yardId === null || yardId === undefined) {
+    return [];
+  }
+  if (Array.isArray(yardId)) {
+    return [...new Set(yardId.map((id) => String(id).trim()).filter((id) => id !== ''))].sort();
+  }
+  const raw = String(yardId).trim();
+  if (raw === '') {
+    return [];
+  }
+  return [...new Set(raw.split(',').map((id) => id.trim()).filter((id) => id !== ''))].sort();
+}
+
+function areSameYardIdSets(left, right) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function inferSearchLocation(yardId) {
+  const normalizedIds = normalizeYardIds(yardId);
+  if (areSameYardIdSets(normalizedIds, ALL_YARD_IDS_CANONICAL)) {
+    return 'all';
+  }
+  if (areSameYardIdSets(normalizedIds, TREASURE_VALLEY_YARD_IDS_CANONICAL)) {
+    return 'treasurevalleyyards';
+  }
+  if (normalizedIds.length === 1 && SINGLE_YARD_LOCATION_BY_ID[normalizedIds[0]]) {
+    return SINGLE_YARD_LOCATION_BY_ID[normalizedIds[0]];
+  }
+  return convertYardIdToLocation(yardId).toLowerCase().replace(/\s+/g, '');
+}
+
+function sortVehiclesForSearchView(rows) {
+  return [...rows].sort((a, b) => {
+    const firstSeenA = new Date(a.first_seen);
+    const firstSeenB = new Date(b.first_seen);
+    return firstSeenB - firstSeenA || String(a.vehicle_model || '').localeCompare(String(b.vehicle_model || ''));
+  });
 }
 
 function formatSavedSearchDate(rawDate) {
@@ -67,7 +94,26 @@ function buildSavedSearchComponents(currentIndex, totalCount, currentSearch) {
   return [buttonRow];
 }
 
-function buildSavedSearchEmbed(search, currentIndex, totalCount, matchSummary = null) {
+function buildSearchResultsComponents(currentPage, totalPages, currentSearch, currentIndex) {
+  const isPaused = normalizeFrequency(currentSearch.frequency) === 'paused';
+  const noResults = totalPages === 0;
+
+  const buttonRow = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder().setCustomId('rprev').setLabel('Previous').setStyle(ButtonStyle.Primary).setDisabled(noResults || currentPage === 0),
+      new ButtonBuilder().setCustomId('rnext').setLabel('Next').setStyle(ButtonStyle.Primary).setDisabled(noResults || currentPage >= totalPages - 1),
+      new ButtonBuilder().setCustomId(`back:${currentIndex}`).setLabel('Back To Saved').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`delete:${currentIndex}`).setLabel('Delete').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`pause:${currentIndex}`)
+        .setLabel(isPaused ? 'Resume Alerts' : 'Pause Alerts')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+  return [buttonRow];
+}
+
+function buildSavedSearchEmbed(search, currentIndex, totalCount) {
   const createDate = formatSavedSearchDate(search.create_date);
   const lastUpdatedDate = formatSavedSearchDate(search.update_date);
   const alertsState = normalizeFrequency(search.frequency) === 'paused' ? 'Paused' : 'Active';
@@ -84,12 +130,51 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount, matchSummary = 
     )
     .setFooter({ text: `Viewing ${currentIndex + 1} of ${totalCount}` });
 
-  if (matchSummary && matchSummary.fieldName && matchSummary.fieldValue) {
-    embed.addFields({
-      name: matchSummary.fieldName,
-      value: matchSummary.fieldValue,
-    });
+  return embed;
+}
+
+function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalPages) {
+  const make = search.make || 'Any';
+  const model = search.model || 'Any';
+  const yearRange = search.year_range || 'Any';
+  const status = search.status || 'ACTIVE';
+
+  const embed = new EmbedBuilder()
+    .setColor(0x0099FF)
+    .setTitle(`Database search results for ${location} ${make} ${model} (${yearRange}) ${status}`)
+    .setTimestamp();
+
+  if (vehicles.length === 0) {
+    embed
+      .setDescription('No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)')
+      .setFooter({ text: 'Page 0 of 0' });
+    return embed;
   }
+
+  const safePage = Math.min(Math.max(currentPage, 0), totalPages - 1);
+  const start = safePage * RESULTS_ITEMS_PER_PAGE;
+  const end = start + RESULTS_ITEMS_PER_PAGE;
+  const pageItems = vehicles.slice(start, end);
+
+  embed.setFooter({ text: `Page ${safePage + 1} of ${totalPages}` });
+
+  pageItems.forEach((vehicle) => {
+    const firstSeen = new Date(vehicle.first_seen);
+    const lastUpdated = new Date(vehicle.last_updated);
+    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
+    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+
+    let valueText = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
+    if (vehicle.notes) {
+      valueText += `\nNotes: ${vehicle.notes}`;
+    }
+
+    embed.addFields({
+      name: `${vehicle.vehicle_make} ${vehicle.vehicle_model} (${vehicle.vehicle_year})`,
+      value: valueText,
+      inline: false,
+    });
+  });
 
   return embed;
 }
@@ -112,17 +197,36 @@ async function handleSavedSearchCommand(interaction) {
     }
 
     let currentIndex = 0;
-    const matchSummariesById = new Map();
+    let resultsState = null;
 
-    const buildViewPayload = () => {
+    const buildSavedViewPayload = () => {
       const currentSearch = savedSearches[currentIndex];
-      const matchSummary = matchSummariesById.get(currentSearch.id) || null;
-      const embed = buildSavedSearchEmbed(currentSearch, currentIndex, savedSearches.length, matchSummary);
+      const embed = buildSavedSearchEmbed(currentSearch, currentIndex, savedSearches.length);
       const components = buildSavedSearchComponents(currentIndex, savedSearches.length, currentSearch);
       return { embeds: [embed], components };
     };
 
-    await interaction.editReply(buildViewPayload());
+    const buildResultsViewPayload = () => {
+      const currentSearch = savedSearches[currentIndex];
+      const embed = buildSearchResultsEmbed(
+        currentSearch,
+        resultsState.location,
+        resultsState.vehicles,
+        resultsState.currentPage,
+        resultsState.totalPages
+      );
+      const components = buildSearchResultsComponents(
+        resultsState.currentPage,
+        resultsState.totalPages,
+        currentSearch,
+        currentIndex
+      );
+      return { embeds: [embed], components };
+    };
+
+    const buildActiveViewPayload = () => (resultsState ? buildResultsViewPayload() : buildSavedViewPayload());
+
+    await interaction.editReply(buildSavedViewPayload());
 
     const replyMessage = await interaction.fetchReply();
     const collector = replyMessage.createMessageComponentCollector({
@@ -138,14 +242,16 @@ async function handleSavedSearchCommand(interaction) {
         const baseIndex = Math.min(Math.max(requestedIndex, 0), savedSearches.length - 1);
 
         if (action === 'next') {
+          resultsState = null;
           currentIndex = Math.min(baseIndex + 1, savedSearches.length - 1);
-          await i.update(buildViewPayload());
+          await i.update(buildSavedViewPayload());
           return;
         }
 
         if (action === 'prev') {
+          resultsState = null;
           currentIndex = Math.max(baseIndex - 1, 0);
-          await i.update(buildViewPayload());
+          await i.update(buildSavedViewPayload());
           return;
         }
 
@@ -158,9 +264,48 @@ async function handleSavedSearchCommand(interaction) {
             currentSearch.year_range || 'ANY',
             currentSearch.status || 'ACTIVE'
           );
-          matchSummariesById.set(currentSearch.id, buildMatchSummary(currentSearch, vehicles));
+          const sortedVehicles = sortVehiclesForSearchView(vehicles);
+          const totalPages = Math.ceil(sortedVehicles.length / RESULTS_ITEMS_PER_PAGE);
+          resultsState = {
+            searchId: currentSearch.id,
+            location: inferSearchLocation(currentSearch.yard_id),
+            vehicles: sortedVehicles,
+            currentPage: 0,
+            totalPages,
+          };
           currentIndex = baseIndex;
-          await i.update(buildViewPayload());
+          await i.update(buildResultsViewPayload());
+          return;
+        }
+
+        if (action === 'rnext') {
+          if (!resultsState) {
+            await i.reply({ content: 'No search results are currently active.', ephemeral: true });
+            return;
+          }
+          if (resultsState.currentPage < resultsState.totalPages - 1) {
+            resultsState.currentPage += 1;
+          }
+          await i.update(buildResultsViewPayload());
+          return;
+        }
+
+        if (action === 'rprev') {
+          if (!resultsState) {
+            await i.reply({ content: 'No search results are currently active.', ephemeral: true });
+            return;
+          }
+          if (resultsState.currentPage > 0) {
+            resultsState.currentPage -= 1;
+          }
+          await i.update(buildResultsViewPayload());
+          return;
+        }
+
+        if (action === 'back') {
+          resultsState = null;
+          currentIndex = baseIndex;
+          await i.update(buildSavedViewPayload());
           return;
         }
 
@@ -168,7 +313,9 @@ async function handleSavedSearchCommand(interaction) {
           const currentSearch = savedSearches[baseIndex];
           await deleteSavedSearch(currentSearch.id);
           savedSearches.splice(baseIndex, 1);
-          matchSummariesById.delete(currentSearch.id);
+          if (resultsState && resultsState.searchId === currentSearch.id) {
+            resultsState = null;
+          }
 
           if (savedSearches.length === 0) {
             await i.update({ content: 'All saved searches have been deleted.', embeds: [], components: [] });
@@ -177,7 +324,7 @@ async function handleSavedSearchCommand(interaction) {
           }
 
           currentIndex = Math.min(baseIndex, savedSearches.length - 1);
-          await i.update(buildViewPayload());
+          await i.update(buildActiveViewPayload());
           return;
         }
 
@@ -189,7 +336,7 @@ async function handleSavedSearchCommand(interaction) {
           currentSearch.frequency = nextFrequency;
           currentSearch.update_date = new Date().toISOString();
           currentIndex = baseIndex;
-          await i.update(buildViewPayload());
+          await i.update(buildActiveViewPayload());
           return;
         }
 

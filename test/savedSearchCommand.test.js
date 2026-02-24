@@ -164,7 +164,7 @@ test('savedsearch command renders in-channel carousel with requested actions', a
   assert.deepEqual(labels, ['Prev Saved', 'Next Saved', 'Run', 'Delete', 'Pause Alerts']);
 });
 
-test('run button updates saved-search embed with current DB match summary', async () => {
+test('run button switches to /search-style results view with pagination controls', async () => {
   const interaction = makeInteraction('user-run-test');
   let updatedPayload;
 
@@ -191,6 +191,7 @@ test('run button updates saved-search embed with current DB match summary', asyn
           vehicle_model: 'CAMRY',
           yard_name: 'BOISE',
           row_number: 50,
+          first_seen: new Date().toISOString(),
           last_updated: new Date().toISOString(),
         },
       ],
@@ -212,8 +213,75 @@ test('run button updates saved-search embed with current DB match summary', asyn
 
   assert.ok(Array.isArray(updatedPayload.embeds));
   const embedData = updatedPayload.embeds[0].data;
+  assert.match(embedData.title, /Database search results for/i);
   assert.ok(Array.isArray(embedData.fields));
-  assert.ok(embedData.fields.some((field) => /Current DB Matches/i.test(field.name)));
+  assert.ok(embedData.fields.some((field) => /TOYOTA CAMRY/i.test(field.name)));
+  const labels = updatedPayload.components[0].components.map((button) => button.data.label);
+  assert.deepEqual(labels, ['Previous', 'Next', 'Back To Saved', 'Delete', 'Pause Alerts']);
+});
+
+test('back-to-saved button returns from results view to saved carousel view', async () => {
+  const interaction = makeInteraction('user-back-test');
+  const updates = [];
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 101,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+      queryVehicles: async () => [
+        {
+          vehicle_year: 2005,
+          vehicle_make: 'TOYOTA',
+          vehicle_model: 'CAMRY',
+          yard_name: 'BOISE',
+          row_number: 50,
+          first_seen: new Date().toISOString(),
+          last_updated: new Date().toISOString(),
+        },
+      ],
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      const runCustomId = getButtonByLabel(interaction.editReplyCalls[0], 'Run').data.custom_id;
+
+      await interaction.__collector.emitCollect({
+        customId: runCustomId,
+        user: { id: 'user-back-test' },
+        async update(payload) {
+          updates.push(payload);
+        },
+        async reply() {},
+      });
+
+      const backCustomId = getButtonByLabel(updates[0], 'Back To Saved').data.custom_id;
+      await interaction.__collector.emitCollect({
+        customId: backCustomId,
+        user: { id: 'user-back-test' },
+        async update(payload) {
+          updates.push(payload);
+        },
+        async reply() {},
+      });
+    }
+  );
+
+  assert.equal(updates.length, 2);
+  assert.match(updates[0].embeds[0].data.title, /Database search results/i);
+  assert.match(updates[1].embeds[0].data.title, /Saved Search:/i);
+  const labels = updates[1].components[0].components.map((button) => button.data.label);
+  assert.deepEqual(labels, ['Prev Saved', 'Next Saved', 'Run', 'Delete', 'Pause Alerts']);
 });
 
 test('pause button toggles alerts and persists paused frequency', async () => {
