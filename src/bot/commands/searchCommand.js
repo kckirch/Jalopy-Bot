@@ -1,4 +1,4 @@
-const { queryVehicles } = require('../../database/vehicleQueryManager');
+const { queryVehicles, getModelSuggestionsForNoResults } = require('../../database/vehicleQueryManager');
 const {
   EmbedBuilder,
   ActionRowBuilder,
@@ -396,11 +396,15 @@ async function handleSearchCommand(interaction) {
       const runSearchForLocation = async (targetLocation) => {
         const targetYardId = convertLocationToYardId(targetLocation);
         const targetVehicles = await queryVehicles(targetYardId, userMakeInput, model, yearInput, status);
+        const suggestedModels = (targetVehicles.length === 0 && model !== 'ANY')
+          ? await getModelSuggestionsForNoResults(userMakeInput, model, targetYardId, 8)
+          : [];
         sortVehicles(targetVehicles);
         return {
           location: targetLocation,
           yardId: targetYardId,
           vehicles: targetVehicles,
+          suggestedModels,
           currentPage: 0,
           totalPages: Math.ceil(targetVehicles.length / itemsPerPage),
         };
@@ -422,7 +426,13 @@ async function handleSearchCommand(interaction) {
           .setTimestamp();
 
         if (state.vehicles.length === 0) {
-          embed.setDescription('No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)')
+          let description = 'No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)';
+          if (Array.isArray(state.suggestedModels) && state.suggestedModels.length > 0) {
+            const suggestions = state.suggestedModels.slice(0, 8).join(', ');
+            description += `\n\nPossible model names we have seen: ${suggestions}`;
+          }
+          embed
+            .setDescription(description)
             .setFooter({ text: 'Page 0 of 0' });
         } else {
           embed.setFooter({ text: `Page ${safePage + 1} of ${state.totalPages}` });

@@ -57,6 +57,26 @@ const modelAliases = {
     'GRAND CHEROKEE': ['GRAND CHEROKEE'],
 };
 
+const MODEL_NORMALIZATION_RE = /[^A-Z0-9]/g;
+
+function normalizeModelForLooseComparison(value) {
+    return String(value || '')
+        .toUpperCase()
+        .replace(MODEL_NORMALIZATION_RE, '');
+}
+
+function buildNormalizedSqlExpression(columnName = 'vehicle_model') {
+    let expression = `UPPER(${columnName})`;
+    const removableCharacters = [' ', '-', '/', '.', '_', "'", '&'];
+
+    for (const character of removableCharacters) {
+        const sqlCharacter = character === "'" ? "''" : character;
+        expression = `REPLACE(${expression}, '${sqlCharacter}', '')`;
+    }
+
+    return expression;
+}
+
 
 function parseYearInput(yearInput) {
     // If the yearInput is not provided or is an empty string, return no conditions or parameters
@@ -189,8 +209,18 @@ function queryVehicles(yardId, make, model, yearInput, status) {
             params.push(`%CHEROKEE%`, `%GRAND CHEROKEE%`);
         } else {
             const models = getModelVariations(model);
-            conditions.push(`(${models.map(() => "vehicle_model LIKE ?").join(" OR ")})`);
-            params = params.concat(models);
+            const normalizedModel = normalizeModelForLooseComparison(model);
+            const normalizedSql = buildNormalizedSqlExpression('vehicle_model');
+            const modelPredicates = [...models.map(() => "vehicle_model LIKE ?")];
+            const modelParams = [...models];
+
+            if (normalizedModel !== '') {
+                modelPredicates.push(`${normalizedSql} = ?`);
+                modelParams.push(normalizedModel);
+            }
+
+            conditions.push(`(${modelPredicates.join(" OR ")})`);
+            params = params.concat(modelParams);
         }
     } else {
         console.log("Model set to 'Any', skipping model criteria in query.");
@@ -220,6 +250,90 @@ function queryVehicles(yardId, make, model, yearInput, status) {
                 console.log("Rows found:", rows.length);
                 resolve(rows);
             }
+        });
+    });
+}
+
+function scoreModelSuggestion(model, normalizedModel, inputModel, normalizedInput) {
+    const upperModel = String(model || '').toUpperCase();
+    const upperInput = String(inputModel || '').toUpperCase();
+    let score = 0;
+
+    if (upperModel === upperInput) score += 200;
+    if (normalizedModel !== '' && normalizedModel === normalizedInput) score += 180;
+    if (upperInput !== '' && upperModel.startsWith(upperInput)) score += 90;
+    if (normalizedInput !== '' && normalizedModel.startsWith(normalizedInput)) score += 80;
+    if (upperInput !== '' && upperModel.includes(upperInput)) score += 50;
+    if (normalizedInput !== '' && normalizedModel.includes(normalizedInput)) score += 40;
+
+    return score;
+}
+
+function getModelSuggestionsForNoResults(make = 'ANY', modelInput = '', yardId = 'ALL', limit = 8) {
+    const normalizedMake = String(make || 'ANY').trim().toUpperCase();
+    const normalizedInput = normalizeModelForLooseComparison(modelInput);
+    const upperInput = String(modelInput || '').trim().toUpperCase();
+    const normalizedLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 20) : 8;
+    const yardIds = parseYardIds(yardId);
+
+    let sql = `
+        SELECT vehicle_model AS model, COUNT(*) AS count
+        FROM vehicles
+        WHERE 1 = 1
+    `;
+    const params = [];
+
+    if (normalizedMake !== 'ANY' && normalizedMake !== '') {
+        sql += ` AND UPPER(vehicle_make) = ?`;
+        params.push(normalizedMake);
+    }
+
+    if (yardId !== 'ALL' && Array.isArray(yardIds) && yardIds.length > 0) {
+        sql += ` AND yard_id IN (${yardIds.map(() => '?').join(', ')})`;
+        params.push(...yardIds);
+    }
+
+    sql += `
+        GROUP BY vehicle_model
+        ORDER BY count DESC, vehicle_model ASC
+        LIMIT 250
+    `;
+
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) {
+                console.error('Failed to query no-result model suggestions:', err);
+                reject(err);
+                return;
+            }
+
+            const rankedRows = (rows || [])
+                .map((row) => {
+                    const normalizedModel = normalizeModelForLooseComparison(row.model);
+                    return {
+                        model: row.model,
+                        count: row.count,
+                        score: scoreModelSuggestion(row.model, normalizedModel, upperInput, normalizedInput),
+                    };
+                })
+                .filter((row) => row.score > 0)
+                .sort((a, b) => b.score - a.score || b.count - a.count || String(a.model).localeCompare(String(b.model)));
+
+            const uniqueModels = [];
+            const seen = new Set();
+            for (const row of rankedRows) {
+                const key = String(row.model).toUpperCase();
+                if (seen.has(key)) {
+                    continue;
+                }
+                seen.add(key);
+                uniqueModels.push(row.model);
+                if (uniqueModels.length >= normalizedLimit) {
+                    break;
+                }
+            }
+
+            resolve(uniqueModels);
         });
     });
 }
@@ -270,5 +384,10 @@ function getModelSuggestions(make = 'ANY', partialModel = '', limit = 25) {
 module.exports = {
     queryVehicles,
     getModelSuggestions,
+    getModelSuggestionsForNoResults,
+    __testables: {
+        normalizeModelForLooseComparison,
+        buildNormalizedSqlExpression,
+    },
     db
 };

@@ -31,6 +31,7 @@ let tempDir;
 let originalCwd;
 let previousDbPathEnv;
 let queryVehicles;
+let getModelSuggestionsForNoResults;
 let queryDb;
 
 test.before(async () => {
@@ -68,6 +69,9 @@ test.before(async () => {
     [1020, 'BOISE', 'JEEP', 'GRAND CHEROKEE', 2004, 13, 'ACTIVE'],
     [1021, 'CALDWELL', 'FORD', 'F-150', 2010, 14, 'INACTIVE'],
     [999999, 'TRUSTYPICKAPART', 'BMW', '330CI', 2006, 15, 'ACTIVE'],
+    [1020, 'BOISE', 'MAZDA', 'RX-7', 1993, 16, 'ACTIVE'],
+    [1020, 'BOISE', 'MAZDA', 'RX 7', 1994, 17, 'ACTIVE'],
+    [1020, 'BOISE', 'NISSAN', '300 ZX', 1990, 18, 'ACTIVE'],
   ];
 
   for (const row of rows) {
@@ -85,7 +89,7 @@ test.before(async () => {
 
   delete require.cache[dbPathModulePath];
   delete require.cache[queryManagerPath];
-  ({ queryVehicles, db: queryDb } = require(queryManagerPath));
+  ({ queryVehicles, getModelSuggestionsForNoResults, db: queryDb } = require(queryManagerPath));
 });
 
 test.after(async () => {
@@ -105,7 +109,7 @@ test.after(async () => {
 
 test('ACTIVE status query excludes inactive vehicles and respects yard filter', async () => {
   const rows = await queryVehicles(1020, 'ANY', 'ANY', 'ANY', 'ACTIVE');
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, 6);
   assert.ok(rows.every((row) => row.yard_id === 1020));
   assert.ok(rows.every((row) => row.vehicle_status !== 'INACTIVE'));
 });
@@ -134,4 +138,21 @@ test('year range and comma-separated year parsing works through queryVehicles', 
   const rows = await queryVehicles(1020, 'ANY', 'ANY', '2004-2005,2010', 'ACTIVE');
   const models = rows.map((row) => row.vehicle_model).sort();
   assert.deepEqual(models, ['CAMRY', 'CHEROKEE', 'GRAND CHEROKEE']);
+});
+
+test('model query is punctuation-insensitive (RX7 matches RX-7 and RX 7)', async () => {
+  const rows = await queryVehicles(1020, 'MAZDA', 'RX7', 'ANY', 'ACTIVE');
+  const models = rows.map((row) => row.vehicle_model).sort();
+  assert.deepEqual(models, ['RX 7', 'RX-7']);
+});
+
+test('no-result model suggestions include normalized variants and close matches', async () => {
+  const suggestions = await getModelSuggestionsForNoResults('MAZDA', 'RX7', 1020, 5);
+  assert.ok(suggestions.includes('RX-7'));
+  assert.ok(suggestions.includes('RX 7'));
+});
+
+test('no-result model suggestions can surface partial model variants (300 -> 300 ZX)', async () => {
+  const suggestions = await getModelSuggestionsForNoResults('NISSAN', '300', 1020, 5);
+  assert.ok(suggestions.includes('300 ZX'));
 });
