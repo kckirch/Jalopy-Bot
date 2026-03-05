@@ -7,6 +7,7 @@
     "start": "node src/bot/discordBotMain.js",
     "register:commands": "node src/bot/register-commands.js",
     "start:prod": "npm run register:commands && npm start",
+    "start:inventory-api": "node src/api/inventoryApiServer.js",
     "test": "node --test",
     "smoke:live": "node src/testing/liveScrapeSmokeTest.js",
     "scan:model-aliases": "node src/testing/modelAliasScan.js"
