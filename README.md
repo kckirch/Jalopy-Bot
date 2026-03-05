@@ -153,3 +153,37 @@ Run the live scrape smoke test against an isolated temporary DB:
 ```bash
 npm run smoke:live -- --engine http
 ```
+
+## Inventory API (Pi)
+
+You can expose read-only inventory data directly from the bot host (Pi) so external apps do not need to download `vehicleInventory.db` from GitHub.
+
+### Start the API
+
+```bash
+npm run start:inventory-api
+```
+
+Default bind:
+- `INVENTORY_API_HOST=0.0.0.0`
+- `INVENTORY_API_PORT=8787`
+
+Optional hardening:
+- `INVENTORY_API_KEY=your-long-random-token` (required via `x-api-key` header)
+- `INVENTORY_API_ALLOWED_ORIGINS=https://your-site.com,https://www.your-site.com`
+- `INVENTORY_DB_CACHE_SECONDS=3600` (snapshot cache TTL sent to clients/CDN)
+
+### Endpoints
+
+- `GET /health`
+- `GET /api/vehicles`
+- `GET /api/vehicle-db` (raw SQLite snapshot with ETag/Last-Modified caching)
+
+Supported query params:
+- `yard` (single or comma-separated)
+- `make`
+- `model`
+- `status` (`ACTIVE`, `NEW`, `INACTIVE`)
+- `year`
+- `yearStart`, `yearEnd`
+- `limit` (max 10000)
