@@ -1,7 +1,9 @@
 # JalopyBot
 
+[![CI](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml)
+
 JalopyBot is a Discord bot that provides timely notifications for your favorite vehicles at Jalopy Jungle Junkyard in Boise, Idaho. This bot empowers users with custom notifications, advanced search capabilities, and a streamlined user experience to help you stay updated with the latest additions to the junkyard.
-Want to use the tool without running it, join the Discord Group, https://JalopyBot.com
+To use the bot without running it yourself, visit [JalopyBot.com](https://jalopybot.com).
 
 ## Features
 
@@ -24,7 +26,7 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
 
 2. Install the required dependencies:
     ```bash
-    npm install
+    npm ci
     ```
 
 3. Configure scraper engine mode with `SCRAPER_ENGINE`:
@@ -32,15 +34,23 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
     - `selenium`: Uses Selenium + Chrome/Chromedriver.
     - `auto` (default): Uses Selenium when chromedriver is available, otherwise HTTP.
 
-4. Configure environment variables. Create a `.env` file in the root directory with the following variables:
+4. Create the ignored runtime environment file from the checked-in example:
+    ```bash
+    cp .env.example src/.env
+    ```
+
+    At minimum, configure the following values in `src/.env`:
     ```env
     TOKEN=your_discord_token
     GUILD_ID=your_guild_id
     CLIENT_ID=your_client_id
+    VEHICLE_DB_PATH=/absolute/path/to/vehicleInventory.db
     SCRAPER_ENGINE=http
     SCHEDULER_TIMEZONE=Etc/GMT+7
     SCRAPE_LOG_MODE=summary
     ```
+
+    Keep the production database outside the Git checkout and set `VEHICLE_DB_PATH` to its absolute path. See [`.env.example`](.env.example) for every supported option.
 
     `SCHEDULER_TIMEZONE` defaults to `Etc/GMT+7` (fixed MST). Daily jobs run at `05:00` (scrape) and `05:45` (saved-search notifications) in that timezone.
 
@@ -111,7 +121,7 @@ The database contains the following tables:
 
 ### Prerequisites
 
-- Node.js v20.10.0 or later
+- Node.js v20.10.0 through v24 (Node.js 24 LTS recommended)
 - npm
 - SQLite (for local development)
 
@@ -121,7 +131,7 @@ The database contains the following tables:
 2. Clone the repository and navigate to the project directory.
 3. Install the dependencies:
     ```bash
-    npm install
+    npm ci
     ```
 4. Set `SCRAPER_ENGINE` in your env:
    - `SCRAPER_ENGINE=http` for chromedriver-free scraping.
@@ -144,6 +154,13 @@ To run the tests, use:
 npm test
 ```
 
+Each test run uses a temporary SQLite database and removes it afterward, so tests never open the configured production database.
+
+On Node.js 22.8 or newer, enforce the current regression floor of 80% line, 65% branch, and 85% function coverage:
+```bash
+npm run test:coverage
+```
+
 Run fixture-based parser replay tests (no live network calls):
 ```bash
 npm test -- test/httpInventoryReplayFixtures.test.js
@@ -153,6 +170,8 @@ Run the live scrape smoke test against an isolated temporary DB:
 ```bash
 npm run smoke:live -- --engine http
 ```
+
+Pull requests run the full suite on Node.js 20 and the current Node.js 24 LTS line. Keep branches short-lived and merge them only after CI passes.
 
 ## Inventory API (Pi)
 
