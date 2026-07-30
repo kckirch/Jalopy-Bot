@@ -3,9 +3,10 @@ const http = require('http');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
-const { VEHICLE_DB_PATH } = require('../database/dbPath');
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const { VEHICLE_DB_PATH } = require('../database/dbPath');
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_HOST = '0.0.0.0';

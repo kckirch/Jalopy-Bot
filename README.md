@@ -71,6 +71,31 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
     npm run start:prod
     ```
 
+### One-time production database cutover
+
+The repository temporarily retains `src/bot/vehicleInventory.db` as a rollback source. Move production state outside the Git checkout before that tracked legacy file is removed in a later release:
+
+1. Stop both the Discord bot and inventory API so no writes can occur after the snapshot.
+2. Set `VEHICLE_DB_PATH` in `src/.env` to an absolute path outside the checkout, for example:
+    ```env
+    VEHICLE_DB_PATH=/home/pi/jalopy-data/vehicleInventory.db
+    ```
+3. Run the idempotent migration:
+    ```bash
+    npm run migrate:database
+    ```
+
+    The command uses SQLite's backup mechanism so committed WAL data is included, validates the source and destination with `PRAGMA quick_check`, creates the destination with owner-only permissions, and never overwrites an existing destination. It also rejects destinations inside the Git checkout.
+
+4. Restart the bot and inventory API. Confirm that both processes log the same external database path.
+5. Verify the migrated database and local API:
+    ```bash
+    sqlite3 /home/pi/jalopy-data/vehicleInventory.db \
+      'PRAGMA quick_check; SELECT COUNT(*) FROM vehicles; SELECT COUNT(*) FROM saved_searches;'
+    curl --fail http://127.0.0.1:8787/health
+    ```
+6. Keep the legacy file until the bot completes at least one successful scrape and notification cycle and the deployed website still receives inventory through the API. Removing the tracked databases is the second, separate release.
+
 ## Usage
 
 ### Discord Commands
