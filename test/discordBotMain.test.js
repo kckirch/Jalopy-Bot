@@ -16,7 +16,6 @@ const dailySavedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/dailyS
 const runTestSchedulerCommandPath = path.join(repoRoot, 'src/bot/commands/runTestSchedulerCommand.js');
 const commandsCommandPath = path.join(repoRoot, 'src/bot/commands/commandsCommand.js');
 const manualNotifyCommandPath = path.join(repoRoot, 'src/bot/commands/manualNotifyNewVehiclesCommand.js');
-const testGitPushCommandPath = path.join(repoRoot, 'src/bot/commands/testGitPushDB.js');
 
 function noopHandler() {}
 
@@ -35,7 +34,6 @@ async function withDiscordBotMainMocks(runTest) {
     runTestSchedulerCommandPath,
     commandsCommandPath,
     manualNotifyCommandPath,
-    testGitPushCommandPath,
   ];
 
   const previous = new Map();
@@ -143,12 +141,6 @@ async function withDiscordBotMainMocks(runTest) {
     filename: manualNotifyCommandPath,
     loaded: true,
     exports: { handleManualNotifyNewVehiclesCommand: noopHandler },
-  };
-  require.cache[testGitPushCommandPath] = {
-    id: testGitPushCommandPath,
-    filename: testGitPushCommandPath,
-    loaded: true,
-    exports: { handleRunTestGitPushDBCommand: noopHandler },
   };
 
   try {

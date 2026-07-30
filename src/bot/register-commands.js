@@ -109,11 +109,6 @@ const manualNotifyNewVehiclesCommand = new SlashCommandBuilder()
   .setDescription('Manually notify users of new vehicles')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
-const testGitPushDBCommand = new SlashCommandBuilder()
-  .setName('testgitpushdb')
-  .setDescription('Test the git push to database function')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
-
 const commands = [
   scrapeCommand.toJSON(),
   searchCommand.toJSON(),
@@ -121,8 +116,7 @@ const commands = [
   dailySearchCommand.toJSON(),
   runTestScheduler.toJSON(),
   commandsCommand.toJSON(),
-  manualNotifyNewVehiclesCommand.toJSON(),
-  testGitPushDBCommand.toJSON()
+  manualNotifyNewVehiclesCommand.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);

@@ -4,7 +4,6 @@ const { processDailySavedSearches } = require('../notifications/dailyTasks');
 const { getSessionID } = require('../bot/utils/utils');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
 const junkyards = require('../config/junkyards');
-const { pushToScrapedData } = require('./pushToScrapedData'); // Import the push function
 const { withScrapeLock } = require('../scraping/scrapeLock');
 
 const DEFAULT_SCHEDULER_TIMEZONE = 'Etc/GMT+7'; // Mountain Standard Time (MST, UTC-7), no DST shift.
@@ -96,14 +95,6 @@ function startScheduledTasks() {
       console.log('Scraping completed successfully.');
     } catch (error) {
       console.error('Scraping failed after retries:', error);
-      return;
-    }
-
-    try {
-      // After scraping, push updated data to scraped-data branch.
-      await pushToScrapedData();
-    } catch (error) {
-      console.error('Failed to push scraped data:', error);
     }
   }, scheduleOptions);
 

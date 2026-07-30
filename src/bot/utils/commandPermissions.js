@@ -5,7 +5,6 @@ const ELEVATED_COMMANDS = new Set([
   'dailysavedsearch',
   'runtestscheduler',
   'manualnotifynewvehicles',
-  'testgitpushdb',
 ]);
 
 function requiresElevatedCommandAccess(commandName) {
@@ -108,4 +107,3 @@ module.exports = {
     resolveAllowedRoleNames,
   },
 };
-

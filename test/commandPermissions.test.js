@@ -14,7 +14,6 @@ const {
 test('requiresElevatedCommandAccess only flags protected commands', () => {
   assert.equal(requiresElevatedCommandAccess('scrape'), true);
   assert.equal(requiresElevatedCommandAccess('runtestscheduler'), true);
-  assert.equal(requiresElevatedCommandAccess('testgitpushdb'), true);
   assert.equal(requiresElevatedCommandAccess('search'), false);
 });
 
@@ -89,4 +88,3 @@ test('ensureElevatedCommandAccess allows non-protected commands', async () => {
   assert.equal(allowed, true);
   assert.equal(replies.length, 0);
 });
-

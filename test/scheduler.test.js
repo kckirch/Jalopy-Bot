@@ -8,13 +8,8 @@ const universalWebScrapePath = path.join(repoRoot, 'src/scraping/universalWebScr
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
 const utilsPath = path.join(repoRoot, 'src/bot/utils/utils.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
-const pushPath = path.join(repoRoot, 'src/notifications/pushToScrapedData.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
 const cronPath = require.resolve('node-cron', { paths: [repoRoot] });
-
-function tick() {
-  return new Promise((resolve) => setImmediate(resolve));
-}
 
 async function withSchedulerMocks(mocks, runTest) {
   const previousScheduler = require.cache[schedulerPath];
@@ -23,7 +18,6 @@ async function withSchedulerMocks(mocks, runTest) {
   const previousDailyTasks = require.cache[dailyTasksPath];
   const previousUtils = require.cache[utilsPath];
   const previousSessionCheck = require.cache[sessionCheckPath];
-  const previousPush = require.cache[pushPath];
 
   require.cache[cronPath] = {
     id: cronPath,
@@ -55,12 +49,6 @@ async function withSchedulerMocks(mocks, runTest) {
     loaded: true,
     exports: { checkSessionUpdates: mocks.checkSessionUpdates },
   };
-  require.cache[pushPath] = {
-    id: pushPath,
-    filename: pushPath,
-    loaded: true,
-    exports: { pushToScrapedData: mocks.pushToScrapedData },
-  };
   delete require.cache[schedulerPath];
 
   const scrapeLockModule = require(scrapeLockPath);
@@ -89,9 +77,6 @@ async function withSchedulerMocks(mocks, runTest) {
 
     if (previousSessionCheck) require.cache[sessionCheckPath] = previousSessionCheck;
     else delete require.cache[sessionCheckPath];
-
-    if (previousPush) require.cache[pushPath] = previousPush;
-    else delete require.cache[pushPath];
   }
 }
 
@@ -102,7 +87,6 @@ function buildBaseMocks(overrides = {}) {
     processDailySavedSearches: async () => {},
     getSessionID: () => '20260101',
     checkSessionUpdates: async () => true,
-    pushToScrapedData: async () => {},
     ...overrides,
   };
 }
@@ -244,10 +228,9 @@ test('scrapeAllJunkyards rejects when another scrape lock is already held', asyn
   assert.equal(scrapeCalls.length, 0);
 });
 
-test('scrape cron callback performs scrape and then pushes scraped data', async () => {
+test('scrape cron callback performs every configured scrape', async () => {
   const schedules = [];
   const scrapeCalls = [];
-  let pushCalls = 0;
 
   const mocks = buildBaseMocks({
     schedule: (expression, callback, options) => {
@@ -257,57 +240,14 @@ test('scrape cron callback performs scrape and then pushes scraped data', async 
     universalWebScrape: async (options) => {
       scrapeCalls.push(options);
     },
-    pushToScrapedData: async () => {
-      pushCalls += 1;
-    },
   });
 
   await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
     startScheduledTasks();
     await schedules[0].callback();
-    await tick();
   });
 
-  assert.equal(pushCalls, 1);
   assert.equal(scrapeCalls.length, 2);
-});
-
-test('scrape cron callback logs push failures without throwing', async () => {
-  const schedules = [];
-  let pushCalls = 0;
-  const pushedErrorMessages = [];
-
-  const originalConsoleError = console.error;
-  console.error = (...args) => {
-    pushedErrorMessages.push(args.map((value) => String(value)).join(' '));
-  };
-
-  const mocks = buildBaseMocks({
-    schedule: (expression, callback, options) => {
-      schedules.push({ expression, callback, options });
-      return {};
-    },
-    pushToScrapedData: async () => {
-      pushCalls += 1;
-      throw new Error('simulated-push-failure');
-    },
-  });
-
-  try {
-    await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-      startScheduledTasks();
-      await schedules[0].callback();
-      await tick();
-    });
-  } finally {
-    console.error = originalConsoleError;
-  }
-
-  assert.equal(pushCalls, 1);
-  assert.ok(
-    pushedErrorMessages.some((message) => message.includes('Failed to push scraped data:')),
-    `Expected push failure log, got logs: ${pushedErrorMessages.join(' || ')}`
-  );
 });
 
 test('saved-search cron callback runs processing only when session check passes', async () => {

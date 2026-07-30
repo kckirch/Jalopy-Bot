@@ -14,7 +14,6 @@ const { handleDailySavedSearchCommand } = require('./commands/dailySavedSearchCo
 const { handleRunTestSchedulerCommand } = require('./commands/runTestSchedulerCommand');
 const { handleCommandsCommand } = require('./commands/commandsCommand');
 const { handleManualNotifyNewVehiclesCommand } = require('./commands/manualNotifyNewVehiclesCommand');
-const { handleRunTestGitPushDBCommand } = require('./commands/testGitPushDB');
 const { ensureElevatedCommandAccess } = require('./utils/commandPermissions');
 let readyHandled = false;
 
@@ -80,8 +79,6 @@ client.on('interactionCreate', async (interaction) => {
         await handleCommandsCommand(interaction);
       } else if (commandName === 'manualnotifynewvehicles') {
         await handleManualNotifyNewVehiclesCommand(interaction);
-      } else if (commandName === 'testgitpushdb') {
-        await handleRunTestGitPushDBCommand(interaction);
       }
     }
 
