@@ -123,7 +123,7 @@ The database contains the following tables:
 
 ### Prerequisites
 
-- Node.js v20.10.0 through v24 (Node.js 24 LTS recommended)
+- Node.js v20.17.0 through v24 (Node.js 24 LTS recommended)
 - npm
 - SQLite (for local development)
 
