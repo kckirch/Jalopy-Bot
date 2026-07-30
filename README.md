@@ -1,6 +1,7 @@
 # JalopyBot
 
 [![CI](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 JalopyBot is a Discord bot that provides timely notifications for your favorite vehicles at Jalopy Jungle Junkyard in Boise, Idaho. This bot empowers users with custom notifications, advanced search capabilities, and a streamlined user experience to help you stay updated with the latest additions to the junkyard.
 To use the bot without running it yourself, visit [JalopyBot.com](https://jalopybot.com).
@@ -175,6 +176,10 @@ npm run smoke:live -- --engine http
 
 Pull requests run the full suite on Node.js 20 and the current Node.js 24 LTS line. Keep branches short-lived and merge them only after CI passes.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete development and pull
+request workflow. Report vulnerabilities or exposed private data through the
+private process in [SECURITY.md](SECURITY.md), never in a public issue.
+
 ## Inventory API (Pi)
 
 You can expose read-only inventory data directly from the bot host (Pi) so external apps do not need to download `vehicleInventory.db` from GitHub.
@@ -211,3 +216,12 @@ Supported query params:
 - `year`
 - `yearStart`, `yearEnd`
 - `limit` (max 10000)
+
+## Community and license
+
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Support guide](SUPPORT.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+
+JalopyBot is available under the [ISC License](LICENSE).
