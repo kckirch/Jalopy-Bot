@@ -9,7 +9,6 @@
     "register:commands": "node src/bot/register-commands.js",
     "start:prod": "npm run register:commands && npm start",
     "start:inventory-api": "node src/api/inventoryApiServer.js",
-    "migrate:database": "node scripts/migrate-runtime-database.js",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node scripts/run-tests.js --coverage",
     "smoke:live": "node src/testing/liveScrapeSmokeTest.js",

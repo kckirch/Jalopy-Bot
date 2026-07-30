@@ -27,6 +27,23 @@ function close(db) {
   });
 }
 
+test('resolveVehicleDbPath requires an absolute configured path', () => {
+  const { resolveVehicleDbPath } = require(dbPathModulePath);
+
+  assert.throws(
+    () => resolveVehicleDbPath({}),
+    /VEHICLE_DB_PATH is required/
+  );
+  assert.throws(
+    () => resolveVehicleDbPath({ VEHICLE_DB_PATH: 'runtime/vehicleInventory.db' }),
+    /must be an absolute path/
+  );
+  assert.equal(
+    resolveVehicleDbPath({ VEHICLE_DB_PATH: '/var/lib/jalopy/vehicleInventory.db' }),
+    '/var/lib/jalopy/vehicleInventory.db'
+  );
+});
+
 test('database modules use VEHICLE_DB_PATH and are not CWD-sensitive', async () => {
   const originalCwd = process.cwd();
   const previousDbPathEnv = process.env.VEHICLE_DB_PATH;
