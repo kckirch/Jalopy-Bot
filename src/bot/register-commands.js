@@ -97,7 +97,7 @@ const dailySearchCommand = new SlashCommandBuilder()
 
 const runTestScheduler = new SlashCommandBuilder()
   .setName('runtestscheduler')
-  .setDescription('Run the test scheduler')
+  .setDescription('Run missed morning job: scrape yards, then send saved-search and new-car alerts')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 
 const commandsCommand = new SlashCommandBuilder()

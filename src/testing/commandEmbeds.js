@@ -59,7 +59,7 @@ const adminCommandsEmbed = new EmbedBuilder()
   .addFields(
     { name: '/scrape', value: 'Scrape the website for database data.' },
     { name: '/dailysavedsearch', value: 'Enable or disable daily saved searches.' },
-    { name: '/runtestscheduler', value: 'Run the test scheduler.' }
+    { name: '/runtestscheduler', value: 'Use after bot downtime to run the missed morning scrape, saved-search DMs, and new-car alert.' }
   );
 
 module.exports = { searchEmbed, savedSearchEmbed, adminCommandsEmbed };
