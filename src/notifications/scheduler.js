@@ -78,7 +78,7 @@ function startScheduledTasks() {
 
   scheduledTasksStarted = true;
   const schedulerTimezone = resolveSchedulerTimezone();
-  const scheduleOptions = { scheduled: true, timezone: schedulerTimezone };
+  const scheduleOptions = { timezone: schedulerTimezone, noOverlap: true };
   console.log(`Scheduler timezone: ${schedulerTimezone}. Daily scrape at 05:00 and notifications at 05:45.`);
 
   // Scheduled scraping every day at 05:00 MST by default.

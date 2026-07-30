@@ -117,8 +117,8 @@ test('startScheduledTasks registers the expected two cron schedules', async () =
   assert.equal(schedules.length, 2);
   assert.equal(schedules[0].expression, '0 5 * * *');
   assert.equal(schedules[1].expression, '45 5 * * *');
-  assert.deepEqual(schedules[0].options, { scheduled: true, timezone: 'Etc/GMT+7' });
-  assert.deepEqual(schedules[1].options, { scheduled: true, timezone: 'Etc/GMT+7' });
+  assert.deepEqual(schedules[0].options, { timezone: 'Etc/GMT+7', noOverlap: true });
+  assert.deepEqual(schedules[1].options, { timezone: 'Etc/GMT+7', noOverlap: true });
 });
 
 test('startScheduledTasks uses SCHEDULER_TIMEZONE override when provided', async () => {
