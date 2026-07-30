@@ -31,8 +31,10 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
 
 3. Configure scraper engine mode with `SCRAPER_ENGINE`:
     - `http` (recommended): Uses HTTP + HTML parsing, no chromedriver required.
-    - `selenium`: Uses Selenium + Chrome/Chromedriver.
-    - `auto` (default): Uses Selenium when chromedriver is available, otherwise HTTP.
+    - `selenium`: Uses Selenium with `CHROMEDRIVER_PATH`, a system driver, or Selenium Manager.
+    - `auto` (default): Uses Selenium when an external chromedriver executable is available, otherwise HTTP.
+
+    Chromedriver is not bundled. If you use Selenium, keep the browser driver outside this repository and set `CHROMEDRIVER_PATH` when automatic resolution is unavailable.
 
 4. Create the ignored runtime environment file from the checked-in example:
     ```bash
@@ -135,8 +137,8 @@ The database contains the following tables:
     ```
 4. Set `SCRAPER_ENGINE` in your env:
    - `SCRAPER_ENGINE=http` for chromedriver-free scraping.
-   - `SCRAPER_ENGINE=selenium` to keep the existing Selenium flow.
-   - `SCRAPER_ENGINE=auto` to choose at runtime based on chromedriver availability.
+   - `SCRAPER_ENGINE=selenium` to use an external driver or Selenium Manager.
+   - `SCRAPER_ENGINE=auto` to choose Selenium only when an external chromedriver executable is available.
    Set `SCRAPE_LOG_MODE=summary` for concise yard/make logs, or `SCRAPE_LOG_MODE=full` for per-vehicle insert/update logs.
 5. Register slash commands when needed:
     ```bash

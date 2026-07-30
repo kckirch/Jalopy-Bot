@@ -139,27 +139,6 @@ function closeDb(db) {
   });
 }
 
-function ensureSmokeChromedriverPath(logger = console) {
-  const configuredPath = String(process.env.CHROMEDRIVER_PATH || '').trim();
-  if (configuredPath) {
-    return null;
-  }
-
-  try {
-    const bundledChromedriver = require('chromedriver');
-    const bundledPath = bundledChromedriver && bundledChromedriver.path;
-    if (bundledPath) {
-      process.env.CHROMEDRIVER_PATH = bundledPath;
-      logger.log(`[smoke] Defaulted CHROMEDRIVER_PATH to bundled driver: ${bundledPath}`);
-      return bundledPath;
-    }
-  } catch (error) {
-    // Fall back to resolver behavior when bundled dependency is unavailable.
-  }
-
-  return null;
-}
-
 async function runLiveScrapeSmokeTest({
   argv = process.argv.slice(2),
   logger = console,
@@ -181,10 +160,6 @@ async function runLiveScrapeSmokeTest({
   process.env.VEHICLE_DB_PATH = dbFilePath;
   if (args.engine) {
     process.env.SCRAPER_ENGINE = args.engine;
-  }
-  const effectiveEngine = String(process.env.SCRAPER_ENGINE || 'auto').trim().toLowerCase();
-  if (effectiveEngine !== 'http') {
-    ensureSmokeChromedriverPath(logger);
   }
 
   const {
@@ -399,6 +374,5 @@ module.exports = {
     normalizeSessionId,
     selectSentinelYard,
     getUsageText,
-    ensureSmokeChromedriverPath,
   },
 };

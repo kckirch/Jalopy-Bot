@@ -34,33 +34,29 @@ test('resolveChromedriverPath prefers CHROMEDRIVER_PATH when it points to an exi
   }
 });
 
-test('resolveChromedriverPath falls back to bundled chromedriver when CHROMEDRIVER_PATH is not executable', async () => {
+test('resolveChromedriverPath falls back to an executable chromedriver on PATH', async () => {
   const previous = process.env.CHROMEDRIVER_PATH;
+  const previousPath = process.env.PATH;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-chromedriver-resolver-'));
-  const fakeDriverPath = path.join(tempDir, 'chromedriver');
-  fs.writeFileSync(fakeDriverPath, '#!/bin/sh\necho fake-driver\n', { mode: 0o644 });
-
-  let bundled;
-  try {
-    bundled = require('chromedriver');
-  } catch (error) {
-    bundled = null;
-  }
-
-  if (!bundled || !bundled.path) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    restoreEnv(previous);
-    return test.skip('chromedriver package path unavailable in this environment');
-  }
+  const configuredDriverPath = path.join(tempDir, 'configured-chromedriver');
+  const pathDriverPath = path.join(tempDir, 'chromedriver');
+  fs.writeFileSync(configuredDriverPath, '#!/bin/sh\necho configured-driver\n', { mode: 0o644 });
+  fs.writeFileSync(pathDriverPath, '#!/bin/sh\necho path-driver\n', { mode: 0o755 });
 
   try {
-    process.env.CHROMEDRIVER_PATH = fakeDriverPath;
+    process.env.CHROMEDRIVER_PATH = configuredDriverPath;
+    process.env.PATH = `${tempDir}${path.delimiter}${previousPath || ''}`;
     delete require.cache[resolverPath];
     const { resolveChromedriverPath } = require(resolverPath);
     const resolved = resolveChromedriverPath();
-    assert.equal(resolved, path.resolve(bundled.path));
+    assert.equal(resolved, path.resolve(pathDriverPath));
   } finally {
     restoreEnv(previous);
+    if (typeof previousPath === 'string') {
+      process.env.PATH = previousPath;
+    } else {
+      delete process.env.PATH;
+    }
     delete require.cache[resolverPath];
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

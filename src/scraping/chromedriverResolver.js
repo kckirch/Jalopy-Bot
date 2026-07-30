@@ -30,17 +30,6 @@ function getCandidatePaths() {
     candidates.push(process.env.CHROMEDRIVER_PATH);
   }
 
-  try {
-    // Prefer the project-local chromedriver dependency when available.
-    // This avoids relying on machine-global installation paths.
-    const bundledChromedriver = require('chromedriver');
-    if (bundledChromedriver && bundledChromedriver.path) {
-      candidates.push(bundledChromedriver.path);
-    }
-  } catch (error) {
-    // Dependency is optional at runtime for some environments.
-  }
-
   const fromPath = commandExists('chromedriver');
   if (fromPath) {
     candidates.push(fromPath);

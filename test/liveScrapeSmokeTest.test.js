@@ -354,30 +354,3 @@ test('smoke test helpers provide deterministic behavior', () => {
   assert.notEqual(__testables.selectSentinelYard(1020), 1020);
   assert.match(__testables.getUsageText(), /Usage:/);
 });
-
-test('ensureSmokeChromedriverPath sets bundled path only when CHROMEDRIVER_PATH is unset', () => {
-  const previous = process.env.CHROMEDRIVER_PATH;
-  const logger = { log() {}, error() {} };
-
-  try {
-    process.env.CHROMEDRIVER_PATH = '/tmp/already-configured-driver';
-    const unchanged = __testables.ensureSmokeChromedriverPath(logger);
-    assert.equal(unchanged, null);
-    assert.equal(process.env.CHROMEDRIVER_PATH, '/tmp/already-configured-driver');
-
-    delete process.env.CHROMEDRIVER_PATH;
-    const bundled = __testables.ensureSmokeChromedriverPath(logger);
-
-    if (bundled !== null) {
-      assert.equal(process.env.CHROMEDRIVER_PATH, bundled);
-    } else {
-      assert.equal(process.env.CHROMEDRIVER_PATH, undefined);
-    }
-  } finally {
-    if (typeof previous === 'string') {
-      process.env.CHROMEDRIVER_PATH = previous;
-    } else {
-      delete process.env.CHROMEDRIVER_PATH;
-    }
-  }
-});
