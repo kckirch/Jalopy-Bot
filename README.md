@@ -223,7 +223,10 @@ Optional hardening:
 
 - `GET /health`
 - `GET /api/vehicles`
-- `GET /api/vehicle-db` (raw SQLite snapshot with ETag/Last-Modified caching)
+- `GET /api/vehicle-db` (vehicles-only SQLite snapshot with ETag/Last-Modified caching)
+
+The downloadable snapshot deliberately contains only the `vehicles` table. Discord identities,
+saved searches, and other private runtime state are never copied into the public file.
 
 Supported query params:
 - `yard` (single or comma-separated)

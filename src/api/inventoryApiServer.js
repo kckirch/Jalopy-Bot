@@ -1,5 +1,6 @@
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
@@ -7,6 +8,7 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const { VEHICLE_DB_PATH } = require('../database/dbPath');
+const { createPublicInventorySnapshotProvider } = require('./publicInventorySnapshot');
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_HOST = '0.0.0.0';
@@ -186,13 +188,16 @@ function isNotModified(request, etag, lastModifiedMillis) {
   return false;
 }
 
-function sendVehicleDbFile(request, response, corsHeaders, dbCacheSeconds) {
-  fs.stat(VEHICLE_DB_PATH, (statError, stat) => {
-    if (statError) {
-      console.error('[inventory-api] failed to stat vehicle DB:', statError);
-      writeJson(response, 500, { error: 'Database file not available' }, corsHeaders);
-      return;
-    }
+async function sendVehicleDbFile(
+  request,
+  response,
+  corsHeaders,
+  dbCacheSeconds,
+  snapshotProvider
+) {
+  try {
+    const snapshot = await snapshotProvider.getSnapshot();
+    const stat = await fs.promises.stat(snapshot.path);
 
     const etag = buildDbEtag(stat);
     const lastModified = new Date(stat.mtimeMs).toUTCString();
@@ -213,6 +218,7 @@ function sendVehicleDbFile(request, response, corsHeaders, dbCacheSeconds) {
       ...sharedHeaders,
       'Content-Type': 'application/vnd.sqlite3',
       'Content-Length': stat.size,
+      'X-Inventory-Snapshot': 'public-vehicles-only',
     });
 
     if (request.method === 'HEAD') {
@@ -220,9 +226,9 @@ function sendVehicleDbFile(request, response, corsHeaders, dbCacheSeconds) {
       return;
     }
 
-    const stream = fs.createReadStream(VEHICLE_DB_PATH);
+    const stream = fs.createReadStream(snapshot.path);
     stream.on('error', (streamError) => {
-      console.error('[inventory-api] failed to stream vehicle DB:', streamError);
+      console.error('[inventory-api] failed to stream public vehicle snapshot:', streamError);
       if (!response.headersSent) {
         writeJson(response, 500, { error: 'Failed to stream database file' }, corsHeaders);
       } else {
@@ -230,7 +236,14 @@ function sendVehicleDbFile(request, response, corsHeaders, dbCacheSeconds) {
       }
     });
     stream.pipe(response);
-  });
+  } catch (error) {
+    console.error('[inventory-api] failed to build public vehicle snapshot:', error);
+    if (!response.headersSent) {
+      writeJson(response, 500, { error: 'Database snapshot not available' }, corsHeaders);
+    } else {
+      response.destroy(error);
+    }
+  }
 }
 
 function startInventoryApiServer(options = {}) {
@@ -242,14 +255,27 @@ function startInventoryApiServer(options = {}) {
     options.dbCacheSeconds || process.env.INVENTORY_DB_CACHE_SECONDS,
     DEFAULT_DB_CACHE_SECONDS
   );
+  const vehicleDbPath = options.dbPath || VEHICLE_DB_PATH;
+  const ownsSnapshotDirectory = !options.publicSnapshotDirectory;
+  const publicSnapshotDirectory =
+    options.publicSnapshotDirectory ||
+    fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-public-inventory-'));
+  const publicSnapshotPath = path.join(publicSnapshotDirectory, 'vehicleInventory.db');
 
-  const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READONLY, (error) => {
+  const db = new sqlite3.Database(vehicleDbPath, sqlite3.OPEN_READONLY, (error) => {
     if (error) {
-      console.error(`[inventory-api] failed to open database at ${VEHICLE_DB_PATH}:`, error);
+      console.error(`[inventory-api] failed to open database at ${vehicleDbPath}:`, error);
     } else {
-      console.log(`[inventory-api] using database at ${VEHICLE_DB_PATH}`);
+      console.log(`[inventory-api] using database at ${vehicleDbPath}`);
     }
   });
+  const snapshotProvider =
+    options.snapshotProvider ||
+    createPublicInventorySnapshotProvider({
+      sourceDatabase: db,
+      sourcePath: vehicleDbPath,
+      snapshotPath: publicSnapshotPath,
+    });
 
   const server = http.createServer((request, response) => {
     const origin = request.headers.origin || '';
@@ -273,7 +299,13 @@ function startInventoryApiServer(options = {}) {
         writeJson(response, 401, { error: 'Unauthorized' }, corsHeaders);
         return;
       }
-      sendVehicleDbFile(request, response, corsHeaders, dbCacheSeconds);
+      sendVehicleDbFile(
+        request,
+        response,
+        corsHeaders,
+        dbCacheSeconds,
+        snapshotProvider
+      );
       return;
     }
 
@@ -317,6 +349,9 @@ function startInventoryApiServer(options = {}) {
   const shutdown = () => {
     server.close(() => {
       db.close(() => {
+        if (ownsSnapshotDirectory) {
+          fs.rmSync(publicSnapshotDirectory, { recursive: true, force: true });
+        }
         process.exit(0);
       });
     });
