@@ -297,7 +297,7 @@ test('snapshot provider refreshes the public database after committed source cha
       ]
     );
 
-    const secondSnapshot = await provider.getSnapshot();
+    const secondSnapshot = await provider.refreshSnapshot();
     assert.equal(secondSnapshot.vehicleCount, 2);
     assert.notEqual(secondSnapshot.dataVersion, firstSnapshot.dataVersion);
 
@@ -305,6 +305,130 @@ test('snapshot provider refreshes the public database after committed source cha
     const count = await get(snapshotDatabase, 'SELECT COUNT(*) AS count FROM vehicles;');
     await closeDatabase(snapshotDatabase);
     assert.equal(count.count, 2);
+  } finally {
+    await closeDatabase(readerDatabase);
+    await closeDatabase(writerDatabase);
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('snapshot provider serves the last good snapshot while refreshing in the background', async () => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-public-stale-provider-'));
+  const sourcePath = path.join(tempDirectory, 'private-runtime.db');
+  const snapshotPath = path.join(tempDirectory, 'public', 'inventory.db');
+  const writerDatabase = await createPrivateRuntimeDatabase(sourcePath);
+  const readerDatabase = await openDatabase(sourcePath, sqlite3.OPEN_READONLY);
+  let signalSecondBuildStarted = () => {};
+  const secondBuildStarted = new Promise((resolve) => {
+    signalSecondBuildStarted = resolve;
+  });
+  let buildCount = 0;
+  let continueSecondBuild;
+  const secondBuildCanContinue = new Promise((resolve) => {
+    continueSecondBuild = resolve;
+  });
+  const provider = createPublicInventorySnapshotProvider({
+    sourceDatabase: readerDatabase,
+    sourcePath,
+    snapshotPath,
+    buildSnapshot: async (...args) => {
+      buildCount += 1;
+      if (buildCount === 2) {
+        signalSecondBuildStarted();
+        await secondBuildCanContinue;
+      }
+      return buildPublicInventorySnapshot(...args);
+    },
+  });
+
+  try {
+    const firstSnapshot = await provider.getSnapshot();
+    assert.equal(firstSnapshot.vehicleCount, 1);
+
+    await run(
+      writerDatabase,
+      `INSERT INTO vehicles (
+        yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+        first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        1021,
+        'CALDWELL',
+        'HONDA',
+        'CIVIC',
+        2005,
+        8,
+        '2026-07-31',
+        '2026-07-31',
+        'NEW',
+        '2026-07-31',
+        '2026-07-31',
+        '',
+        '20260731',
+      ]
+    );
+
+    const staleSnapshot = await provider.getSnapshot();
+    assert.equal(staleSnapshot.vehicleCount, 1);
+    await secondBuildStarted;
+
+    const staleDatabase = await openDatabase(snapshotPath, sqlite3.OPEN_READONLY);
+    const staleCount = await get(staleDatabase, 'SELECT COUNT(*) AS count FROM vehicles;');
+    await closeDatabase(staleDatabase);
+    assert.equal(staleCount.count, 1);
+
+    continueSecondBuild();
+    const refreshedSnapshot = await provider.refreshSnapshot();
+    assert.equal(refreshedSnapshot.vehicleCount, 2);
+    assert.equal(buildCount, 2);
+  } finally {
+    continueSecondBuild();
+    await closeDatabase(readerDatabase);
+    await closeDatabase(writerDatabase);
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('snapshot provider reports a failed background refresh and keeps serving good data', async () => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-public-refresh-error-'));
+  const sourcePath = path.join(tempDirectory, 'private-runtime.db');
+  const snapshotPath = path.join(tempDirectory, 'public', 'inventory.db');
+  const writerDatabase = await createPrivateRuntimeDatabase(sourcePath);
+  const readerDatabase = await openDatabase(sourcePath, sqlite3.OPEN_READONLY);
+  let buildCount = 0;
+  let reportRefreshError;
+  const refreshErrorReported = new Promise((resolve) => {
+    reportRefreshError = resolve;
+  });
+  const provider = createPublicInventorySnapshotProvider({
+    sourceDatabase: readerDatabase,
+    sourcePath,
+    snapshotPath,
+    buildSnapshot: async (...args) => {
+      buildCount += 1;
+      if (buildCount === 2) {
+        throw new Error('simulated background refresh failure');
+      }
+      return buildPublicInventorySnapshot(...args);
+    },
+    onRefreshError: reportRefreshError,
+  });
+
+  try {
+    const firstSnapshot = await provider.getSnapshot();
+    assert.equal(firstSnapshot.vehicleCount, 1);
+
+    await run(writerDatabase, "UPDATE vehicles SET vehicle_status = 'INACTIVE' WHERE id = 1;");
+
+    const staleSnapshot = await provider.getSnapshot();
+    assert.equal(staleSnapshot.vehicleCount, 1);
+    const refreshError = await refreshErrorReported;
+    assert.match(refreshError.message, /simulated background refresh failure/);
+    assert.equal(fs.existsSync(staleSnapshot.path), true);
+
+    const recoveredSnapshot = await provider.refreshSnapshot();
+    assert.equal(recoveredSnapshot.vehicleCount, 1);
+    assert.equal(buildCount, 3);
   } finally {
     await closeDatabase(readerDatabase);
     await closeDatabase(writerDatabase);

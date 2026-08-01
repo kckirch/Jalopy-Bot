@@ -198,6 +198,8 @@ function createPublicInventorySnapshotProvider({
   sourceDatabase,
   sourcePath,
   snapshotPath,
+  buildSnapshot = buildPublicInventorySnapshot,
+  onRefreshError,
 }) {
   let currentSnapshot = null;
   let buildPromise = null;
@@ -211,42 +213,83 @@ function createPublicInventorySnapshotProvider({
     return dataVersion;
   }
 
-  async function getSnapshot() {
+  function startBuild(dataVersion) {
+    if (buildPromise) {
+      return buildPromise;
+    }
+
+    const pendingBuild = Promise.resolve()
+      .then(() => buildSnapshot(sourcePath, snapshotPath))
+      .then((snapshot) => {
+        currentSnapshot = {
+          ...snapshot,
+          dataVersion,
+        };
+        return currentSnapshot;
+      });
+    buildPromise = pendingBuild;
+
+    pendingBuild.then(
+      () => {
+        if (buildPromise === pendingBuild) {
+          buildPromise = null;
+        }
+      },
+      () => {
+        if (buildPromise === pendingBuild) {
+          buildPromise = null;
+        }
+      }
+    );
+
+    return pendingBuild;
+  }
+
+  function hasCurrentSnapshot() {
+    return currentSnapshot && fs.existsSync(currentSnapshot.path);
+  }
+
+  async function refreshSnapshot() {
     const dataVersion = await getDataVersion();
 
-    if (
-      currentSnapshot &&
-      currentSnapshot.dataVersion === dataVersion &&
-      fs.existsSync(currentSnapshot.path)
-    ) {
+    if (hasCurrentSnapshot() && currentSnapshot.dataVersion === dataVersion) {
       return currentSnapshot;
     }
 
     if (buildPromise) {
       await buildPromise;
-      return getSnapshot();
+      return refreshSnapshot();
     }
 
-    const pendingBuild = buildPublicInventorySnapshot(sourcePath, snapshotPath).then((snapshot) => {
-      currentSnapshot = {
-        ...snapshot,
-        dataVersion,
-      };
+    return startBuild(dataVersion);
+  }
+
+  async function getSnapshot() {
+    const dataVersion = await getDataVersion();
+
+    if (hasCurrentSnapshot() && currentSnapshot.dataVersion === dataVersion) {
       return currentSnapshot;
-    });
-    buildPromise = pendingBuild;
-
-    try {
-      return await pendingBuild;
-    } finally {
-      if (buildPromise === pendingBuild) {
-        buildPromise = null;
-      }
     }
+
+    if (hasCurrentSnapshot()) {
+      startBuild(dataVersion).catch((error) => {
+        if (typeof onRefreshError === 'function') {
+          try {
+            onRefreshError(error);
+          } catch {
+            // Refresh reporting must not turn a recoverable stale response into an unhandled rejection.
+          }
+        }
+      });
+      return currentSnapshot;
+    }
+
+    return refreshSnapshot();
   }
 
   return {
     getSnapshot,
+    refreshSnapshot,
   };
 }
 
