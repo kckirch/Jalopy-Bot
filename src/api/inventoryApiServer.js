@@ -195,9 +195,12 @@ async function sendVehicleDbFile(
   dbCacheSeconds,
   snapshotProvider
 ) {
+  let fileHandle;
+
   try {
     const snapshot = await snapshotProvider.getSnapshot();
-    const stat = await fs.promises.stat(snapshot.path);
+    fileHandle = await fs.promises.open(snapshot.path, 'r');
+    const stat = await fileHandle.stat();
 
     const etag = buildDbEtag(stat);
     const lastModified = new Date(stat.mtimeMs).toUTCString();
@@ -209,6 +212,8 @@ async function sendVehicleDbFile(
     };
 
     if (isNotModified(request, etag, stat.mtimeMs)) {
+      await fileHandle.close();
+      fileHandle = null;
       response.writeHead(304, sharedHeaders);
       response.end();
       return;
@@ -222,11 +227,14 @@ async function sendVehicleDbFile(
     });
 
     if (request.method === 'HEAD') {
+      await fileHandle.close();
+      fileHandle = null;
       response.end();
       return;
     }
 
-    const stream = fs.createReadStream(snapshot.path);
+    const stream = fileHandle.createReadStream();
+    fileHandle = null;
     stream.on('error', (streamError) => {
       console.error('[inventory-api] failed to stream public vehicle snapshot:', streamError);
       if (!response.headersSent) {
@@ -237,6 +245,9 @@ async function sendVehicleDbFile(
     });
     stream.pipe(response);
   } catch (error) {
+    if (fileHandle) {
+      await fileHandle.close().catch(() => {});
+    }
     console.error('[inventory-api] failed to build public vehicle snapshot:', error);
     if (!response.headersSent) {
       writeJson(response, 500, { error: 'Database snapshot not available' }, corsHeaders);
@@ -275,6 +286,9 @@ function startInventoryApiServer(options = {}) {
       sourceDatabase: db,
       sourcePath: vehicleDbPath,
       snapshotPath: publicSnapshotPath,
+      onRefreshError: (error) => {
+        console.error('[inventory-api] failed to refresh public vehicle snapshot:', error);
+      },
     });
 
   const server = http.createServer((request, response) => {
@@ -344,6 +358,22 @@ function startInventoryApiServer(options = {}) {
 
   server.listen(port, host, () => {
     console.log(`[inventory-api] listening on http://${host}:${port}`);
+
+    Promise.resolve()
+      .then(() => {
+        if (typeof snapshotProvider.refreshSnapshot === 'function') {
+          return snapshotProvider.refreshSnapshot();
+        }
+        return snapshotProvider.getSnapshot();
+      })
+      .then((snapshot) => {
+        console.log(
+          `[inventory-api] public snapshot ready with ${snapshot.vehicleCount} vehicles`
+        );
+      })
+      .catch((error) => {
+        console.error('[inventory-api] failed to prewarm public vehicle snapshot:', error);
+      });
   });
 
   const shutdown = () => {
