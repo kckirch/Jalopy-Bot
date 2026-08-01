@@ -82,6 +82,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Reject tracked runtime data
+        shell: bash
+        run: |
+          tracked_runtime_files="$({
+            git ls-files |
+              grep -E '(^|/)(\.env(\..+)?|[^/]+\.(db|sqlite|sqlite3)(-(journal|shm|wal))?|[^/]+\.log)$' |
+              grep -v -E '(^|/)\.env\.example$'
+          } || true)"
+
+          if [ -n "$tracked_runtime_files" ]; then
+            echo "Runtime data must not be committed:"
+            printf '%s\n' "$tracked_runtime_files"
+            exit 1
+          fi
+
       - name: Scan for committed secrets
         uses: gitleaks/gitleaks-action@v3
         env:
