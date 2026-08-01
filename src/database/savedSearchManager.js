@@ -75,29 +75,6 @@ function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
 
 
 
-function updateSavedSearch(id, updates) {
-    return new Promise((resolve, reject) => {
-        const updateKeys = Object.keys(updates || {});
-        if (updateKeys.length === 0) {
-            resolve();
-            return;
-        }
-
-        // Assume updates is an object containing key-value pairs of columns to update
-        const setPart = updateKeys.map(key => `${key} = ?`).join(', ');
-        const sql = `UPDATE saved_searches SET ${setPart} WHERE id = ?;`;
-        db.run(sql, [...Object.values(updates), id], function(err) {
-            if (err) {
-                console.error('Error updating saved search:', err);
-                reject(err);
-            } else {
-                console.log('Saved search updated successfully');
-                resolve();
-            }
-        });
-    });
-}
-
 function setSavedSearchFrequency(searchId, frequency) {
     return new Promise((resolve, reject) => {
         const sql = `
@@ -177,7 +154,6 @@ module.exports = {
     getAllSavedSearches,
     addSavedSearch,
     checkExistingSearch,
-    updateSavedSearch,
     setSavedSearchFrequency,
     deleteSavedSearch
 };
