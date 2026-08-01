@@ -2,33 +2,6 @@
 
 const { db } = require('./database');
 
-function setupSavedSearchesTable() {
-    const sql = `
-        CREATE TABLE IF NOT EXISTS saved_searches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            username TEXT,
-            yard_id TEXT,
-            yard_name TEXT,
-            make TEXT,
-            model TEXT,
-            year_range TEXT,
-            status TEXT,
-            frequency TEXT DEFAULT 'daily',
-            last_notified DATETIME,
-            create_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-            update_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-            alert_on_new BOOLEAN DEFAULT 0,
-            priority INTEGER DEFAULT 0,
-            notes TEXT
-        );
-    `;
-    db.run(sql, function(err) {
-        if (err) console.error('Error creating saved_searches table:', err);
-        else console.log('Saved searches table created successfully');
-    });
-}
-
 function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRange, status, notes) {
     const sql = `
         INSERT INTO saved_searches (user_id, username, yard_id, yard_name, make, model, year_range, status, notes)
@@ -149,7 +122,6 @@ function getSavedSearches(userId, yardId = null) {
 
 
 module.exports = {
-    setupSavedSearchesTable,
     getSavedSearches,
     getAllSavedSearches,
     addSavedSearch,
