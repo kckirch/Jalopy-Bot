@@ -165,7 +165,7 @@ function buildVehicleQuery(searchParams) {
 }
 
 function buildDbEtag(stat) {
-  return `W/\"${stat.size}-${Math.floor(stat.mtimeMs)}\"`;
+  return `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
 }
 
 function isNotModified(request, etag, lastModifiedMillis) {

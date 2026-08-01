@@ -82,7 +82,7 @@ function markInactiveVehicles(sessionID, options = {}) {
 
 
 
-function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status = '', notes, sessionID) {
+function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, _status = '', notes, sessionID) {
     logFullScrapeDetails(`Processing vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID}`);
     logFullScrapeDetails(`Yard ID type: ${typeof yardId}, Yard ID value: ${yardId}`);
       

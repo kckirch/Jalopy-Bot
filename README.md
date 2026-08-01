@@ -159,9 +159,15 @@ npm test
 
 Each test run uses a temporary SQLite database and removes it afterward, so tests never open the configured production database.
 
-On Node.js 22.8 or newer, enforce the current regression floor of 80% line, 65% branch, and 85% function coverage:
+On Node.js 22.8 or newer, enforce the current regression floor of 82% line, 68% branch, and 90% function coverage:
 ```bash
 npm run test:coverage
+```
+
+Lint all source, test, script, and configuration JavaScript:
+
+```bash
+npm run lint
 ```
 
 Run fixture-based parser replay tests (no live network calls):
@@ -174,7 +180,9 @@ Run the live scrape smoke test against an isolated temporary DB:
 npm run smoke:live -- --engine http
 ```
 
-Pull requests run the full suite on Node.js 20 and the current Node.js 24 LTS line. Keep branches short-lived and merge them only after CI passes.
+Pull requests run the full suite on Node.js 20, 22, and 24, plus coverage,
+lint, production dependency audit, and full-history secret scan gates. Keep
+branches short-lived and merge them only after CI passes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete development and pull
 request workflow. Report vulnerabilities or exposed private data through the
