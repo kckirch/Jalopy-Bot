@@ -18,15 +18,6 @@ function run(db, sql, params = []) {
   });
 }
 
-function get(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
-}
-
 function close(db) {
   return new Promise((resolve, reject) => {
     db.close((err) => {
@@ -34,15 +25,6 @@ function close(db) {
       resolve();
     });
   });
-}
-
-async function waitFor(check, timeoutMs = 2000, intervalMs = 20) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    if (await check()) return;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  throw new Error('Timed out waiting for condition.');
 }
 
 let tempDir;
@@ -62,18 +44,10 @@ test.before(async () => {
   delete require.cache[savedSearchManagerPath];
   delete require.cache[databasePath];
 
+  const databaseModule = require(databasePath);
+  ({ db } = databaseModule);
   savedSearchManager = require(savedSearchManagerPath);
-  ({ db } = require(databasePath));
-
-  savedSearchManager.setupSavedSearchesTable();
-
-  await waitFor(async () => {
-    const row = await get(
-      db,
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='saved_searches';"
-    );
-    return Boolean(row);
-  });
+  await databaseModule.setupDatabase();
 });
 
 test.beforeEach(async () => {
