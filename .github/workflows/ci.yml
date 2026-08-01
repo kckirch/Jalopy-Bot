@@ -44,7 +44,8 @@ jobs:
         run: npm test
 
   quality:
-    name: Coverage, lint, and production audit
+    # Keep this stable because branch protection requires this exact check name.
+    name: Coverage thresholds
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
