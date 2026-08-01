@@ -1,4 +1,4 @@
-const { Client, IntentsBitField } = require('discord.js');
+const { Client, Events, IntentsBitField } = require('discord.js');
 
 const client = new Client({
     intents: [
@@ -9,23 +9,19 @@ const client = new Client({
     ]
 });
 
-client.on('error', (error) => {
+client.on(Events.Error, (error) => {
     console.error('WebSocket encountered an error:', error);
 });
 
-client.on('shardError', (error) => {
+client.on(Events.ShardError, (error) => {
     console.error('A websocket connection encountered an error:', error);
 });
 
-client.on('disconnect', (event) => {
-    console.warn(`Disconnected from Discord with code ${event.code}.`);
+client.on(Events.ShardReconnecting, (id) => {
+    console.log(`Shard ${id} is attempting to reconnect.`);
 });
 
-client.on('reconnecting', () => {
-    console.log('Attempting to reconnect to Discord...');
-});
-
-client.on('shardDisconnect', (event, id) => {
+client.on(Events.ShardDisconnect, (event, id) => {
     console.warn(`Shard ${id} disconnected with code ${event.code}.`);
 });
 
