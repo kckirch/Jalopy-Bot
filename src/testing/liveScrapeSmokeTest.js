@@ -172,9 +172,7 @@ async function runLiveScrapeSmokeTest({
 
   const { setupDatabase, db } = databaseModule;
 
-  let closeError = null;
-
-  try {
+  async function executeSmokeChecks() {
     fs.mkdirSync(path.dirname(dbFilePath), { recursive: true });
 
     await setupDatabase();
@@ -311,6 +309,16 @@ async function runLiveScrapeSmokeTest({
 
     logger.log('[smoke] PASS: live scrape smoke checks succeeded.');
     return { ok: true, dbFilePath };
+  }
+
+  let smokeResult;
+  let smokeError = null;
+  let closeError = null;
+
+  try {
+    smokeResult = await executeSmokeChecks();
+  } catch (err) {
+    smokeError = err;
   } finally {
     try {
       await closeDb(db);
@@ -342,11 +350,11 @@ async function runLiveScrapeSmokeTest({
     } else {
       delete process.env.CHROMEDRIVER_PATH;
     }
-
-    if (closeError) {
-      throw closeError;
-    }
   }
+
+  if (smokeError) throw smokeError;
+  if (closeError) throw closeError;
+  return smokeResult;
 }
 
 if (require.main === module) {

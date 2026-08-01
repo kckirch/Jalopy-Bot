@@ -348,6 +348,88 @@ test('live smoke runner restores env vars after an error', async () => {
   }
 });
 
+test('live smoke runner reports a database close failure after successful checks', async () => {
+  const closeError = new Error('forced-close-failure');
+  const loggedErrors = [];
+  const fakeDb = {
+    get(sql, params, callback) {
+      callback(null, { count: 1 });
+    },
+    close(callback) {
+      callback(closeError);
+    },
+  };
+
+  await assert.rejects(
+    runLiveScrapeSmokeTest({
+      argv: ['--locations', 'boise', '--db-path', '/tmp/jalopy-smoke-close-fail-unit.db', '--keep-db'],
+      logger: {
+        log() {},
+        error(...args) {
+          loggedErrors.push(args);
+        },
+      },
+      deps: {
+        junkyards: {
+          jalopyJungle: { inventoryUrl: 'https://example', hasMultipleLocations: true },
+        },
+        convertLocationToYardId: () => 1020,
+        getSessionID: () => '20260101',
+        databaseModule: {
+          async setupDatabase() {},
+          db: fakeDb,
+        },
+        async universalWebScrape() {},
+      },
+    }),
+    (error) => error === closeError
+  );
+
+  assert.equal(loggedErrors.length, 1);
+  assert.equal(loggedErrors[0][1], closeError);
+});
+
+test('live smoke runner preserves its primary error when database close also fails', async () => {
+  const smokeError = new Error('forced-smoke-failure');
+  const closeError = new Error('forced-close-failure');
+  const loggedErrors = [];
+  const fakeDb = {
+    close(callback) {
+      callback(closeError);
+    },
+  };
+
+  await assert.rejects(
+    runLiveScrapeSmokeTest({
+      argv: ['--location', 'boise', '--db-path', '/tmp/jalopy-smoke-double-fail-unit.db', '--keep-db'],
+      logger: {
+        log() {},
+        error(...args) {
+          loggedErrors.push(args);
+        },
+      },
+      deps: {
+        junkyards: {
+          jalopyJungle: { inventoryUrl: 'https://example', hasMultipleLocations: true },
+        },
+        convertLocationToYardId: () => 1020,
+        getSessionID: () => '20260101',
+        databaseModule: {
+          async setupDatabase() {
+            throw smokeError;
+          },
+          db: fakeDb,
+        },
+        async universalWebScrape() {},
+      },
+    }),
+    (error) => error === smokeError
+  );
+
+  assert.equal(loggedErrors.length, 1);
+  assert.equal(loggedErrors[0][1], closeError);
+});
+
 test('smoke test helpers provide deterministic behavior', () => {
   assert.equal(__testables.normalizeSessionId('20260101'), '20260102');
   assert.equal(__testables.normalizeSessionId('abc'), 'abc1');

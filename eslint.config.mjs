@@ -26,11 +26,4 @@ export default [
       ],
     },
   },
-  {
-    files: ["src/testing/liveScrapeSmokeTest.js"],
-    rules: {
-      // Preserve the existing cleanup flow until its error precedence is tested separately.
-      "no-unsafe-finally": "off",
-    },
-  },
 ];
