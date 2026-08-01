@@ -3,7 +3,7 @@
  * 
  * Handles database operations related to vehicle inventory for a junkyard system, including initialization, insertion, and updating of vehicle records.
  * Functions included:
- * - `insertOrUpdateVehicle(yardId, make, model, year, rowNumber, status, notes)`: Inserts a new vehicle record or updates an existing one based on provided parameters.
+ * - `insertOrUpdateVehicle(yardId, make, model, year, rowNumber, notes, sessionID)`: Inserts a new vehicle record or updates an existing one based on provided parameters.
  * - `getYardNameById(yardId)`: Utility function to convert yard ID to a human-readable yard name.
  * 
  * This module establishes a connection to the `vehicleInventory.db` SQLite database and handles potential connection errors or SQL errors during table creation and data manipulation.
@@ -82,7 +82,7 @@ function markInactiveVehicles(sessionID, options = {}) {
 
 
 
-function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, _status = '', notes, sessionID) {
+function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, notes, sessionID) {
     logFullScrapeDetails(`Processing vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID}`);
     logFullScrapeDetails(`Yard ID type: ${typeof yardId}, Yard ID value: ${yardId}`);
       

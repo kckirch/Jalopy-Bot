@@ -346,7 +346,6 @@ async function scrapeMakeModelHttp(clientState, context, yardId, make, model, se
       vehicle.year,
       vehicle.rowNumber,
       '',
-      '',
       sessionID
     );
   }
