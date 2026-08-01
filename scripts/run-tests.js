@@ -4,9 +4,9 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const COVERAGE_MINIMUMS = {
-  lines: 80,
-  branches: 65,
-  functions: 85,
+  lines: 82,
+  branches: 68,
+  functions: 90,
 };
 
 function supportsCoverageThresholds(version = process.versions.node) {

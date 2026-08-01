@@ -9,6 +9,7 @@
     "register:commands": "node src/bot/register-commands.js",
     "start:prod": "npm run register:commands && npm start",
     "start:inventory-api": "node src/api/inventoryApiServer.js",
+    "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node scripts/run-tests.js --coverage",
     "smoke:live": "node src/testing/liveScrapeSmokeTest.js",
@@ -42,5 +43,10 @@
     "node-cron": "^4.6.0",
     "selenium-webdriver": "^4.16.0",
     "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "globals": "17.8.0"
   }
 }

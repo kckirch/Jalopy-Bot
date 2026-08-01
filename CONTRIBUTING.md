@@ -45,11 +45,12 @@ pull request.
 ```bash
 npm test
 npm run test:coverage
+npm run lint
 npm audit
 ```
 
-Coverage currently must remain at or above 80% for lines, 65% for branches,
-and 85% for functions. Live scrape checks are opt-in and should use an
+Coverage currently must remain at or above 82% for lines, 68% for branches,
+and 90% for functions. Live scrape checks are opt-in and should use an
 isolated database:
 
 ```bash

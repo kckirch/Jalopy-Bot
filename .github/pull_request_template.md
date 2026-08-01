@@ -10,5 +10,6 @@
 
 - [ ] `npm test`
 - [ ] `npm run test:coverage` on Node.js 22.8 or newer
+- [ ] `npm run lint`
 - [ ] No credentials, runtime databases, or generated files were added
 - [ ] User-facing behavior and deployment notes were updated when applicable
