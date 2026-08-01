@@ -29,7 +29,6 @@ async function scrapeMakeModel(driver, yardId, make, model, sessionID, upsertVeh
         parseInt(await cols[0].getText(), 10),
         parseInt(await cols[3].getText(), 10),
         '',
-        '',
         sessionID
       );
       processedRows += 1;

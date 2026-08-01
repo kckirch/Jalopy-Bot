@@ -89,11 +89,11 @@ test.after(async () => {
 });
 
 test('insertOrUpdateVehicle inserts new vehicle as NEW with mapped yard name', async () => {
-  await insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '', '20260101');
+  await insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, 'test note', '20260101');
 
   const row = await get(
     db,
-    `SELECT yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number, vehicle_status, session_id
+    `SELECT yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number, vehicle_status, notes, session_id
      FROM vehicles
      WHERE yard_id = 1020 AND vehicle_make = 'TOYOTA' AND vehicle_model = 'CAMRY';`
   );
@@ -103,12 +103,13 @@ test('insertOrUpdateVehicle inserts new vehicle as NEW with mapped yard name', a
   assert.equal(row.vehicle_year, 2005);
   assert.equal(row.row_number, 11);
   assert.equal(row.vehicle_status, 'NEW');
+  assert.equal(row.notes, 'test note');
   assert.equal(row.session_id, '20260101');
 });
 
 test('insertOrUpdateVehicle updates existing vehicle and moves status to ACTIVE for later session', async () => {
-  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '', '20260101');
-  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '', '20260102');
+  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '20260101');
+  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '20260102');
 
   const updated = await get(
     db,

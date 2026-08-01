@@ -124,6 +124,7 @@ async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, mark
 
 test('universalWebScrape awaits all upserts before markInactiveVehicles', async () => {
   const eventLog = [];
+  const upserts = [];
   let insertCount = 0;
 
   await withUniversalWebScrapeMocks(
@@ -132,7 +133,8 @@ test('universalWebScrape awaits all upserts before markInactiveVehicles', async 
         [2005, 'TOYOTA', 'CAMRY', 7],
         [2006, 'TOYOTA', 'COROLLA', 8],
       ]),
-      insertOrUpdateVehicle: async () => {
+      insertOrUpdateVehicle: async (...args) => {
+        upserts.push(args);
         insertCount += 1;
         const index = insertCount;
         eventLog.push(`insert-start-${index}`);
@@ -157,6 +159,7 @@ test('universalWebScrape awaits all upserts before markInactiveVehicles', async 
   );
 
   assert.equal(insertCount, 2);
+  assert.ok(upserts.every((args) => args.length === 7 && args[5] === '' && args[6] === '20260101'));
   assert.deepEqual(eventLog, [
     'insert-start-1',
     'insert-end-1',

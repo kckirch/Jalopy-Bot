@@ -157,6 +157,7 @@ test('http scraper follows dynamic makes/models flow for ANY/ANY and reconciles 
   );
 
   assert.equal(upserts.length, 3);
+  assert.ok(upserts.every((args) => args.length === 7 && args[5] === '' && args[6] === '20260224'));
   assert.deepEqual(
     upserts.map((args) => ({ make: args[1], model: args[2], year: args[3], row: args[4] })),
     [
