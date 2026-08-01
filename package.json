@@ -25,10 +25,13 @@
   "homepage": "https://jalopybot.com",
   "keywords": [
     "discord-bot",
+    "idaho",
     "inventory",
     "nodejs",
+    "salvage-yard",
     "sqlite",
-    "web-scraping"
+    "web-scraping",
+    "rest-api"
   ],
   "author": "KC Kircher",
   "license": "ISC",

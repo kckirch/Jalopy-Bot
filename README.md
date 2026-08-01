@@ -3,19 +3,39 @@
 [![CI](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/kckirch/Jalopy-Bot/actions/workflows/ci.yml)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
-JalopyBot is a Discord bot that provides timely notifications for your favorite vehicles at Jalopy Jungle Junkyard in Boise, Idaho. This bot empowers users with custom notifications, advanced search capabilities, and a streamlined user experience to help you stay updated with the latest additions to the junkyard.
-To use the bot without running it yourself, visit [JalopyBot.com](https://jalopybot.com).
+JalopyBot is an open-source Discord bot and read-only inventory API for Idaho
+salvage yards. It tracks when vehicles first appear, supports saved-search
+alerts, and powers [JalopyBot.com](https://jalopybot.com) without publishing
+Discord identities or saved searches.
+
+The current yard set includes Jalopy Jungle locations in Boise, Caldwell,
+Nampa, Garden City, and Twin Falls, plus Trusty Pick A Part.
 
 ## Features
 
-- **Real-time Daily Notifications**: Get instant alerts when new vehicles are added to the inventory.
-- **Search Across Multiple Yards**: Comprehensive search results across all Jalopy Jungle yards at once.
-- **Custom Model Year Ranges**: Filter vehicles by specific model year ranges to find exactly what you need.
-- **Alias Naming Conventions**: Simplify your search with alias naming conventions.
+- **Daily Saved-Search Alerts**: Receive scheduled Discord notifications for matching inventory.
+- **Six-Yard Search**: Search one yard, the Treasure Valley group, or every supported yard.
+- **First-Seen Tracking**: Distinguish newly discovered, active, and inactive inventory.
+- **Flexible Filters**: Search by make, model aliases, year lists or ranges, and status.
+- **Two Scraper Engines**: Use the HTTP parser by default or Selenium as a fallback.
+- **Privacy-Preserving API**: Serve a vehicles-only SQLite snapshot to the public website.
 
 ## Why JalopyBot?
 
-Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jungle website doesn’t show this information, but JalopyBot does. Get daily notifications when new cars are added, and tailor your search preferences to receive updates on the vehicles you’re most interested in. Built to help you stay ahead, JalopyBot is your go-to solution for efficient and timely junkyard searches.
+Source inventory pages do not consistently expose when a vehicle first
+appeared. JalopyBot records that history in a private runtime database, uses it
+for Discord search and alerts, and creates a separate vehicles-only snapshot
+for public API consumers.
+
+## Project layout
+
+- `src/bot`: Discord startup, commands, handlers, and permissions.
+- `src/scraping`: HTTP and Selenium inventory collectors.
+- `src/database`: Runtime schema, queries, and saved-search persistence.
+- `src/notifications`: Scheduled scrapes and Discord alert processing.
+- `src/api`: Read-only JSON and vehicles-only SQLite endpoints.
+- `src/testing`: Opt-in live smoke and model-alias diagnostic tools.
+- `test`: Isolated unit, integration, and recorded-fixture tests.
 
 ## Installation
 
@@ -76,15 +96,18 @@ Frustrated with not knowing when a vehicle was added to the lot? The Jalopy Jung
 
 ### Discord Commands
 
-- **/scrape**: Initiate a web scrape for vehicle data. Options:
-  - `location`: The yard location to search (e.g., BOISE, GARDENCITY, ALL).
-  - `make`: The make of the vehicle (e.g., TOYOTA, FORD).
-  - `model`: The model of the vehicle (e.g., CAMRY, F-150).
+- **`/commands`**: Show the in-Discord command guide.
+- **`/search`**: Search by location, make, model, year, and status. Result
+  controls provide pagination, location switching, and saved-search actions.
+- **`/savedsearch`**: Open an in-channel carousel to run, pause, or delete saved
+  searches.
 
-- **/savedsearch**: Manage your saved search preferences.
-  - `add`: Add a new search preference.
-  - `list`: List all your saved search preferences.
-  - `remove`: Remove a saved search preference.
+The following maintenance commands require elevated Discord permissions:
+
+- **`/scrape`**: Run an inventory scrape for a location and optional make/model.
+- **`/dailysavedsearch`**: Manually process saved-search notifications.
+- **`/runtestscheduler`**: Recover the missed morning scrape and alert workflow.
+- **`/manualnotifynewvehicles`**: Manually send new-vehicle notifications.
 
 ### Database Structure
 
@@ -104,10 +127,12 @@ The database contains the following tables:
   - `date_added`: Date when the vehicle was added to the database.
   - `last_updated`: Date when the vehicle data was last updated.
   - `notes`: Additional notes about the vehicle.
+  - `session_id`: Scrape session that most recently observed the vehicle.
 
 - **saved_searches**:
+  - `id`: Unique identifier for the saved search.
   - `user_id`: Unique identifier for the user.
-  - `discord_username`: Discord username of the user.
+  - `username`: Discord username captured with the search.
   - `yard_id`: Identifier for the yard.
   - `yard_name`: Name of the yard.
   - `make`: Make of the vehicle.
@@ -115,10 +140,16 @@ The database contains the following tables:
   - `year_range`: Year range for the search.
   - `status`: Status of the vehicle (e.g., NEW, ACTIVE, INACTIVE).
   - `frequency`: Frequency of notifications.
-  - `last_notified_date`: Date when the user was last notified.
-  - `creation_date`: Date when the search was created.
-  - `update_date`: Date when the search was last updated.
+  - `last_notified`: Date when the user was last notified.
+  - `create_date`: Date when the search was created.
+  - `update_date`: Date when the search was last changed.
+  - `alert_on_new`: Whether the search is configured to alert for new rows.
+  - `priority`: Optional search priority.
   - `notes`: Additional notes about the search.
+
+The runtime database is private and must live outside the Git checkout. Public
+API downloads are generated from a separate snapshot containing only the
+`vehicles` table.
 
 ## Development
 
@@ -188,9 +219,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete development and pull
 request workflow. Report vulnerabilities or exposed private data through the
 private process in [SECURITY.md](SECURITY.md), never in a public issue.
 
-## Inventory API (Pi)
+## Inventory API
 
-You can expose read-only inventory data directly from the bot host (Pi) so external apps do not need to download `vehicleInventory.db` from GitHub.
+The bot host can expose read-only inventory data so external apps do not need
+the private runtime database or a database file stored in GitHub.
 
 ### Start the API
 
