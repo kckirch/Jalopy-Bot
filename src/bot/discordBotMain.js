@@ -1,5 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const { Events } = require('discord.js');
 
 const { client } = require('./utils/client.js');
 const { setupDatabase } = require('../database/database');
@@ -24,7 +25,7 @@ setupDatabase().then(() => {
   console.error('Failed to set up database:', error);
 });
 
-client.on('ready', async (c) => {
+client.on(Events.ClientReady, async (c) => {
   console.log(`✅   ${c.user.tag} is online.  ✅`);
   if (!readyHandled) {
     readyHandled = true;

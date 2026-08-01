@@ -154,14 +154,15 @@ async function withDiscordBotMainMocks(runTest) {
   }
 }
 
-test('discordBotMain logs in once and initializes scheduled tasks only once across repeated ready events', async () => {
+test('discordBotMain uses clientReady and initializes scheduled tasks only once across repeated events', async () => {
   await withDiscordBotMainMocks(async ({ handlers, state }) => {
     assert.equal(state.setupDatabaseCalls, 1);
     assert.equal(state.loginCalls, 1);
-    assert.ok(typeof handlers.ready === 'function');
+    assert.equal(handlers.ready, undefined);
+    assert.ok(typeof handlers.clientReady === 'function');
 
-    await handlers.ready({ user: { tag: 'jalopy#0001' } });
-    await handlers.ready({ user: { tag: 'jalopy#0001' } });
+    await handlers.clientReady({ user: { tag: 'jalopy#0001' } });
+    await handlers.clientReady({ user: { tag: 'jalopy#0001' } });
 
     assert.equal(state.startScheduledTasksCalls, 1);
   });
