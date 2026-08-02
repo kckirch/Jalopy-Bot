@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'src/bot/commands/dailySavedSearchCommand.js');
@@ -70,36 +71,44 @@ test('daily saved-search command defers and reports successful processing', asyn
 
 test('daily saved-search command edits a deferred reply after processing fails', async () => {
   const interaction = createInteraction();
+  const privateErrorDetails = 'private-user /home/kc/private-file';
 
-  await withDailySavedSearchCommandMock(
-    async () => { throw new Error('forced failure'); },
-    async (handleDailySavedSearchCommand) => {
-      await handleDailySavedSearchCommand(interaction);
-    }
-  );
+  const consoleCalls = await captureConsole(async () => {
+    await withDailySavedSearchCommandMock(
+      async () => { throw new Error(privateErrorDetails); },
+      async (handleDailySavedSearchCommand) => {
+        await handleDailySavedSearchCommand(interaction);
+      }
+    );
+  });
 
   assert.deepEqual(interaction.editReplies, [
     'An error occurred while processing daily saved searches.',
   ]);
   assert.deepEqual(interaction.replies, []);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
 
 test('daily saved-search command sends an initial error reply when deferral fails', async () => {
   const interaction = createInteraction();
+  const privateErrorDetails = 'private-user /home/kc/private-file';
   interaction.deferReply = async () => {
-    throw new Error('forced deferral failure');
+    throw new Error(privateErrorDetails);
   };
 
-  await withDailySavedSearchCommandMock(
-    async () => {},
-    async (handleDailySavedSearchCommand) => {
-      await handleDailySavedSearchCommand(interaction);
-    }
-  );
+  const consoleCalls = await captureConsole(async () => {
+    await withDailySavedSearchCommandMock(
+      async () => {},
+      async (handleDailySavedSearchCommand) => {
+        await handleDailySavedSearchCommand(interaction);
+      }
+    );
+  });
 
   assert.deepEqual(interaction.editReplies, []);
   assert.deepEqual(interaction.replies, [{
     content: 'An error occurred while processing daily saved searches.',
     ephemeral: true,
   }]);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
