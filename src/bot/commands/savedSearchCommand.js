@@ -2,6 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { getSavedSearches, deleteSavedSearch, setSavedSearchFrequency } = require('../../database/savedSearchManager');
 const { convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
 const { queryVehicles, getModelSuggestionsForNoResults } = require('../../database/vehicleQueryManager');
+const { summarizeError } = require('../../utils/errorSummary');
 
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
 const RESULTS_ITEMS_PER_PAGE = 20;
@@ -348,7 +349,7 @@ async function handleSavedSearchCommand(interaction) {
 
         await i.reply({ content: 'Unknown action.', ephemeral: true });
       } catch (collectorError) {
-        console.error('Saved search interaction failed:', collectorError);
+        console.error('Saved search interaction failed:', summarizeError(collectorError));
         await i.reply({ content: 'Unable to process that saved-search action right now.', ephemeral: true });
       }
     });
@@ -358,13 +359,16 @@ async function handleSavedSearchCommand(interaction) {
         try {
           await interaction.editReply({ components: [] });
         } catch (editError) {
-          console.error('Unable to disable saved-search carousel buttons:', editError);
+          console.error(
+            'Unable to disable saved-search carousel buttons:',
+            summarizeError(editError)
+          );
         }
       }
     });
 
   } catch (error) {
-    console.error('Error retrieving saved searches:', error);
+    console.error('Error retrieving saved searches:', summarizeError(error));
     await interaction.editReply({ content: 'Failed to retrieve saved searches.' });
   }
 }

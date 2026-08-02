@@ -472,3 +472,120 @@ test('carousel collector end disables components on the ephemeral reply', async 
   assert.equal(interaction.editReplyCalls.length, 2);
   assert.deepEqual(interaction.editReplyCalls[1].components, []);
 });
+
+test('savedsearch command redacts retrieval errors', async () => {
+  const privateErrorDetails = 'private user /home/kc/private-inventory.db';
+  const interaction = makeInteraction('private-user');
+
+  const consoleCalls = await captureConsole(async () => {
+    await withSavedSearchCommandMocks(
+      {
+        getSavedSearches: async () => {
+          throw new TypeError(privateErrorDetails);
+        },
+      },
+      async (handleSavedSearchCommand) => {
+        await handleSavedSearchCommand(interaction);
+      }
+    );
+  });
+
+  assert.deepEqual(interaction.editReplyCalls, [{
+    content: 'Failed to retrieve saved searches.',
+  }]);
+  assert.match(joinedConsoleText(consoleCalls), /Error retrieving saved searches: TypeError/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+});
+
+test('savedsearch command redacts collector action errors', async () => {
+  const privateErrorDetails = 'private saved search /home/kc/private-inventory.db';
+  const interaction = makeInteraction('user-collector-error');
+  const buttonReplies = [];
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 81,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+      deleteSavedSearch: async () => {
+        throw new RangeError(privateErrorDetails);
+      },
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      const deleteCustomId = getButtonByLabel(
+        interaction.editReplyCalls[0],
+        'Delete'
+      ).data.custom_id;
+
+      const consoleCalls = await captureConsole(async () => {
+        await interaction.__collector.emitCollect({
+          customId: deleteCustomId,
+          user: { id: 'user-collector-error' },
+          async update() {},
+          async reply(payload) {
+            buttonReplies.push(payload);
+          },
+        });
+      });
+
+      assert.deepEqual(buttonReplies, [{
+        content: 'Unable to process that saved-search action right now.',
+        ephemeral: true,
+      }]);
+      assert.match(joinedConsoleText(consoleCalls), /Saved search interaction failed: RangeError/);
+      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+    }
+  );
+});
+
+test('savedsearch command redacts carousel cleanup errors', async () => {
+  const privateErrorDetails = 'private message /home/kc/private-inventory.db';
+  const interaction = makeInteraction('user-cleanup-error');
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 82,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'HONDA',
+          model: 'CIVIC',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      interaction.editReply = async () => {
+        throw new SyntaxError(privateErrorDetails);
+      };
+
+      const consoleCalls = await captureConsole(async () => {
+        await interaction.__collector.emitEnd([], 'time');
+      });
+
+      assert.match(
+        joinedConsoleText(consoleCalls),
+        /Unable to disable saved-search carousel buttons: SyntaxError/
+      );
+      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+    }
+  );
+});
