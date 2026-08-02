@@ -14,6 +14,7 @@ function tick() {
 }
 
 async function withDailyTasksMocks(mocks, runTest) {
+  const previousNewVehiclesChannelId = process.env.NEW_VEHICLES_CHANNEL_ID;
   const previousDailyTasks = require.cache[dailyTasksPath];
   const previousClient = require.cache[clientPath];
   const previousSavedSearchManager = require.cache[savedSearchManagerPath];
@@ -39,6 +40,10 @@ async function withDailyTasksMocks(mocks, runTest) {
   };
   delete require.cache[dailyTasksPath];
 
+  process.env.NEW_VEHICLES_CHANNEL_ID = Object.hasOwn(mocks, 'newVehiclesChannelId')
+    ? mocks.newVehiclesChannelId
+    : '111111111111111111';
+
   try {
     const moduleExports = require(dailyTasksPath);
     await runTest(moduleExports);
@@ -54,6 +59,9 @@ async function withDailyTasksMocks(mocks, runTest) {
 
     if (previousVehicleQueryManager) require.cache[vehicleQueryManagerPath] = previousVehicleQueryManager;
     else delete require.cache[vehicleQueryManagerPath];
+
+    if (previousNewVehiclesChannelId === undefined) delete process.env.NEW_VEHICLES_CHANNEL_ID;
+    else process.env.NEW_VEHICLES_CHANNEL_ID = previousNewVehiclesChannelId;
   }
 }
 
@@ -145,11 +153,35 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
   assert.equal(channelSends.length, 1);
   assert.ok(Array.isArray(dmSends[0].payload.embeds));
   assert.ok(Array.isArray(channelSends[0].payload.embeds));
+  assert.equal(channelSends[0].id, '111111111111111111');
 
   const logOutput = joinedConsoleText(consoleCalls);
-  for (const privateValue of ['user-1', 'user#1', '1239688596080955492']) {
+  for (const privateValue of ['user-1', 'user#1', '111111111111111111']) {
     assert.equal(logOutput.includes(privateValue), false, privateValue);
   }
+});
+
+test('notifyNewVehicles skips delivery when its channel is not configured', async () => {
+  let queryCalled = false;
+  const consoleCalls = await captureConsole(async () => {
+    await withDailyTasksMocks(
+      {
+        newVehiclesChannelId: '',
+        client: { isReady: () => true },
+        getAllSavedSearches: async () => [],
+        queryVehicles: async () => {
+          queryCalled = true;
+          return [];
+        },
+      },
+      async ({ notifyNewVehicles }) => {
+        await notifyNewVehicles();
+      }
+    );
+  });
+
+  assert.equal(queryCalled, false);
+  assert.match(joinedConsoleText(consoleCalls), /NEW_VEHICLES_CHANNEL_ID/);
 });
 
 test('processDailySavedSearches awaits DM delivery before resolving', async () => {
