@@ -9,6 +9,7 @@
  * This module establishes a connection to the `vehicleInventory.db` SQLite database and handles potential connection errors or SQL errors during table creation and data manipulation.
  */
 const { db } = require('./database');
+const { summarizeError } = require('../utils/errorSummary');
 
 function resolveScrapeLogMode() {
     const value = String(process.env.SCRAPE_LOG_MODE || 'summary').trim().toLowerCase();
@@ -69,7 +70,7 @@ function markInactiveVehicles(sessionID, options = {}) {
     return new Promise((resolve, reject) => {
         db.run(sql, [sessionID, ...scopedYardIds], function(err) {
             if (err) {
-                console.error('Error marking vehicles as INACTIVE:', err);
+                console.error('Error marking vehicles as INACTIVE:', summarizeError(err));
                 reject(err);
             } else {
                 console.log(`Marked ${this.changes} vehicles as INACTIVE for session ${sessionID} in yards [${scopedYardIds.join(', ')}].`);
@@ -99,7 +100,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, notes, sess
     return new Promise((resolve, reject) => {
         db.get(findSQL, [yardId, make, model, year, rowNumber], function(err, row) {
             if (err) {
-                console.error('Error searching for existing vehicle:', err.message);
+                console.error('Error searching for existing vehicle:', summarizeError(err));
                 reject(err);
                 return;
             }
@@ -118,7 +119,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, notes, sess
                 `;
                 db.run(updateSQL, [finalStatus, sessionID, row.id], function(updateErr) {
                     if (updateErr) {
-                        console.error('Error updating existing vehicle with ID', row.id, ':', updateErr.message);
+                        console.error('Error updating existing vehicle:', summarizeError(updateErr));
                         reject(updateErr);
                     } else {
                         logFullScrapeDetails(`Updated existing vehicle with ID ${row.id} to status '${finalStatus}' and session ID ${sessionID}`);
@@ -147,7 +148,7 @@ function insertOrUpdateVehicle(yardId, make, model, year, rowNumber, notes, sess
                 `;
                 db.run(insertSQL, [yardId, yardName, make, model, year, rowNumber, notes, sessionID], function(insertErr) {
                     if (insertErr) {
-                        console.error('Error inserting new vehicle:', insertErr.message);
+                        console.error('Error inserting new vehicle:', summarizeError(insertErr));
                         reject(insertErr);
                     } else {
                         logFullScrapeDetails(`🆕 Inserted new vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID} 🆕`);
