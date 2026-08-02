@@ -1,135 +1,67 @@
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const path = require('node:path');
+const { REST, Routes } = require('discord.js');
 
-// Create command builders
-const scrapeCommand = new SlashCommandBuilder()
-  .setName('scrape')
-  .setDescription('Scrape the website for DB data!')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-  .addStringOption(option => 
-    option.setName('location')
-    .setDescription('The location to search in')
-    .setRequired(true)
-    .addChoices(
-      { name: 'Boise', value: 'boise' },
-      { name: 'Garden City', value: 'gardencity' },
-      { name: 'Nampa', value: 'nampa' },
-      { name: 'Caldwell', value: 'caldwell' },
-      { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
-      { name: 'All', value: 'all' }
-    ))
-  .addStringOption(option => 
-    option.setName('make')
-    .setDescription('The make of the vehicle')
-    .setRequired(false)
-    .setAutocomplete(true))
-  .addStringOption(option => 
-    option.setName('model')
-    .setDescription('The model of the vehicle')
-    .setRequired(false)
-    .setAutocomplete(true));
+const { buildCommandDefinitions } = require('./commandDefinitions');
 
-const searchCommand = new SlashCommandBuilder()
-  .setName('search')
-  .setDescription('Search for vehicles in the database')
-  .addStringOption(option => 
-    option.setName('location')
-    .setDescription('The yard location to search')
-    .setRequired(true)
-    .addChoices(
-      { name: 'Boise', value: 'boise' },
-      { name: 'Garden City', value: 'gardencity' },
-      { name: 'Nampa', value: 'nampa' },
-      { name: 'Caldwell', value: 'caldwell' },
-      { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
-      { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
-      { name: 'All', value: 'all' }
-    ))
-  .addStringOption(option => 
-    option.setName('make')
-    .setDescription('The make of the vehicle')
-    .setRequired(false)
-    .setAutocomplete(true))
-  .addStringOption(option => 
-    option.setName('model')
-    .setDescription('The model of the vehicle')
-    .setRequired(false)
-    .setAutocomplete(true))
-  .addStringOption(option =>
-    option.setName('year')
-    .setDescription('The year(s) of the vehicle (comma-separated list or range)')
-    .setRequired(false))
-  .addStringOption(option =>
-    option.setName('status')
-    .setDescription('The status of the vehicle | New, Active, or Inactive')
-    .addChoices(
-      { name: 'New', value: 'NEW' },
-      { name: 'Active (Includes New)', value: 'ACTIVE' },
-      { name: 'Inactive', value: 'INACTIVE' }
-    )
-    .setRequired(false));
+const REQUIRED_ENVIRONMENT_VARIABLES = Object.freeze([
+  'TOKEN',
+  'CLIENT_ID',
+  'GUILD_ID',
+]);
 
-const savedSearchCommand = new SlashCommandBuilder()
-  .setName('savedsearch')
-  .setDescription('Send Your Saved Searches to Your DMs!')
-  .addStringOption(option => 
-    option.setName('location')
-    .setDescription('The yard location to search')
-    .setRequired(false)
-    .addChoices(
-      { name: 'Boise', value: 'boise' },
-      { name: 'Garden City', value: 'gardencity' },
-      { name: 'Nampa', value: 'nampa' },
-      { name: 'Caldwell', value: 'caldwell' },
-      { name: 'Twin Falls', value: 'twinfalls' },
-      { name: 'Trusty Pick A Part', value: 'trustypickapart' },  // Added Trusty
-      { name: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
-      { name: 'All', value: 'all' }
-    ));
+function readRegistrationConfig(environment = process.env) {
+  const missingVariables = REQUIRED_ENVIRONMENT_VARIABLES.filter((name) => (
+    typeof environment[name] !== 'string' || environment[name].trim() === ''
+  ));
 
-const dailySearchCommand = new SlashCommandBuilder()
-  .setName('dailysavedsearch')
-  .setDescription('Manually Force a daily saved searches to send to users')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-
-const runTestScheduler = new SlashCommandBuilder()
-  .setName('runtestscheduler')
-  .setDescription('Run missed morning job: scrape yards, then send saved-search and new-car alerts')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-
-const commandsCommand = new SlashCommandBuilder()
-.setName('commands')
-.setDescription('Showcase all user commands with examples');
-
-const manualNotifyNewVehiclesCommand = new SlashCommandBuilder()
-  .setName('manualnotifynewvehicles')
-  .setDescription('Manually notify users of new vehicles')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
-
-const commands = [
-  scrapeCommand.toJSON(),
-  searchCommand.toJSON(),
-  savedSearchCommand.toJSON(),
-  dailySearchCommand.toJSON(),
-  runTestScheduler.toJSON(),
-  commandsCommand.toJSON(),
-  manualNotifyNewVehiclesCommand.toJSON()
-];
-
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    console.log('Registering slash commands...');
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body: commands }
+  if (missingVariables.length > 0) {
+    throw new Error(
+      `Missing required Discord registration configuration: ${missingVariables.join(', ')}`
     );
-    console.log('Slash commands were registered successfully!');
-  } catch (error) {
-    console.log(`There was an error: ${error}`);
   }
-})();
+
+  return {
+    token: environment.TOKEN.trim(),
+    clientId: environment.CLIENT_ID.trim(),
+    guildId: environment.GUILD_ID.trim(),
+  };
+}
+
+async function registerCommands({ environment = process.env, rest } = {}) {
+  const { token, clientId, guildId } = readRegistrationConfig(environment);
+  const commandDefinitions = buildCommandDefinitions();
+  const discordRest = rest || new REST({ version: '10' }).setToken(token);
+
+  await discordRest.put(
+    Routes.applicationGuildCommands(clientId, guildId),
+    { body: commandDefinitions }
+  );
+
+  return commandDefinitions;
+}
+
+async function registerCommandsFromEnvironment({
+  environment = process.env,
+  environmentPath = path.resolve(__dirname, '../.env'),
+  rest,
+} = {}) {
+  require('dotenv').config({ path: environmentPath });
+  console.log('Registering slash commands...');
+  const commandDefinitions = await registerCommands({ environment, rest });
+  console.log('Slash commands were registered successfully!');
+  return commandDefinitions;
+}
+
+if (require.main === module) {
+  registerCommandsFromEnvironment().catch((error) => {
+    console.error('Failed to register slash commands:', error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  REQUIRED_ENVIRONMENT_VARIABLES,
+  readRegistrationConfig,
+  registerCommands,
+  registerCommandsFromEnvironment,
+};
