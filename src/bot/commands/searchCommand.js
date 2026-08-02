@@ -25,19 +25,9 @@ const {
   matchesSavedSearchCriteria,
   serializeYardId,
 } = require('../utils/savedSearchCriteria');
+const { SEARCH_LOCATION_CHOICES } = require('../locationChoices');
 
 const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
-
-const SEARCH_LOCATION_OPTIONS = [
-  { label: 'Boise', value: 'boise' },
-  { label: 'Garden City', value: 'gardencity' },
-  { label: 'Nampa', value: 'nampa' },
-  { label: 'Caldwell', value: 'caldwell' },
-  { label: 'Twin Falls', value: 'twinfalls' },
-  { label: 'Trusty Pick A Part', value: 'trustypickapart' },
-  { label: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
-  { label: 'All', value: 'all' },
-];
 
 function normalizeLocationName(location, yardId) {
   if (location && location.trim() !== '') {
@@ -318,8 +308,8 @@ async function handleSearchCommand(interaction) {
                 .setMinValues(1)
                 .setMaxValues(1)
                 .addOptions(
-                  SEARCH_LOCATION_OPTIONS.map((option) => ({
-                    label: option.label,
+                  SEARCH_LOCATION_CHOICES.map((option) => ({
+                    label: option.name,
                     value: option.value,
                     default: option.value === state.location,
                   }))
