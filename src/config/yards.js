@@ -1,0 +1,60 @@
+const YARDS = Object.freeze([
+  Object.freeze({
+    id: 1020,
+    slug: 'boise',
+    databaseName: 'BOISE',
+    displayName: 'Boise',
+    junkyardKey: 'jalopyJungle',
+    treasureValleyOrder: 1,
+    commandOrder: 1,
+  }),
+  Object.freeze({
+    id: 1021,
+    slug: 'caldwell',
+    databaseName: 'CALDWELL',
+    displayName: 'Caldwell',
+    junkyardKey: 'jalopyJungle',
+    treasureValleyOrder: 3,
+    commandOrder: 4,
+  }),
+  Object.freeze({
+    id: 1119,
+    slug: 'gardencity',
+    databaseName: 'GARDENCITY',
+    displayName: 'Garden City',
+    junkyardKey: 'jalopyJungle',
+    treasureValleyOrder: 2,
+    commandOrder: 2,
+  }),
+  Object.freeze({
+    id: 1022,
+    slug: 'nampa',
+    databaseName: 'NAMPA',
+    displayName: 'Nampa',
+    junkyardKey: 'jalopyJungle',
+    treasureValleyOrder: 4,
+    commandOrder: 3,
+  }),
+  Object.freeze({
+    id: 1099,
+    slug: 'twinfalls',
+    databaseName: 'TWINFALLS',
+    displayName: 'Twin Falls',
+    junkyardKey: 'jalopyJungle',
+    treasureValleyOrder: null,
+    commandOrder: 5,
+  }),
+  Object.freeze({
+    id: 999999,
+    slug: 'trustypickapart',
+    databaseName: 'TRUSTYPICKAPART',
+    displayName: 'Trusty Pick A Part',
+    junkyardKey: 'trustyJunkyard',
+    treasureValleyOrder: 5,
+    commandOrder: 6,
+  }),
+]);
+
+module.exports = {
+  YARDS,
+};

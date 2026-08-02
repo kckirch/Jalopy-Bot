@@ -1,14 +1,10 @@
 const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
+const { YARDS } = require('../config/yards');
 
-const YARD_NAMES = Object.freeze({
-  1020: 'BOISE',
-  1021: 'CALDWELL',
-  1022: 'NAMPA',
-  1099: 'TWINFALLS',
-  1119: 'GARDENCITY',
-  999999: 'TRUSTYPICKAPART',
-});
+const YARD_NAMES = Object.freeze(
+  Object.fromEntries(YARDS.map((yard) => [yard.id, yard.databaseName]))
+);
 
 function resolveScrapeLogMode() {
   const value = String(process.env.SCRAPE_LOG_MODE || 'summary')
