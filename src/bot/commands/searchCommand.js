@@ -9,14 +9,14 @@ const {
 const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
 const { checkExistingSearch, addSavedSearch, getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
 const { summarizeError } = require('../../utils/errorSummary');
-const crypto = require('crypto');
+const {
+  buildQuickActionCustomId,
+  resolveInteractionParameters,
+  resolveQuickActionPayload,
+  storeInteractionParameters,
+} = require('../utils/interactionParameters');
 
-const parameterStore = new Map();
-let parameterStoreMaxEntries = 5000;
-let parameterStoreTtlMs = 10 * 60 * 1000;
-let nowProvider = () => Date.now();
 const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
-const QUICK_ACTION_PREFIX = 'sq:';
 
 const SEARCH_LOCATION_OPTIONS = [
   { label: 'Boise', value: 'boise' },
@@ -65,89 +65,6 @@ function canonicalizeYardIdForSavedSearch(yardId) {
   }
 
   return String(yardId);
-}
-
-function pruneParameterStore() {
-  const now = nowProvider();
-
-  for (const [hash, entry] of parameterStore.entries()) {
-    if (!entry || entry.expiresAt <= now) {
-      parameterStore.delete(hash);
-    }
-  }
-
-  while (parameterStore.size > parameterStoreMaxEntries) {
-    const oldestKey = parameterStore.keys().next().value;
-    if (!oldestKey) {
-      break;
-    }
-    parameterStore.delete(oldestKey);
-  }
-}
-
-function generateHash(parameters) {
-  pruneParameterStore();
-  const hash = crypto.createHash('md5').update(parameters).digest('hex');
-  parameterStore.set(hash, {
-    parameters,
-    expiresAt: nowProvider() + parameterStoreTtlMs,
-  });
-  pruneParameterStore();
-  return hash;
-}
-
-function resolveHash(hash) {
-  const entry = parameterStore.get(hash);
-  if (!entry) {
-    return undefined;
-  }
-  if (entry.expiresAt <= nowProvider()) {
-    parameterStore.delete(hash);
-    return undefined;
-  }
-  return entry.parameters;
-}
-
-function encodeParamValue(value) {
-  return encodeURIComponent(String(value ?? ''));
-}
-
-function decodeParamValue(value) {
-  try {
-    return decodeURIComponent(String(value ?? ''));
-  } catch (error) {
-    return String(value ?? '');
-  }
-}
-
-function serializeActionPayload(payload) {
-  return Object.entries(payload)
-    .map(([key, value]) => `${key}:${encodeParamValue(value)}`)
-    .join('|');
-}
-
-function deserializeActionPayload(serializedPayload) {
-  return String(serializedPayload || '')
-    .split('|')
-    .reduce((accumulator, pair) => {
-      const separatorIndex = pair.indexOf(':');
-      if (separatorIndex === -1) {
-        return accumulator;
-      }
-      const key = pair.slice(0, separatorIndex);
-      const value = pair.slice(separatorIndex + 1);
-      accumulator[key] = decodeParamValue(value);
-      return accumulator;
-    }, {});
-}
-
-function buildQuickActionCustomId(action, payload) {
-  const serialized = serializeActionPayload({
-    ...payload,
-    sa: action,
-  });
-  const hash = generateHash(serialized);
-  return `${QUICK_ACTION_PREFIX}${hash}`;
 }
 
 function normalizeLocationName(location, yardId) {
@@ -450,7 +367,7 @@ async function handleSearchCommand(interaction) {
           const createCustomId = (action) => {
             const serializedYardId = serializeYardId(state.yardId);
             const parameters = `pg:${state.currentPage}|act:${action}|uid:${userId}|lc:${state.location}|yd:${serializedYardId}|mk:${userMakeInput}|md:${model}|yr:${yearInput}|st:${status}`;
-            return generateHash(parameters);
+            return storeInteractionParameters(parameters);
           };
 
           const pagingRow = new ActionRowBuilder()
@@ -519,7 +436,7 @@ async function handleSearchCommand(interaction) {
 
       collector.on('collect', async i => {
         try {
-          const parameters = resolveHash(i.customId);
+          const parameters = resolveInteractionParameters(i.customId);
           if (!parameters) {
             await i.reply({ content: 'Invalid or expired interaction.', ephemeral: true });
             return;
@@ -716,13 +633,11 @@ async function handleSearchCommand(interaction) {
 }
 
 async function handleSavedSearchQuickActionButton(interaction, quickHash) {
-  const serializedPayload = resolveHash(quickHash);
-  if (!serializedPayload) {
+  const payload = resolveQuickActionPayload(quickHash);
+  if (!payload) {
     await interaction.reply({ content: 'This action expired. Please save the search again.', ephemeral: true });
     return;
   }
-
-  const payload = deserializeActionPayload(serializedPayload);
   const action = payload.sa;
 
   if (payload.uid && payload.uid !== interaction.user.id) {
@@ -857,29 +772,4 @@ async function handleSavedSearchQuickActionButton(interaction, quickHash) {
 module.exports = {
   handleSearchCommand,
   handleSavedSearchQuickActionButton,
-  __testables: {
-    QUICK_ACTION_PREFIX,
-    canonicalizeYardIdForSavedSearch,
-    generateHash,
-    resolveHash,
-    buildQuickActionCustomId,
-    deserializeActionPayload,
-    pruneParameterStore,
-    resetParameterStore: () => parameterStore.clear(),
-    getParameterStoreSize: () => parameterStore.size,
-    setParameterStoreConfig: ({ maxEntries, ttlMs } = {}) => {
-      if (Number.isInteger(maxEntries) && maxEntries > 0) {
-        parameterStoreMaxEntries = maxEntries;
-      }
-      if (Number.isInteger(ttlMs) && ttlMs > 0) {
-        parameterStoreTtlMs = ttlMs;
-      }
-    },
-    setNowProvider: (fn) => {
-      nowProvider = typeof fn === 'function' ? fn : () => Date.now();
-    },
-    resetNowProvider: () => {
-      nowProvider = () => Date.now();
-    },
-  },
 };

@@ -1,10 +1,11 @@
 const { summarizeError } = require('../../utils/errorSummary');
+const { QUICK_ACTION_PREFIX } = require('../utils/interactionParameters');
 
 async function handleButtonClick(interaction, buttonId, messageCollector = null) {
-  if (buttonId.startsWith('sq:')) {
+  if (buttonId.startsWith(QUICK_ACTION_PREFIX)) {
     try {
       const { handleSavedSearchQuickActionButton } = require('../commands/searchCommand');
-      const quickHash = buttonId.slice(3);
+      const quickHash = buttonId.slice(QUICK_ACTION_PREFIX.length);
       await handleSavedSearchQuickActionButton(interaction, quickHash);
     } catch (error) {
       console.error('Saved-search quick action failed:', summarizeError(error));

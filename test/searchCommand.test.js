@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
+const {
+  buildQuickActionCustomId,
+} = require('../src/bot/utils/interactionParameters');
 
 const repoRoot = path.resolve(__dirname, '..');
 const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
@@ -634,8 +637,8 @@ test('saved-search quick action run updates interaction with current match summa
       ],
       getSavedSearches: async () => [],
     },
-    async ({ handleSavedSearchQuickActionButton, __testables }) => {
-      const quickCustomId = __testables.buildQuickActionCustomId('run', {
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const quickCustomId = buildQuickActionCustomId('run', {
         uid: 'user-1',
         lc: 'boise',
         yd: '1020',
@@ -688,8 +691,8 @@ test('saved-search quick action delete reports the number removed', async () => 
       },
       deleteSavedSearch: async (id) => deletedSearchIds.push(id),
     },
-    async ({ handleSavedSearchQuickActionButton, __testables }) => {
-      const quickCustomId = __testables.buildQuickActionCustomId('delete', {
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const quickCustomId = buildQuickActionCustomId('delete', {
         uid: 'user-1',
         lc: 'boise',
         yd: savedSearch.yard_id,
@@ -903,39 +906,6 @@ test('search command redacts outer collector errors', async () => {
         /Error processing button interaction: EvalError/
       );
       assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
-    }
-  );
-});
-
-test('parameterStore enforces TTL and max-entry limits', async () => {
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [],
-      checkExistingSearch: async () => false,
-      addSavedSearch: async () => {},
-    },
-    async ({ __testables }) => {
-      let now = 0;
-      __testables.resetParameterStore();
-      __testables.setNowProvider(() => now);
-      __testables.setParameterStoreConfig({ maxEntries: 2, ttlMs: 100 });
-
-      const hashA = __testables.generateHash('A');
-      const hashB = __testables.generateHash('B');
-      const hashC = __testables.generateHash('C'); // should evict oldest (A)
-
-      assert.equal(__testables.getParameterStoreSize(), 2);
-      assert.equal(__testables.resolveHash(hashA), undefined);
-      assert.equal(__testables.resolveHash(hashB), 'B');
-      assert.equal(__testables.resolveHash(hashC), 'C');
-
-      now = 250; // expire B/C
-      __testables.pruneParameterStore();
-      assert.equal(__testables.getParameterStoreSize(), 0);
-
-      __testables.resetParameterStore();
-      __testables.resetNowProvider();
-      __testables.setParameterStoreConfig({ maxEntries: 5000, ttlMs: 10 * 60 * 1000 });
     }
   );
 });
