@@ -1,10 +1,11 @@
 // database.js
 const sqlite3 = require('sqlite3').verbose();
 const { VEHICLE_DB_PATH } = require('./dbPath');
+const { summarizeError } = require('../utils/errorSummary');
 
 const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
-        console.error('Error when connecting to the database', err);
+        console.error('Error when connecting to the database:', summarizeError(err));
     } else {
         console.log('Database connection established.');
     }
@@ -101,7 +102,7 @@ function setupDatabase() {
 
                 resolve();
             } catch (error) {
-                console.error('Database setup failed:', error);
+                console.error('Database setup failed:', summarizeError(error));
                 reject(error);
             }
         });
