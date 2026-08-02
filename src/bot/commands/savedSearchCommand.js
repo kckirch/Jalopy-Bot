@@ -3,19 +3,21 @@ const { getSavedSearches, deleteSavedSearch, setSavedSearchFrequency } = require
 const { convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
 const { queryVehicles, getModelSuggestionsForNoResults } = require('../../database/vehicleQueryManager');
 const { summarizeError } = require('../../utils/errorSummary');
+const { YARDS } = require('../../config/yards');
 
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
 const RESULTS_ITEMS_PER_PAGE = 20;
-const ALL_YARD_IDS_CANONICAL = ['1020', '1021', '1022', '1099', '1119', '999999'];
-const TREASURE_VALLEY_YARD_IDS_CANONICAL = ['1020', '1021', '1022', '1119', '999999'];
-const SINGLE_YARD_LOCATION_BY_ID = {
-  '1020': 'boise',
-  '1021': 'caldwell',
-  '1119': 'gardencity',
-  '1022': 'nampa',
-  '1099': 'twinfalls',
-  '999999': 'trustypickapart',
-};
+const ALL_YARD_IDS_CANONICAL = Object.freeze(
+  YARDS.map((yard) => String(yard.id)).sort()
+);
+const TREASURE_VALLEY_YARD_IDS_CANONICAL = Object.freeze(
+  YARDS.filter((yard) => yard.treasureValleyOrder !== null)
+    .map((yard) => String(yard.id))
+    .sort()
+);
+const SINGLE_YARD_LOCATION_BY_ID = Object.freeze(
+  Object.fromEntries(YARDS.map((yard) => [String(yard.id), yard.slug]))
+);
 
 function normalizeFrequency(frequency) {
   const normalized = String(frequency || 'daily').trim().toLowerCase();

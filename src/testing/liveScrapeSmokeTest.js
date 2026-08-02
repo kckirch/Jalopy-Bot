@@ -2,6 +2,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { summarizeError } = require('../utils/errorSummary');
+const { YARDS } = require('../config/yards');
+
+const YARD_NAME_BY_ID = Object.freeze(
+  Object.fromEntries(YARDS.map((yard) => [yard.id, yard.databaseName]))
+);
+const TRUSTY_YARD = YARDS.find(
+  (yard) => yard.junkyardKey === 'trustyJunkyard'
+);
 
 function parseArgs(argv) {
   const args = {
@@ -76,8 +84,11 @@ function normalizeSessionId(sessionId) {
 function resolveScrapeTarget(location, convertLocationToYardId) {
   const normalizedLocation = String(location || '').trim().toLowerCase();
 
-  if (normalizedLocation === 'trustypickapart') {
-    return { junkyardKey: 'trustyJunkyard', yardId: 999999 };
+  if (normalizedLocation === TRUSTY_YARD.slug) {
+    return {
+      junkyardKey: TRUSTY_YARD.junkyardKey,
+      yardId: TRUSTY_YARD.id,
+    };
   }
 
   const yardId = convertLocationToYardId(normalizedLocation);
@@ -93,20 +104,13 @@ function resolveScrapeTargets(locations, convertLocationToYardId) {
 }
 
 function getYardNameById(yardId) {
-  const mapping = {
-    1020: 'BOISE',
-    1021: 'CALDWELL',
-    1022: 'NAMPA',
-    1099: 'TWINFALLS',
-    1119: 'GARDENCITY',
-    999999: 'TRUSTYPICKAPART',
-  };
-  return mapping[yardId] || `YARD_${yardId}`;
+  return YARD_NAME_BY_ID[yardId] || `YARD_${yardId}`;
 }
 
 function selectSentinelYard(targetYardId) {
-  const candidates = [1020, 1021, 1022, 1099, 1119, 999999];
-  const found = candidates.find((yardId) => yardId !== Number(targetYardId));
+  const found = YARDS.map((yard) => yard.id).find(
+    (yardId) => yardId !== Number(targetYardId)
+  );
   if (!found) {
     throw new Error('Unable to find sentinel yard ID for smoke validation.');
   }

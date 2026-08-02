@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { YARDS } = require('../src/config/yards');
 const junkyards = require('../src/config/junkyards');
+const {
+  YARD_LOCATION_CHOICES,
+} = require('../src/bot/commandDefinitions');
 
 test('yard catalog is immutable and has unique identities', () => {
   assert.equal(Object.isFrozen(YARDS), true);
@@ -32,22 +35,15 @@ test('junkyard scraper configuration is derived from the yard catalog', () => {
 });
 
 test('yard catalog preserves command and Treasure Valley ordering', () => {
-  const commandOrder = [...YARDS]
+  const commandYards = [...YARDS]
     .sort((left, right) => left.commandOrder - right.commandOrder)
-    .map((yard) => yard.slug);
+    .map((yard) => ({ name: yard.displayName, value: yard.slug }));
   const treasureValleyOrder = YARDS.filter(
     (yard) => yard.treasureValleyOrder !== null
   )
     .sort((left, right) => left.treasureValleyOrder - right.treasureValleyOrder)
     .map((yard) => yard.id);
 
-  assert.deepEqual(commandOrder, [
-    'boise',
-    'gardencity',
-    'nampa',
-    'caldwell',
-    'twinfalls',
-    'trustypickapart',
-  ]);
+  assert.deepEqual(YARD_LOCATION_CHOICES, commandYards);
   assert.deepEqual(treasureValleyOrder, [1020, 1119, 1021, 1022, 999999]);
 });
