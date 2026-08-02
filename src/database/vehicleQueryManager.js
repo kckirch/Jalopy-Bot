@@ -14,9 +14,10 @@
 
 const sqlite3 = require('sqlite3').verbose();
 const { VEHICLE_DB_PATH } = require('./dbPath');
+const { summarizeError } = require('../utils/errorSummary');
 const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
-        console.error('Error when connecting to the database', err);
+        console.error('Error when connecting to the database:', summarizeError(err));
     } else {
         console.log('Vehicle database connection established.');
     }
@@ -236,7 +237,7 @@ function queryVehicles(yardId, make, model, yearInput, status) {
     return new Promise((resolve, reject) => {
         db.all(baseQuery, params, (err, rows) => {
             if (err) {
-                console.error('Failed to query vehicles:', err);
+                console.error('Failed to query vehicles:', summarizeError(err));
                 reject(err);
             } else {
                 resolve(rows);
@@ -293,7 +294,7 @@ function getModelSuggestionsForNoResults(make = 'ANY', modelInput = '', yardId =
     return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {
             if (err) {
-                console.error('Failed to query no-result model suggestions:', err);
+                console.error('Failed to query no-result model suggestions:', summarizeError(err));
                 reject(err);
                 return;
             }
@@ -361,7 +362,7 @@ function getModelSuggestions(make = 'ANY', partialModel = '', limit = 25) {
     return new Promise((resolve, reject) => {
         db.all(sql, params, (err, rows) => {
             if (err) {
-                console.error('Failed to query model suggestions:', err);
+                console.error('Failed to query model suggestions:', summarizeError(err));
                 reject(err);
             } else {
                 resolve(rows || []);
