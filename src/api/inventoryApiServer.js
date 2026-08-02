@@ -8,6 +8,7 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 const { VEHICLE_DB_PATH } = require('../database/dbPath');
+const { summarizeError } = require('../utils/errorSummary');
 const { createPublicInventorySnapshotProvider } = require('./publicInventorySnapshot');
 
 const DEFAULT_PORT = 8787;
@@ -236,7 +237,10 @@ async function sendVehicleDbFile(
     const stream = fileHandle.createReadStream();
     fileHandle = null;
     stream.on('error', (streamError) => {
-      console.error('[inventory-api] failed to stream public vehicle snapshot:', streamError);
+      console.error(
+        '[inventory-api] failed to stream public vehicle snapshot:',
+        summarizeError(streamError)
+      );
       if (!response.headersSent) {
         writeJson(response, 500, { error: 'Failed to stream database file' }, corsHeaders);
       } else {
@@ -248,7 +252,10 @@ async function sendVehicleDbFile(
     if (fileHandle) {
       await fileHandle.close().catch(() => {});
     }
-    console.error('[inventory-api] failed to build public vehicle snapshot:', error);
+    console.error(
+      '[inventory-api] failed to build public vehicle snapshot:',
+      summarizeError(error)
+    );
     if (!response.headersSent) {
       writeJson(response, 500, { error: 'Database snapshot not available' }, corsHeaders);
     } else {
@@ -275,7 +282,10 @@ function startInventoryApiServer(options = {}) {
 
   const db = new sqlite3.Database(vehicleDbPath, sqlite3.OPEN_READONLY, (error) => {
     if (error) {
-      console.error('[inventory-api] failed to open configured database:', error);
+      console.error(
+        '[inventory-api] failed to open configured database:',
+        summarizeError(error)
+      );
     } else {
       console.log('[inventory-api] using configured database');
     }
@@ -287,7 +297,10 @@ function startInventoryApiServer(options = {}) {
       sourcePath: vehicleDbPath,
       snapshotPath: publicSnapshotPath,
       onRefreshError: (error) => {
-        console.error('[inventory-api] failed to refresh public vehicle snapshot:', error);
+        console.error(
+          '[inventory-api] failed to refresh public vehicle snapshot:',
+          summarizeError(error)
+        );
       },
     });
 
@@ -333,7 +346,7 @@ function startInventoryApiServer(options = {}) {
 
       db.all(sql, params, (error, rows) => {
         if (error) {
-          console.error('[inventory-api] query failed:', error);
+          console.error('[inventory-api] query failed:', summarizeError(error));
           writeJson(response, 500, { error: 'Query failed' }, corsHeaders);
           return;
         }
@@ -372,7 +385,10 @@ function startInventoryApiServer(options = {}) {
         );
       })
       .catch((error) => {
-        console.error('[inventory-api] failed to prewarm public vehicle snapshot:', error);
+        console.error(
+          '[inventory-api] failed to prewarm public vehicle snapshot:',
+          summarizeError(error)
+        );
       });
   });
 
@@ -404,5 +420,6 @@ module.exports = {
     normalizeStatus,
     parseList,
     buildDbEtag,
+    sendVehicleDbFile,
   },
 };
