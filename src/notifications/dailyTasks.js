@@ -3,7 +3,16 @@ const { getAllSavedSearches } = require('../database/savedSearchManager');
 const { queryVehicles } = require('../database/vehicleQueryManager');
 const { EmbedBuilder } = require('discord.js');
 
-const NEW_VEHICLES_CHANNEL_ID = '1239688596080955492';
+const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
+
+function getNewVehiclesChannelId() {
+    const channelId = String(process.env.NEW_VEHICLES_CHANNEL_ID || '').trim();
+    if (!DISCORD_SNOWFLAKE_PATTERN.test(channelId)) {
+        console.error('NEW_VEHICLES_CHANNEL_ID must be configured with a valid Discord channel ID.');
+        return null;
+    }
+    return channelId;
+}
 
 async function processDailySavedSearches() {
     try {
@@ -34,10 +43,15 @@ async function processDailySavedSearches() {
 
 async function notifyNewVehicles() {
     try {
+        const channelId = getNewVehiclesChannelId();
+        if (!channelId) {
+            return;
+        }
+
         const newVehicles = await queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'NEW');
         if (newVehicles.length > 0) {
             const embeds = formatVehicles(newVehicles, 'New Vehicles Added Today');
-            await sendChannelNotification(NEW_VEHICLES_CHANNEL_ID, embeds);
+            await sendChannelNotification(channelId, embeds);
         }
     } catch (error) {
         console.error('Error notifying new vehicles:', error);

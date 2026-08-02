@@ -67,6 +67,7 @@ for public API consumers.
     TOKEN=your_discord_token
     GUILD_ID=your_guild_id
     CLIENT_ID=your_client_id
+    NEW_VEHICLES_CHANNEL_ID=your_new_vehicles_channel_id
     VEHICLE_DB_PATH=/absolute/path/to/vehicleInventory.db
     SCRAPER_ENGINE=http
     SCHEDULER_TIMEZONE=Etc/GMT+7
