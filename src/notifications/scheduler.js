@@ -5,6 +5,7 @@ const { getSessionID } = require('../bot/utils/utils');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
 const junkyards = require('../config/junkyards');
 const { withScrapeLock } = require('../scraping/scrapeLock');
+const { summarizeError } = require('../utils/errorSummary');
 
 const DEFAULT_SCHEDULER_TIMEZONE = 'Etc/GMT+7'; // Mountain Standard Time (MST, UTC-7), no DST shift.
 
@@ -22,7 +23,7 @@ function retryOperation(operation, retries, delay) {
       .then(resolve)
       .catch((error) => {
         if (retries > 0) {
-          console.log(`Retrying after error: ${error}. ${retries} retries left.`);
+          console.log(`Retrying after ${summarizeError(error)}. ${retries} retries left.`);
           setTimeout(() => {
             retryOperation(operation, retries - 1, delay).then(resolve).catch(reject);
           }, delay);
@@ -53,7 +54,7 @@ async function scrapeAllJunkyards(sessionID) {
         await universalWebScrape(options);
         console.log(`Scraping completed for ${junkyardKey}`);
       } catch (error) {
-        console.error(`Error scraping ${junkyardKey}:`, error);
+        console.error(`Error scraping ${junkyardKey}:`, summarizeError(error));
         failures.push({ junkyardKey, error });
       }
     }
@@ -103,7 +104,7 @@ function startScheduledTasks() {
       }, 3, 5000);
       console.log('Scraping completed successfully.');
     } catch (error) {
-      console.error('Scraping failed after retries:', error);
+      console.error('Scraping failed after retries:', summarizeError(error));
     }
   }, scheduleOptions);
 
@@ -119,7 +120,7 @@ function startScheduledTasks() {
         console.log('Session not updated recently; skipping processing of saved searches.');
       }
     } catch (error) {
-      console.error('Error during processing daily saved searches:', error);
+      console.error('Error during processing daily saved searches:', summarizeError(error));
     }
   }, scheduleOptions);
 }

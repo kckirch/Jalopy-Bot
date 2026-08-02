@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'src/bot/commands/runTestSchedulerCommand.js');
@@ -66,6 +67,7 @@ test('handleRunTestSchedulerCommand runs the missed morning jobs', async () => {
 });
 
 test('handleRunTestSchedulerCommand reports a missed-morning recovery failure', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
   const interaction = {
     memberPermissions: {
       has() {
@@ -82,18 +84,21 @@ test('handleRunTestSchedulerCommand reports a missed-morning recovery failure', 
     },
   };
 
-  await withRunTestSchedulerCommandMocks(
-    {
-      runMissedMorningJobs: async () => { throw new Error('forced-failure'); },
-    },
-    async (handleRunTestSchedulerCommand) => {
-      await handleRunTestSchedulerCommand(interaction);
-    }
-  );
+  const consoleCalls = await captureConsole(async () => {
+    await withRunTestSchedulerCommandMocks(
+      {
+        runMissedMorningJobs: async () => { throw new Error(privateErrorDetails); },
+      },
+      async (handleRunTestSchedulerCommand) => {
+        await handleRunTestSchedulerCommand(interaction);
+      }
+    );
+  });
 
   assert.equal(interaction.deferReplyCalls, 1);
   assert.equal(interaction.editReplyCalls.length, 1);
   assert.match(interaction.editReplyCalls[0], /an error occurred/i);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
 
 test('handleRunTestSchedulerCommand denies users without elevated permissions', async () => {
