@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const modulePath = path.join(repoRoot, 'src/testing/liveScrapeSmokeTest.js');
@@ -10,6 +11,7 @@ const {
   resolveScrapeTarget,
   resolveScrapeTargets,
   __testables,
+  runLiveScrapeSmokeCli,
   runLiveScrapeSmokeTest,
 } = require(modulePath);
 
@@ -31,6 +33,26 @@ test('parseArgs parses supported smoke-script flags', () => {
   assert.equal(parsed.engine, 'http');
   assert.equal(parsed.dbPath, '/tmp/smoke.db');
   assert.equal(parsed.keepDb, true);
+});
+
+test('live smoke CLI redacts failures and sets a failing exit code', async () => {
+  const privateErrorDetails = 'private smoke path /home/kc/private-inventory.db';
+  const previousExitCode = process.exitCode;
+
+  try {
+    process.exitCode = undefined;
+    const consoleCalls = await captureConsole(async () => {
+      await runLiveScrapeSmokeCli(async () => {
+        throw new TypeError(privateErrorDetails);
+      });
+    });
+
+    assert.equal(process.exitCode, 1);
+    assert.match(joinedConsoleText(consoleCalls), /\[smoke\] FAIL: TypeError/);
+    assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+  } finally {
+    process.exitCode = previousExitCode;
+  }
 });
 
 test('resolveScrapeTarget maps trustypickapart explicitly and rejects grouped locations', () => {

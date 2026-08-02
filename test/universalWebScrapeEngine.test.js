@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const universalPath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
@@ -153,17 +154,22 @@ test('SCRAPER_ENGINE=auto selects HTTP when chromedriver path does not resolve',
 
 test('invalid SCRAPER_ENGINE falls back to auto selection', async () => {
   const calls = [];
+  const privateConfiguredValue = 'private-token-value';
 
-  await withEngineMocks({
-    scraperEngineEnv: 'invalid',
-    resolvedChromedriverPath: null,
-    scrapeWithHttp: async () => {
-      calls.push({ type: 'http' });
-    },
-  }, async ({ universalWebScrape, __testables }) => {
-    assert.equal(__testables.resolveConfiguredScraperEngine(process.env), 'auto');
-    await universalWebScrape({ inventoryUrl: 'https://example.test' });
+  const consoleCalls = await captureConsole(async () => {
+    await withEngineMocks({
+      scraperEngineEnv: privateConfiguredValue,
+      resolvedChromedriverPath: null,
+      scrapeWithHttp: async () => {
+        calls.push({ type: 'http' });
+      },
+    }, async ({ universalWebScrape, __testables }) => {
+      assert.equal(__testables.resolveConfiguredScraperEngine(process.env), 'auto');
+      await universalWebScrape({ inventoryUrl: 'https://example.test' });
+    });
   });
 
   assert.deepEqual(calls, [{ type: 'http' }]);
+  assert.match(joinedConsoleText(consoleCalls), /Invalid SCRAPER_ENGINE value/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateConfiguredValue), false);
 });

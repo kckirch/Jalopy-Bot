@@ -6,7 +6,7 @@ function resolveConfiguredScraperEngine(env = process.env) {
   const configured = String(env.SCRAPER_ENGINE || '').trim().toLowerCase();
   if (!configured) return 'auto';
   if (!VALID_SCRAPER_ENGINES.has(configured)) {
-    console.warn(`Invalid SCRAPER_ENGINE="${configured}". Falling back to auto.`);
+    console.warn('Invalid SCRAPER_ENGINE value. Falling back to auto.');
     return 'auto';
   }
   return configured;

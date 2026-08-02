@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { summarizeError } = require('../src/utils/errorSummary');
 
 const COVERAGE_MINIMUMS = {
   lines: 82,
@@ -69,18 +70,23 @@ function runTests(argv = process.argv.slice(2)) {
   }
 }
 
-if (require.main === module) {
+function runTestCli(run = runTests) {
   try {
-    process.exitCode = runTests();
+    process.exitCode = run();
   } catch (error) {
-    console.error(error.message);
+    console.error('Test runner failed:', summarizeError(error));
     process.exitCode = 1;
   }
+}
+
+if (require.main === module) {
+  runTestCli();
 }
 
 module.exports = {
   COVERAGE_MINIMUMS,
   buildNodeArgs,
+  runTestCli,
   runTests,
   supportsCoverageThresholds,
 };
