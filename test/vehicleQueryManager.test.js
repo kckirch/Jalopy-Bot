@@ -32,6 +32,7 @@ let tempDir;
 let originalCwd;
 let previousDbPathEnv;
 let queryVehicles;
+let getModelSuggestions;
 let getModelSuggestionsForNoResults;
 let queryDb;
 
@@ -90,7 +91,12 @@ test.before(async () => {
 
   delete require.cache[dbPathModulePath];
   delete require.cache[queryManagerPath];
-  ({ queryVehicles, getModelSuggestionsForNoResults, db: queryDb } = require(queryManagerPath));
+  ({
+    queryVehicles,
+    getModelSuggestions,
+    getModelSuggestionsForNoResults,
+    db: queryDb,
+  } = require(queryManagerPath));
 });
 
 test.after(async () => {
@@ -163,4 +169,35 @@ test('no-result model suggestions include normalized variants and close matches'
 test('no-result model suggestions can surface partial model variants (300 -> 300 ZX)', async () => {
   const suggestions = await getModelSuggestionsForNoResults('NISSAN', '300', 1020, 5);
   assert.ok(suggestions.includes('300 ZX'));
+});
+
+test('vehicle query failures reject without logging SQL error details', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+  const originalAll = queryDb.all.bind(queryDb);
+  queryDb.all = function allWithFailure(_sql, _params, callback) {
+    callback(new Error(privateErrorDetails));
+    return this;
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      const operations = [
+        () => queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'ACTIVE'),
+        () => getModelSuggestionsForNoResults('TOYOTA', 'CAMRY', 'ALL', 5),
+        () => getModelSuggestions('TOYOTA', 'CAM', 5),
+      ];
+
+      for (const operation of operations) {
+        await assert.rejects(operation, (error) => error.message === privateErrorDetails);
+      }
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, /Failed to query vehicles: Error/);
+    assert.match(logOutput, /Failed to query no-result model suggestions: Error/);
+    assert.match(logOutput, /Failed to query model suggestions: Error/);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
+  } finally {
+    queryDb.all = originalAll;
+  }
 });
