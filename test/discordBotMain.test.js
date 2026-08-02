@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const discordBotMainPath = path.join(repoRoot, 'src/bot/discordBotMain.js');
@@ -11,7 +12,7 @@ const interactionHandlerPath = path.join(repoRoot, 'src/bot/handlers/interaction
 
 function noopHandler() {}
 
-async function withDiscordBotMainMocks(runTest) {
+async function withDiscordBotMainMocks(runTest, mocks = {}) {
   const targets = [
     discordBotMainPath,
     clientPath,
@@ -39,6 +40,9 @@ async function withDiscordBotMainMocks(runTest) {
     },
     async login() {
       state.loginCalls += 1;
+      if (mocks.login) {
+        return mocks.login();
+      }
     },
   };
 
@@ -56,6 +60,9 @@ async function withDiscordBotMainMocks(runTest) {
     exports: {
       setupDatabase: async () => {
         state.setupDatabaseCalls += 1;
+        if (mocks.setupDatabase) {
+          return mocks.setupDatabase();
+        }
       },
     },
   };
@@ -67,6 +74,9 @@ async function withDiscordBotMainMocks(runTest) {
     exports: {
       startScheduledTasks: () => {
         state.startScheduledTasksCalls += 1;
+        if (mocks.startScheduledTasks) {
+          return mocks.startScheduledTasks();
+        }
       },
     },
   };
@@ -102,4 +112,38 @@ test('discordBotMain uses clientReady and initializes scheduled tasks only once 
 
     assert.equal(state.startScheduledTasksCalls, 1);
   });
+});
+
+test('discordBotMain redacts startup errors', async () => {
+  const setupDetails = 'private database /home/kc/private-inventory.db';
+  const schedulerDetails = 'private scheduler value 123456789';
+  const loginDetails = 'private Discord token value';
+
+  const consoleCalls = await captureConsole(async () => {
+    await withDiscordBotMainMocks(
+      async ({ handlers }) => {
+        await new Promise((resolve) => setImmediate(resolve));
+        await handlers.clientReady({ user: { tag: 'jalopy#0001' } });
+      },
+      {
+        setupDatabase: async () => {
+          throw new TypeError(setupDetails);
+        },
+        startScheduledTasks: () => {
+          throw new RangeError(schedulerDetails);
+        },
+        login: async () => {
+          throw new URIError(loginDetails);
+        },
+      }
+    );
+  });
+  const consoleText = joinedConsoleText(consoleCalls);
+
+  assert.match(consoleText, /Failed to set up database: TypeError/);
+  assert.match(consoleText, /Failed to start scheduled tasks: RangeError/);
+  assert.match(consoleText, /Failed to login: URIError/);
+  assert.equal(consoleText.includes(setupDetails), false);
+  assert.equal(consoleText.includes(schedulerDetails), false);
+  assert.equal(consoleText.includes(loginDetails), false);
 });
