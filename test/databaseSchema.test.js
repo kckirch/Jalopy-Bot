@@ -78,6 +78,24 @@ test('saved_searches table includes username and yard_name columns', async () =>
   assert.ok(columnNames.includes('yard_name'));
 });
 
+test('setupDatabase is idempotent when the schema is already current', async () => {
+  await setupDatabase();
+
+  const savedSearchColumns = await all(
+    db,
+    "PRAGMA table_info('saved_searches');"
+  );
+  const columnNames = savedSearchColumns.map((column) => column.name);
+  const tables = await all(
+    db,
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('vehicles', 'saved_searches') ORDER BY name;"
+  );
+
+  assert.equal(columnNames.filter((name) => name === 'username').length, 1);
+  assert.equal(columnNames.filter((name) => name === 'yard_name').length, 1);
+  assert.deepEqual(tables, [{ name: 'saved_searches' }, { name: 'vehicles' }]);
+});
+
 test('setupDatabase redacts errors while preserving the rejection', async () => {
   const privateErrorDetails = 'private SQL value /home/kc/private-inventory.db';
   const originalRun = db.run;
