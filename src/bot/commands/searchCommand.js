@@ -782,7 +782,7 @@ async function handleSavedSearchQuickActionButton(interaction, quickHash) {
   }
 
   if (action === 'delete') {
-    let deletedCount = 0;
+    let deletedCount;
     if (payload.sid) {
       await deleteSavedSearch(payload.sid);
       deletedCount = 1;

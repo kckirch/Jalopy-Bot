@@ -648,6 +648,59 @@ test('saved-search quick action run updates interaction with current match summa
   );
 });
 
+test('saved-search quick action delete reports the number removed', async () => {
+  const savedSearch = {
+    id: 123,
+    yard_id: '1020',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year_range: '2005',
+    status: 'ACTIVE',
+  };
+  const deletedSearchIds = [];
+  let savedSearchReads = 0;
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [],
+      getSavedSearches: async () => {
+        savedSearchReads += 1;
+        return savedSearchReads === 1 ? [savedSearch] : [];
+      },
+      deleteSavedSearch: async (id) => deletedSearchIds.push(id),
+    },
+    async ({ handleSavedSearchQuickActionButton, __testables }) => {
+      const quickCustomId = __testables.buildQuickActionCustomId('delete', {
+        uid: 'user-1',
+        lc: 'boise',
+        yd: savedSearch.yard_id,
+        mk: savedSearch.make,
+        md: savedSearch.model,
+        yr: savedSearch.year_range,
+        st: savedSearch.status,
+        sid: savedSearch.id,
+        idx: 0,
+      });
+      const interaction = {
+        user: { id: 'user-1' },
+        updates: [],
+        async update(payload) {
+          this.updates.push(payload);
+        },
+        async reply() {},
+      };
+
+      await handleSavedSearchQuickActionButton(interaction, quickCustomId.slice(3));
+
+      assert.deepEqual(deletedSearchIds, ['123']);
+      assert.equal(savedSearchReads, 2);
+      assert.equal(interaction.updates.length, 1);
+      assert.match(interaction.updates[0].content, /Deleted 1 saved search/);
+      assert.match(interaction.updates[0].content, /no saved searches left/i);
+    }
+  );
+});
+
 test('parameterStore enforces TTL and max-entry limits', async () => {
   await withSearchCommandMocks(
     {

@@ -453,18 +453,24 @@ async function scrapeWithHttp(options, deps = {}) {
   let axiosModule = deps.axios;
   if (!axiosModule) {
     try {
-      axiosModule = require('axios');
+      const loadAxios = deps.loadAxios || (() => require('axios'));
+      axiosModule = loadAxios();
     } catch (error) {
-      throw new Error('HTTP scraper requires axios. Install it with: npm install axios');
+      throw new Error('HTTP scraper requires axios. Install it with: npm install axios', {
+        cause: error,
+      });
     }
   }
 
   let cheerioModule = deps.cheerio;
   if (!cheerioModule) {
     try {
-      cheerioModule = require('cheerio');
+      const loadCheerio = deps.loadCheerio || (() => require('cheerio'));
+      cheerioModule = loadCheerio();
     } catch (error) {
-      throw new Error('HTTP scraper requires cheerio. Install it with: npm install cheerio');
+      throw new Error('HTTP scraper requires cheerio. Install it with: npm install cheerio', {
+        cause: error,
+      });
     }
   }
 
