@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'src/bot/commands/manualNotifyNewVehiclesCommand.js');
@@ -99,4 +100,35 @@ test('handleManualNotifyNewVehiclesCommand denies non-elevated users', async () 
     content: 'You do not have permission to use this command.',
     ephemeral: true,
   });
+});
+
+test('handleManualNotifyNewVehiclesCommand redacts notification errors', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+  const interaction = {
+    memberPermissions: {
+      has() {
+        return true;
+      },
+    },
+    replyCalls: [],
+    async reply(payload) {
+      this.replyCalls.push(payload);
+    },
+  };
+
+  const consoleCalls = await captureConsole(async () => {
+    await withManualNotifyCommandMocks(
+      async () => { throw new TypeError(privateErrorDetails); },
+      async (handleManualNotifyNewVehiclesCommand) => {
+        await handleManualNotifyNewVehiclesCommand(interaction);
+      }
+    );
+  });
+
+  assert.deepEqual(interaction.replyCalls, [{
+    content: 'Failed to send new vehicles notification.',
+    ephemeral: true,
+  }]);
+  assert.match(joinedConsoleText(consoleCalls), /Error notifying new vehicles: TypeError/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });

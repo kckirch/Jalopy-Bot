@@ -1,4 +1,5 @@
 const { processDailySavedSearches } = require('../../notifications/dailyTasks');
+const { summarizeError } = require('../../utils/errorSummary');
 
 async function handleDailySavedSearchCommand(interaction) {
   console.log('Daily saved search command received.');
@@ -7,7 +8,7 @@ async function handleDailySavedSearchCommand(interaction) {
     await processDailySavedSearches();
     await interaction.editReply('Daily saved searches processed successfully.');
   } catch (error) {
-    console.error('Error processing daily saved searches:', error);
+    console.error('Error processing daily saved searches:', summarizeError(error));
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply('An error occurred while processing daily saved searches.');
     } else {

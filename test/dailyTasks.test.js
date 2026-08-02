@@ -439,3 +439,36 @@ test('processDailySavedSearches skips saved searches with paused frequency', asy
   assert.equal(queryCalls.length, 1);
   assert.equal(queryCalls[0][4], 'NEW');
 });
+
+test('processDailySavedSearches does not log upstream error details', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+  const consoleCalls = await captureConsole(async () => {
+    await withDailyTasksMocks(
+      {
+        client: { isReady: () => true },
+        getAllSavedSearches: async () => [{
+          user_id: 'private-user',
+          yard_id: '1020',
+          make: 'PRIVATE-MAKE',
+          model: 'PRIVATE-MODEL',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+        }],
+        queryVehicles: async (_yardId, _make, _model, _yearRange, status) => {
+          if (status === 'ACTIVE') {
+            throw new TypeError(privateErrorDetails);
+          }
+          return [];
+        },
+      },
+      async ({ processDailySavedSearches }) => {
+        await processDailySavedSearches();
+      }
+    );
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  assert.match(logOutput, /Error processing saved search: TypeError/);
+  assert.equal(logOutput.includes(privateErrorDetails), false);
+  assert.equal(logOutput.includes('PRIVATE-MODEL'), false);
+});

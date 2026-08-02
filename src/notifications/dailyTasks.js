@@ -2,6 +2,7 @@ const { client } = require('../bot/utils/client');
 const { getAllSavedSearches } = require('../database/savedSearchManager');
 const { queryVehicles } = require('../database/vehicleQueryManager');
 const { EmbedBuilder } = require('discord.js');
+const { summarizeError } = require('../utils/errorSummary');
 
 const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 
@@ -30,14 +31,14 @@ async function processDailySavedSearches() {
                     await sendNotification(search.user_id, embeds);
                 }
             } catch (error) {
-                console.error('Error processing saved search:', error);
+                console.error('Error processing saved search:', summarizeError(error));
             }
         }
 
         await notifyNewVehicles();
 
     } catch (error) {
-        console.error('Error processing daily saved searches:', error);
+        console.error('Error processing daily saved searches:', summarizeError(error));
     }
 }
 
@@ -54,7 +55,7 @@ async function notifyNewVehicles() {
             await sendChannelNotification(channelId, embeds);
         }
     } catch (error) {
-        console.error('Error notifying new vehicles:', error);
+        console.error('Error notifying new vehicles:', summarizeError(error));
     }
 }
 
@@ -68,7 +69,7 @@ async function sendNotification(userId, embeds) {
         const user = await client.users.fetch(userId);
         await sendEmbedChunks(user, embeds);
     } catch (err) {
-        console.error('Failed to fetch notification recipient:', err);
+        console.error('Failed to fetch notification recipient:', summarizeError(err));
         throw err;
     }
 }
@@ -99,7 +100,7 @@ async function sendEmbedChunks(target, embeds) {
             try {
                 await target.send({ embeds: chunk });
             } catch (err) {
-                console.error('Failed to send notification:', err);
+                console.error('Failed to send notification:', summarizeError(err));
                 throw err;
             }
             chunk = [embed];
@@ -114,7 +115,7 @@ async function sendEmbedChunks(target, embeds) {
         try {
             await target.send({ embeds: chunk });
         } catch (err) {
-            console.error('Failed to send notification:', err);
+            console.error('Failed to send notification:', summarizeError(err));
             throw err;
         }
     }

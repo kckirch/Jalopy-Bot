@@ -1,5 +1,6 @@
 const { notifyNewVehicles } = require('../../notifications/dailyTasks');
 const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
+const { summarizeError } = require('../../utils/errorSummary');
 
 async function handleManualNotifyNewVehiclesCommand(interaction) {
   try {
@@ -10,7 +11,7 @@ async function handleManualNotifyNewVehiclesCommand(interaction) {
     await notifyNewVehicles();
     await interaction.reply({ content: 'New vehicles notification sent successfully.', ephemeral: true });
   } catch (error) {
-    console.error('Error notifying new vehicles:', error);
+    console.error('Error notifying new vehicles:', summarizeError(error));
     await interaction.reply({ content: 'Failed to send new vehicles notification.', ephemeral: true });
   }
 }
