@@ -6,8 +6,10 @@ const { client } = require('../src/bot/utils/client');
 
 test('Discord client registers supported connection lifecycle listeners', () => {
   const eventNames = new Set(client.eventNames());
-  const websocketError = new Error('websocket failure');
-  const shardError = new Error('shard failure');
+  const websocketDetails = 'private websocket /home/kc/private.env';
+  const shardDetails = 'private Discord user 123456789';
+  const websocketError = new TypeError(websocketDetails);
+  const shardError = new RangeError(shardDetails);
   const errorCalls = [];
   const warningCalls = [];
   const logCalls = [];
@@ -38,9 +40,11 @@ test('Discord client registers supported connection lifecycle listeners', () => 
   }
 
   assert.deepEqual(errorCalls, [
-    ['WebSocket encountered an error:', websocketError],
-    ['A websocket connection encountered an error:', shardError],
+    ['WebSocket encountered an error:', 'TypeError'],
+    ['A websocket connection encountered an error:', 'RangeError'],
   ]);
+  assert.equal(JSON.stringify(errorCalls).includes(websocketDetails), false);
+  assert.equal(JSON.stringify(errorCalls).includes(shardDetails), false);
   assert.deepEqual(warningCalls, [['Shard 3 disconnected with code 1006.']]);
   assert.deepEqual(logCalls, [['Shard 3 is attempting to reconnect.']]);
 });
