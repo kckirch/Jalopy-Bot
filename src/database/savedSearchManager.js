@@ -8,14 +8,12 @@ function addSavedSearch(userId, username, yardId, yard_name, make, model, yearRa
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     `;
     const params = [userId, username, yardId, yard_name, make, model, yearRange, status, notes];
-    console.log("Attempting to add saved search with parameters:", params);
     return new Promise((resolve, reject) => {
         db.run(sql, params, function(err) {
             if (err) {
                 console.error('Error adding new saved search:', err);
                 reject(err);
             } else {
-                console.log('Saved search added successfully with ID:', this.lastID);
                 resolve(this.lastID);
             }
         });
@@ -30,15 +28,12 @@ function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
             WHERE user_id = TRIM(?) AND yard_id = TRIM(?) AND UPPER(make) = UPPER(TRIM(?)) AND UPPER(model) = UPPER(TRIM(?)) AND year_range = TRIM(?) AND status = TRIM(?);
         `;
         const params = [userId, yardId, make, model, yearRange, status];
-        console.log("Running SQL Check for Existing Search:", sql, params);  // Log the query and parameters
-        
         db.get(sql, params, (err, row) => {
             if (err) {
-                console.error("SQL Error in checkExistingSearch:", err);  // Log any SQL errors
+                console.error("SQL Error in checkExistingSearch:", err);
                 reject(err);
             } else {
                 const exists = !!row;
-                console.log("Search Exists Check Result:", exists);  // Log the result of the existence check
                 resolve(exists);
             }
         });
@@ -75,7 +70,6 @@ async function deleteSavedSearch(searchId) {
           console.error('Error deleting saved search:', err);
           reject(err);
         } else {
-          console.log('Saved search deleted successfully.');
           resolve();
         }
       });
@@ -98,7 +92,6 @@ function getSavedSearches(userId, yardId = null) {
           console.error('Failed to retrieve saved searches:', err);
           reject(err);
         } else {
-          console.log("Retrieved saved searches successfully.");
           resolve(rows);
         }
       });
@@ -113,7 +106,6 @@ function getSavedSearches(userId, yardId = null) {
                 console.error('Failed to retrieve all saved searches:', err);
                 reject(err);
             } else {
-                console.log("Retrieved all saved searches successfully.");
                 resolve(rows);
             }
         });

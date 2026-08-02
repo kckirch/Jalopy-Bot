@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
@@ -117,19 +118,22 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
 test('savedsearch command replies with no-results message when user has no saved searches', async () => {
   const interaction = makeInteraction('user-empty');
 
-  await withSavedSearchCommandMocks(
-    {
-      getSavedSearches: async () => [],
-    },
-    async (handleSavedSearchCommand) => {
-      await handleSavedSearchCommand(interaction);
-    }
-  );
+  const consoleCalls = await captureConsole(async () => {
+    await withSavedSearchCommandMocks(
+      {
+        getSavedSearches: async () => [],
+      },
+      async (handleSavedSearchCommand) => {
+        await handleSavedSearchCommand(interaction);
+      }
+    );
+  });
 
   assert.equal(interaction.deferReplyCalls.length, 1);
   assert.equal(interaction.deferReplyCalls[0].ephemeral, true);
   assert.equal(interaction.editReplyCalls.length, 1);
   assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
+  assert.equal(joinedConsoleText(consoleCalls).includes('user-empty'), false);
 });
 
 test('savedsearch command renders in-channel carousel with requested actions', async () => {

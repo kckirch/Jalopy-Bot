@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
@@ -127,14 +128,16 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
     ];
   };
 
-  await withDailyTasksMocks(
-    { client, getAllSavedSearches, queryVehicles },
-    async ({ processDailySavedSearches }) => {
-      await processDailySavedSearches();
-      await tick();
-      await tick();
-    }
-  );
+  const consoleCalls = await captureConsole(async () => {
+    await withDailyTasksMocks(
+      { client, getAllSavedSearches, queryVehicles },
+      async ({ processDailySavedSearches }) => {
+        await processDailySavedSearches();
+        await tick();
+        await tick();
+      }
+    );
+  });
 
   assert.ok(queryCalls.some((call) => call.status === 'ACTIVE'));
   assert.ok(queryCalls.some((call) => call.status === 'NEW'));
@@ -142,6 +145,11 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
   assert.equal(channelSends.length, 1);
   assert.ok(Array.isArray(dmSends[0].payload.embeds));
   assert.ok(Array.isArray(channelSends[0].payload.embeds));
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  for (const privateValue of ['user-1', 'user#1', '1239688596080955492']) {
+    assert.equal(logOutput.includes(privateValue), false, privateValue);
+  }
 });
 
 test('processDailySavedSearches awaits DM delivery before resolving', async () => {

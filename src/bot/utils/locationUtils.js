@@ -47,8 +47,6 @@ function convertLocationToYardId(location) {
 }
 
 function convertYardIdToLocation(yardId) {
-  console.log("Received yardId:", yardId);
-
   if (yardId === 'ALL') {
     return Object.keys(yardIdMapping).join(', ');
   } else if (Array.isArray(yardId)) {

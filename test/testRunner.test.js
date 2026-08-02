@@ -26,6 +26,8 @@ test('coverage mode applies the repository minimums', () => {
     '--test',
     '--test-concurrency=1',
     '--experimental-test-coverage',
+    '--test-coverage-exclude=test/**',
+    '--test-coverage-exclude=test-support/**',
     `--test-coverage-lines=${COVERAGE_MINIMUMS.lines}`,
     `--test-coverage-branches=${COVERAGE_MINIMUMS.branches}`,
     `--test-coverage-functions=${COVERAGE_MINIMUMS.functions}`,

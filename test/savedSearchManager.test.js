@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
@@ -88,6 +89,42 @@ test('addSavedSearch + getSavedSearches persists expected data', async () => {
   assert.equal(rows[0].yard_name, 'BOISE');
   assert.equal(rows[0].make, 'TOYOTA');
   assert.equal(rows[0].model, 'CAMRY');
+});
+
+test('saved-search operations do not log private record fields', async () => {
+  const privateValues = [
+    'private-user-id',
+    'private-user#0001',
+    'PRIVATE-MODEL',
+    'private note',
+  ];
+  const consoleCalls = await captureConsole(async () => {
+    await savedSearchManager.addSavedSearch(
+      privateValues[0],
+      privateValues[1],
+      '1020',
+      'BOISE',
+      'PRIVATE-MAKE',
+      privateValues[2],
+      '2001-2005',
+      'ACTIVE',
+      privateValues[3]
+    );
+    await savedSearchManager.checkExistingSearch(
+      privateValues[0],
+      '1020',
+      'PRIVATE-MAKE',
+      privateValues[2],
+      '2001-2005',
+      'ACTIVE'
+    );
+    await savedSearchManager.getSavedSearches(privateValues[0]);
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  for (const privateValue of privateValues) {
+    assert.equal(logOutput.includes(privateValue), false, privateValue);
+  }
 });
 
 test('addSavedSearch rejects on database insert failure', async () => {

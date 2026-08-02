@@ -38,7 +38,9 @@ scrape responses. It must not read or modify a configured production database.
 
 Follow the existing CommonJS style and favor clear names over clever
 abstractions. Avoid unrelated formatting or dependency changes in the same
-pull request.
+pull request. Production logs must not include Discord IDs, usernames,
+saved-search fields, notes, local filesystem paths, or raw SQL parameter
+arrays.
 
 ## Validation
 

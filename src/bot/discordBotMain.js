@@ -15,8 +15,8 @@ setupDatabase().then(() => {
   console.error('Failed to set up database:', error);
 });
 
-client.on(Events.ClientReady, async (c) => {
-  console.log(`✅   ${c.user.tag} is online.  ✅`);
+client.on(Events.ClientReady, async () => {
+  console.log('✅ Discord bot is online. ✅');
   if (!readyHandled) {
     readyHandled = true;
     try {
