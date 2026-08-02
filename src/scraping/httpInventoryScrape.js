@@ -1,4 +1,5 @@
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
+const { summarizeError } = require('../utils/errorSummary');
 
 function isHttpDebugEnabled() {
   const value = String(process.env.SCRAPER_HTTP_DEBUG || '').trim().toLowerCase();
@@ -561,7 +562,7 @@ async function scrapeWithHttp(options, deps = {}) {
         );
       }
     } catch (markInactiveError) {
-      console.error('Error during inactive reconciliation:', markInactiveError);
+      console.error('Error during inactive reconciliation:', summarizeError(markInactiveError));
     }
 
     const endTime = Date.now();

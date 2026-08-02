@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const scrapeModulePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
@@ -226,6 +227,60 @@ test('http scraper skips inactive reconciliation when zero rows were upserted', 
   );
 
   assert.equal(markCalls.length, 0);
+});
+
+test('http scraper does not log inactive reconciliation error details', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+  const httpClient = createHttpClient(async (config) => {
+    const method = String(config.method || 'GET').toUpperCase();
+    const pathname = new URL(config.url).pathname;
+
+    if (method === 'GET' && pathname === '/') {
+      return {
+        status: 200,
+        headers: {},
+        data: buildInventoryHtml({ yardOptions: ['1020'] }),
+      };
+    }
+
+    if (method === 'POST' && pathname === '/') {
+      return {
+        status: 200,
+        headers: {},
+        data: buildInventoryHtml({
+          yardOptions: ['1020'],
+          rows: [{ year: 2005, make: 'TOYOTA', model: 'CAMRY', rowNumber: 11 }],
+        }),
+      };
+    }
+
+    throw new Error(`Unexpected request: ${method} ${pathname}`);
+  });
+
+  const consoleCalls = await captureConsole(async () => {
+    await scrapeWithHttp(
+      {
+        inventoryUrl: 'https://inventory.pickapartjalopyjungle.com/',
+        hasMultipleLocations: true,
+        yardId: '1020',
+        make: 'TOYOTA',
+        model: 'CAMRY',
+        sessionID: '20260224',
+        shouldMarkInactive: true,
+      },
+      {
+        cheerio,
+        httpClient,
+        insertOrUpdateVehicle: async () => {},
+        markInactiveVehicles: async () => {
+          throw new TypeError(privateErrorDetails);
+        },
+      }
+    );
+  });
+
+  assert.match(joinedConsoleText(consoleCalls), /Error during inactive reconciliation: TypeError/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
 
 test('http scraper in multi-yard mode iterates discovered yard options', async () => {

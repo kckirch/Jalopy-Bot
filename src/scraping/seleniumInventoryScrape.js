@@ -2,6 +2,7 @@ const { Builder, By, until } = require('selenium-webdriver');
 const chrome = require('selenium-webdriver/chrome');
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 const { resolveChromedriverPath } = require('./chromedriverResolver');
+const { summarizeError } = require('../utils/errorSummary');
 
 function normalizeYardId(yardId) {
   const parsed = parseInt(yardId, 10);
@@ -183,12 +184,13 @@ async function scrapeWithSelenium(options, deps = {}) {
     }
     scrapeSucceeded = true;
   } catch (error) {
-    if (error.message.includes('spawn') && error.message.includes('ENOENT')) {
+    const errorMessage = typeof error?.message === 'string' ? error.message : '';
+    if (errorMessage.includes('spawn') && errorMessage.includes('ENOENT')) {
       console.error('Error: Chromedriver not found. Please ensure the path to chromedriver is correct.');
-    } else if (error.message.includes('session not created')) {
+    } else if (errorMessage.includes('session not created')) {
       console.error('Error: Chromedriver version mismatch. Please ensure you have the correct version of Chromedriver for your installed Chrome browser.');
     } else {
-      console.error('Scraping failed:', error);
+      console.error('Scraping failed:', summarizeError(error));
     }
     throw error;
   } finally {
@@ -199,7 +201,7 @@ async function scrapeWithSelenium(options, deps = {}) {
         console.log(`Skipping inactive reconciliation. shouldMarkInactive=${options.shouldMarkInactive === true}, scrapeSucceeded=${scrapeSucceeded}, scopedYards=${scrapedYardIds.size}, upserts=${upsertCount}`);
       }
     } catch (markInactiveError) {
-      console.error('Error during inactive reconciliation:', markInactiveError);
+      console.error('Error during inactive reconciliation:', summarizeError(markInactiveError));
     }
 
     console.log('🛑 Closing browser');

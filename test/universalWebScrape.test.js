@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const scrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
@@ -237,6 +238,7 @@ test('universalWebScrape skips inactive reconciliation when scrape produced zero
 test('universalWebScrape skips inactive reconciliation when selenium scrape fails after partial upserts', async () => {
   const markCalls = [];
   let insertCount = 0;
+  const privateErrorDetails = 'private-user /home/kc/private-file';
 
   const successfulRow = {
     async findElements(tagSelector) {
@@ -252,7 +254,7 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
   };
   const failingRow = {
     async findElements() {
-      throw new Error('simulated row parse failure');
+      throw new Error(privateErrorDetails);
     },
   };
 
@@ -270,32 +272,36 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
     },
   };
 
-  await withUniversalWebScrapeMocks(
-    {
-      driver,
-      insertOrUpdateVehicle: async () => {
-        insertCount += 1;
+  const consoleCalls = await captureConsole(async () => {
+    await withUniversalWebScrapeMocks(
+      {
+        driver,
+        insertOrUpdateVehicle: async () => {
+          insertCount += 1;
+        },
+        markInactiveVehicles: async (sessionID, options) => {
+          markCalls.push({ sessionID, options });
+        },
       },
-      markInactiveVehicles: async (sessionID, options) => {
-        markCalls.push({ sessionID, options });
-      },
-    },
-    async (universalWebScrape) => {
-      await assert.rejects(
-        () => universalWebScrape({
-          inventoryUrl: 'https://example.test',
-          hasMultipleLocations: false,
-          yardId: '1020',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          sessionID: '20260101',
-          shouldMarkInactive: true,
-        }),
-        /simulated row parse failure/
-      );
-    }
-  );
+      async (universalWebScrape) => {
+        await assert.rejects(
+          () => universalWebScrape({
+            inventoryUrl: 'https://example.test',
+            hasMultipleLocations: false,
+            yardId: '1020',
+            make: 'TOYOTA',
+            model: 'CAMRY',
+            sessionID: '20260101',
+            shouldMarkInactive: true,
+          }),
+          (error) => error.message === privateErrorDetails
+        );
+      }
+    );
+  });
 
   assert.equal(insertCount, 1);
   assert.equal(markCalls.length, 0);
+  assert.match(joinedConsoleText(consoleCalls), /Scraping failed: Error/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
