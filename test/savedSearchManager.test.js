@@ -128,30 +128,37 @@ test('saved-search operations do not log private record fields', async () => {
 });
 
 test('addSavedSearch rejects on database insert failure', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
   const originalRun = db.run.bind(db);
   db.run = function runWithFailure(sql, params, callback) {
     if (typeof callback === 'function') {
-      callback(new Error('forced-insert-failure'));
+      callback(new Error(privateErrorDetails));
       return this;
     }
     return originalRun(sql, params, callback);
   };
 
   try {
-    await assert.rejects(
-      savedSearchManager.addSavedSearch(
-        'user-fail',
-        'user#fail',
-        '1020',
-        'BOISE',
-        'TOYOTA',
-        'CAMRY',
-        'ANY',
-        'ACTIVE',
-        ''
-      ),
-      /forced-insert-failure/
-    );
+    const consoleCalls = await captureConsole(async () => {
+      await assert.rejects(
+        savedSearchManager.addSavedSearch(
+          'user-fail',
+          'user#fail',
+          '1020',
+          'BOISE',
+          'TOYOTA',
+          'CAMRY',
+          'ANY',
+          'ACTIVE',
+          ''
+        ),
+        (error) => error.message === privateErrorDetails
+      );
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, /Error adding new saved search: Error/);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
   } finally {
     db.run = originalRun;
   }
