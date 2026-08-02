@@ -92,6 +92,35 @@ for public API consumers.
     npm run start:prod
     ```
 
+### Run as user services on Linux
+
+The checked-in systemd user units keep both long-running processes supervised
+without requiring an open shell session. They assume the checkout is at
+`~/Jalopy-Bot`; change `WorkingDirectory` in both copied units when deploying
+somewhere else.
+
+```bash
+npm ci --omit=dev
+chmod 600 src/.env
+mkdir -p ~/.config/systemd/user
+cp deploy/systemd/*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now jalopy-bot.service jalopy-inventory-api.service
+```
+
+If user services do not survive logout or reboot on the host, ask its
+administrator to enable lingering for the deployment account. Check both
+processes after a deploy:
+
+```bash
+systemctl --user status jalopy-bot.service jalopy-inventory-api.service
+curl --fail http://127.0.0.1:8787/health
+```
+
+Run `npm run register:commands` separately whenever the Discord command
+definitions change. Keep `src/.env` and the runtime database out of the Git
+checkout as described above.
+
 ## Usage
 
 ### Discord Commands
