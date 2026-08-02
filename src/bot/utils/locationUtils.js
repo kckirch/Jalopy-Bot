@@ -139,5 +139,4 @@ module.exports = {
   reverseMakeAliases,
   convertLocationToYardId,
   convertYardIdToLocation,
-  yardIdMapping,
 };

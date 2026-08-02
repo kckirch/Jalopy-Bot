@@ -6,7 +6,7 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
 } = require('discord.js');
-const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
+const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation } = require('../utils/locationUtils');
 const { checkExistingSearch, addSavedSearch, getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
 const { summarizeError } = require('../../utils/errorSummary');
 const {
@@ -20,6 +20,11 @@ const {
   getSearchResultPageCount,
   sortVehiclesForSearchView,
 } = require('../utils/vehicleSearchResults');
+const {
+  canonicalizeYardIdForSavedSearch,
+  matchesSavedSearchCriteria,
+  serializeYardId,
+} = require('../utils/savedSearchCriteria');
 
 const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
 
@@ -33,44 +38,6 @@ const SEARCH_LOCATION_OPTIONS = [
   { label: 'Treasure Valley Yards', value: 'treasurevalleyyards' },
   { label: 'All', value: 'all' },
 ];
-
-function canonicalizeYardIdForSavedSearch(yardId) {
-  const normalizeIds = (input) => {
-    if (Array.isArray(input)) {
-      return input;
-    }
-    if (typeof input === 'string' && input.includes(',')) {
-      return input.split(',').map((id) => id.trim());
-    }
-    if (typeof input === 'number') {
-      return [input];
-    }
-    if (typeof input === 'string' && input.trim() !== '') {
-      return [input.trim()];
-    }
-    return [];
-  };
-
-  if (yardId === 'ALL') {
-    const allYardIds = Object.values(yardIdMapping);
-    return [...new Set(allYardIds)].sort((a, b) => a - b).join(',');
-  }
-
-  const normalized = normalizeIds(yardId)
-    .map((id) => parseInt(id, 10))
-    .filter((id) => !Number.isNaN(id));
-  const uniqueSorted = [...new Set(normalized)].sort((a, b) => a - b);
-
-  if (uniqueSorted.length > 0) {
-    return uniqueSorted.join(',');
-  }
-
-  if (typeof yardId === 'string') {
-    return yardId.replace(/\s+/g, '').trim();
-  }
-
-  return String(yardId);
-}
 
 function normalizeLocationName(location, yardId) {
   if (location && location.trim() !== '') {
@@ -127,18 +94,6 @@ function createQuickActionPayload({
     sid: savedSearchId || '',
     idx: Number.isInteger(savedIndex) && savedIndex >= 0 ? savedIndex : 0,
   };
-}
-
-function matchesSavedSearchWithPayload(savedSearch, payload) {
-  const savedYard = canonicalizeYardIdForSavedSearch(savedSearch.yard_id);
-  const payloadYard = canonicalizeYardIdForSavedSearch(payload.yd);
-  return (
-    normalizeSearchValue(savedYard) === normalizeSearchValue(payloadYard) &&
-    normalizeSearchValue(savedSearch.make) === normalizeSearchValue(payload.mk) &&
-    normalizeSearchValue(savedSearch.model) === normalizeSearchValue(payload.md) &&
-    normalizeSearchValue(savedSearch.year_range) === normalizeSearchValue(payload.yr) &&
-    normalizeSearchValue(savedSearch.status) === normalizeSearchValue(payload.st)
-  );
 }
 
 function buildSavedSearchActionEmbed({
@@ -243,17 +198,6 @@ async function buildSavedSearchActionMessage({
     components: [buildQuickActionButtons(payload)],
     ephemeral: true,
   };
-}
-
-function normalizeSearchValue(value) {
-  return String(value || '').trim().toUpperCase();
-}
-
-function serializeYardId(yardId) {
-  if (Array.isArray(yardId)) {
-    return yardId.join(',');
-  }
-  return String(yardId);
 }
 
 function formatSavedSearchPreview(savedSearches) {
@@ -478,16 +422,15 @@ async function handleSearchCommand(interaction) {
               try {
                 const cleanedYardId = canonicalizeYardIdForSavedSearch(searchState.yardId);
                 const savedSearches = await getSavedSearches(i.user.id);
-                const matchingSearches = savedSearches.filter((savedSearch) => {
-                  const savedYardId = canonicalizeYardIdForSavedSearch(savedSearch.yard_id);
-                  return (
-                    normalizeSearchValue(savedYardId) === normalizeSearchValue(cleanedYardId) &&
-                    normalizeSearchValue(savedSearch.make) === normalizeSearchValue(userMakeInput) &&
-                    normalizeSearchValue(savedSearch.model) === normalizeSearchValue(model) &&
-                    normalizeSearchValue(savedSearch.year_range) === normalizeSearchValue(yearInput) &&
-                    normalizeSearchValue(savedSearch.status) === normalizeSearchValue(status)
-                  );
-                });
+                const matchingSearches = savedSearches.filter((savedSearch) =>
+                  matchesSavedSearchCriteria(savedSearch, {
+                    yardId: cleanedYardId,
+                    make: userMakeInput,
+                    model,
+                    yearRange: yearInput,
+                    status,
+                  })
+                );
 
                 if (matchingSearches.length === 0) {
                   await i.reply({
@@ -655,7 +598,15 @@ async function handleSavedSearchQuickActionButton(interaction, quickHash) {
       await deleteSavedSearch(payload.sid);
       deletedCount = 1;
     } else {
-      const matches = savedSearches.filter((savedSearch) => matchesSavedSearchWithPayload(savedSearch, payload));
+      const matches = savedSearches.filter((savedSearch) =>
+        matchesSavedSearchCriteria(savedSearch, {
+          yardId: payload.yd,
+          make: payload.mk,
+          model: payload.md,
+          yearRange: payload.yr,
+          status: payload.st,
+        })
+      );
       for (const savedSearch of matches) {
         await deleteSavedSearch(savedSearch.id);
       }
