@@ -155,7 +155,7 @@ API downloads are generated from a separate snapshot containing only the
 
 ### Prerequisites
 
-- Node.js v20.19.0 through v24 (Node.js 24 LTS recommended)
+- Node.js 20.19+, 22.13+, or 24.x (Node.js 24 LTS recommended)
 - npm
 - SQLite (for local development)
 
@@ -190,7 +190,7 @@ npm test
 
 Each test run uses a temporary SQLite database and removes it afterward, so tests never open the configured production database.
 
-On Node.js 22.8 or newer, enforce the current regression floor of 82% line, 68% branch, and 90% function coverage:
+On Node.js 22.13 or newer, enforce the current regression floor of 82% line, 68% branch, and 90% function coverage:
 ```bash
 npm run test:coverage
 ```

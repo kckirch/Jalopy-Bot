@@ -5,7 +5,7 @@ easiest to review and the safest to deploy.
 
 ## Before you start
 
-- Use Node.js 20.19.0 through 24. Node.js 24 LTS is recommended.
+- Use Node.js 20.19+, 22.13+, or 24.x. Node.js 24 LTS is recommended.
 - Search existing issues before opening a new one.
 - Open an issue before making a large behavioral or architectural change.
 - Never commit credentials, Discord identities, runtime databases, logs, or

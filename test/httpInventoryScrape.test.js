@@ -4,7 +4,42 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const modulePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
-const { __testables } = require(modulePath);
+const { scrapeWithHttp, __testables } = require(modulePath);
+
+test('HTTP scraper preserves the axios load failure as the error cause', async () => {
+  const loadError = new Error('simulated axios load failure');
+
+  await assert.rejects(
+    scrapeWithHttp({}, {
+      loadAxios() {
+        throw loadError;
+      },
+    }),
+    (error) => {
+      assert.match(error.message, /requires axios/i);
+      assert.equal(error.cause, loadError);
+      return true;
+    }
+  );
+});
+
+test('HTTP scraper preserves the cheerio load failure as the error cause', async () => {
+  const loadError = new Error('simulated cheerio load failure');
+
+  await assert.rejects(
+    scrapeWithHttp({}, {
+      axios: {},
+      loadCheerio() {
+        throw loadError;
+      },
+    }),
+    (error) => {
+      assert.match(error.message, /requires cheerio/i);
+      assert.equal(error.cause, loadError);
+      return true;
+    }
+  );
+});
 
 test('buildSubmissionPayload maps ANY make/model to empty values', () => {
   const payload = __testables.buildSubmissionPayload(
