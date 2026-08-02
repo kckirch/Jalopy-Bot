@@ -134,16 +134,29 @@ test('registerCommands sends the tested definitions to the configured guild rout
 
 test('registerCommandsFromEnvironment remains injectable for isolated execution', async () => {
   const calls = [];
-  const commands = await registerCommandsFromEnvironment({
-    environment: registrationEnvironment,
-    environmentPath: '/path/that/does/not/exist/.env',
-    rest: {
-      async put(route, payload) {
-        calls.push({ route, payload });
+  const logCalls = [];
+  const originalConsoleLog = console.log;
+  let commands;
+
+  console.log = (...args) => logCalls.push(args.join(' '));
+  try {
+    commands = await registerCommandsFromEnvironment({
+      environment: registrationEnvironment,
+      environmentPath: '/path/that/does/not/exist/.env',
+      rest: {
+        async put(route, payload) {
+          calls.push({ route, payload });
+        },
       },
-    },
-  });
+    });
+  } finally {
+    console.log = originalConsoleLog;
+  }
 
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].payload, { body: commands });
+  assert.deepEqual(logCalls, [
+    'Registering slash commands...',
+    'Slash commands were registered successfully!',
+  ]);
 });

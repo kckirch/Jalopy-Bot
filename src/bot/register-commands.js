@@ -45,7 +45,7 @@ async function registerCommandsFromEnvironment({
   environmentPath = path.resolve(__dirname, '../.env'),
   rest,
 } = {}) {
-  require('dotenv').config({ path: environmentPath });
+  require('dotenv').config({ path: environmentPath, quiet: true });
   console.log('Registering slash commands...');
   const commandDefinitions = await registerCommands({ environment, rest });
   console.log('Slash commands were registered successfully!');
