@@ -105,7 +105,7 @@ async function scrapeWithSelenium(options, deps = {}) {
   const chromedriverPath = resolveChromedriverPath();
 
   if (chromedriverPath) {
-    console.log(`Using chromedriver at: ${chromedriverPath}`);
+    console.log('Using configured Chromedriver.');
     const serviceBuilder = new chrome.ServiceBuilder(chromedriverPath);
     builder = builder.setChromeService(serviceBuilder);
   } else {

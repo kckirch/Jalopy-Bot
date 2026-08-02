@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const sqlite3 = require('sqlite3').verbose();
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
@@ -141,9 +142,16 @@ test('year range and comma-separated year parsing works through queryVehicles', 
 });
 
 test('model query is punctuation-insensitive (RX7 matches RX-7 and RX 7)', async () => {
-  const rows = await queryVehicles(1020, 'MAZDA', 'RX7', 'ANY', 'ACTIVE');
+  let rows;
+  const consoleCalls = await captureConsole(async () => {
+    rows = await queryVehicles(1020, 'MAZDA', 'RX7', 'ANY', 'ACTIVE');
+  });
   const models = rows.map((row) => row.vehicle_model).sort();
   assert.deepEqual(models, ['RX 7', 'RX-7']);
+
+  const logOutput = joinedConsoleText(consoleCalls).toUpperCase();
+  assert.equal(logOutput.includes('MAZDA'), false);
+  assert.equal(logOutput.includes('RX7'), false);
 });
 
 test('no-result model suggestions include normalized variants and close matches', async () => {

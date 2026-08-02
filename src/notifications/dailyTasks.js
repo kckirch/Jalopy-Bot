@@ -15,14 +15,13 @@ async function processDailySavedSearches() {
                     continue;
                 }
 
-                console.log("Processing search for:", search.username);
                 const results = await queryVehicles(search.yard_id, search.make || 'ANY', search.model || 'ANY', search.year_range || 'ANY', search.status || 'ACTIVE');
                 if (results.length > 0) {
                     const embeds = formatMessages(results, search);
                     await sendNotification(search.user_id, embeds);
                 }
             } catch (error) {
-                console.error(`Error processing search for ${search.username}:`, error);
+                console.error('Error processing saved search:', error);
             }
         }
 
@@ -55,7 +54,7 @@ async function sendNotification(userId, embeds) {
         const user = await client.users.fetch(userId);
         await sendEmbedChunks(user, embeds);
     } catch (err) {
-        console.error(`Failed to fetch user ${userId}:`, err);
+        console.error('Failed to fetch notification recipient:', err);
         throw err;
     }
 }
@@ -68,7 +67,7 @@ async function sendChannelNotification(channelId, embeds) {
 
     const channel = client.channels.cache.get(channelId);
     if (!channel) {
-        console.error(`Channel with ID ${channelId} not found.`);
+        console.error('Notification channel not found.');
         return;
     }
 
@@ -85,9 +84,8 @@ async function sendEmbedChunks(target, embeds) {
         if (currentEmbedSize + embedSize > maxEmbedSize) {
             try {
                 await target.send({ embeds: chunk });
-                console.log(`Notification sent to ${target.id}.`);
             } catch (err) {
-                console.error(`Failed to send notification to ${target.id}:`, err);
+                console.error('Failed to send notification:', err);
                 throw err;
             }
             chunk = [embed];
@@ -101,9 +99,8 @@ async function sendEmbedChunks(target, embeds) {
     if (chunk.length > 0) {
         try {
             await target.send({ embeds: chunk });
-            console.log(`Notification sent to ${target.id}.`);
         } catch (err) {
-            console.error(`Failed to send notification to ${target.id}:`, err);
+            console.error('Failed to send notification:', err);
             throw err;
         }
     }

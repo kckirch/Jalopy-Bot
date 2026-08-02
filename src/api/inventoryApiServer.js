@@ -275,9 +275,9 @@ function startInventoryApiServer(options = {}) {
 
   const db = new sqlite3.Database(vehicleDbPath, sqlite3.OPEN_READONLY, (error) => {
     if (error) {
-      console.error(`[inventory-api] failed to open database at ${vehicleDbPath}:`, error);
+      console.error('[inventory-api] failed to open configured database:', error);
     } else {
-      console.log(`[inventory-api] using database at ${vehicleDbPath}`);
+      console.log('[inventory-api] using configured database');
     }
   });
   const snapshotProvider =

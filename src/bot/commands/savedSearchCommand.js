@@ -184,17 +184,13 @@ function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalP
 }
 
 async function handleSavedSearchCommand(interaction) {
-  console.log('Saved search retrieval command received.');
   const userId = interaction.user.id;
   const location = interaction.options.getString('location');
   let yardId = location ? convertLocationToYardId(location) : null;
-  console.log(`Retrieving saved searches for user ${userId} in location ${location || 'All'}`);
 
   try {
     await interaction.deferReply({ ephemeral: true });
     const savedSearches = await getSavedSearches(userId, yardId);
-    console.log('Retrieved saved searches successfully.');
-
     if (savedSearches.length === 0) {
       await interaction.editReply({ content: 'You have no saved searches matching the criteria.' });
       return;

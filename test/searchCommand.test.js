@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
@@ -122,24 +123,27 @@ test('invalid make returns ephemeral validation embed and stops query', async ()
     status: 'ACTIVE',
   });
 
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => {
-        queryCalled = true;
-        return [];
+  const consoleCalls = await captureConsole(async () => {
+    await withSearchCommandMocks(
+      {
+        queryVehicles: async () => {
+          queryCalled = true;
+          return [];
+        },
+        checkExistingSearch: async () => false,
+        addSavedSearch: async () => {},
       },
-      checkExistingSearch: async () => false,
-      addSavedSearch: async () => {},
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-    }
-  );
+      async ({ handleSearchCommand }) => {
+        await handleSearchCommand(interaction);
+      }
+    );
+  });
 
   assert.equal(queryCalled, false);
   assert.equal(interaction.replies.length, 1);
   assert.equal(interaction.replies[0].ephemeral, true);
   assert.equal(interaction.replies[0].embeds[0].data.title, 'Available Vehicle Makes');
+  assert.equal(joinedConsoleText(consoleCalls).toLowerCase().includes('not-a-real-make'), false);
 });
 
 test('no-result search responds with no-results embed and disabled pagination', async () => {

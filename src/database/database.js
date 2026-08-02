@@ -6,7 +6,7 @@ const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite
     if (err) {
         console.error('Error when connecting to the database', err);
     } else {
-        console.log(`Database connection established at ${VEHICLE_DB_PATH}.`);
+        console.log('Database connection established.');
     }
 });
 
@@ -92,10 +92,10 @@ function setupDatabase() {
         db.serialize(async () => {
             try {
                 await runSQL(createVehiclesTableSQL);
-                console.log(`Vehicles table setup complete in ${VEHICLE_DB_PATH}`);
+                console.log('Vehicles table setup complete.');
 
                 await runSQL(createSavedSearchesTableSQL);
-                console.log(`Saved searches table setup complete in ${VEHICLE_DB_PATH}`);
+                console.log('Saved searches table setup complete.');
 
                 await ensureSavedSearchColumns();
 

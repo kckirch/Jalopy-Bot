@@ -29,6 +29,8 @@ function buildNodeArgs(argv, version = process.versions.node) {
 
     nodeArgs.push(
       '--experimental-test-coverage',
+      '--test-coverage-exclude=test/**',
+      '--test-coverage-exclude=test-support/**',
       `--test-coverage-lines=${COVERAGE_MINIMUMS.lines}`,
       `--test-coverage-branches=${COVERAGE_MINIMUMS.branches}`,
       `--test-coverage-functions=${COVERAGE_MINIMUMS.functions}`

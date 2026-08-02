@@ -18,7 +18,7 @@ const db = new sqlite3.Database(VEHICLE_DB_PATH, sqlite3.OPEN_READWRITE | sqlite
     if (err) {
         console.error('Error when connecting to the database', err);
     } else {
-        console.log(`VehicleDB Database connection established to ${VEHICLE_DB_PATH}`);
+        console.log('Vehicle database connection established.');
     }
 });
 
@@ -81,7 +81,6 @@ function buildNormalizedSqlExpression(columnName = 'vehicle_model') {
 function parseYearInput(yearInput) {
     // If the yearInput is not provided or is an empty string, return no conditions or parameters
     if (!yearInput || yearInput.trim() === '') {
-        console.log("No year input provided or input is empty.");
         return { conditions: '', params: [] };
     }
 
@@ -108,7 +107,6 @@ function parseYearInput(yearInput) {
 
     // If no valid conditions were added, return no conditions or parameters
     if (yearConditions.length === 0) {
-        console.log("No valid year conditions found.");
         return { conditions: '', params: [] };
     }
 
@@ -134,7 +132,6 @@ function parseYardIds(input) {
     } else {
         // Handle unexpected input type
         console.error('Unexpected yardId input type:', typeof input);
-        console.error('The user input was:', input);
         return []; // Return an empty array as a safe fallback
     }
 }
@@ -149,7 +146,7 @@ function parseYardIds(input) {
 
 function getMakeVariations(make) {
     if (typeof make !== 'string') {
-        console.error("Expected a string for 'make', received:", make);
+        console.error("Expected a string for 'make'.");
         return [];  // Return an empty array to handle the error gracefully
     }
     const aliases = makeAliases[make.toLowerCase()] || [make];
@@ -158,7 +155,7 @@ function getMakeVariations(make) {
 
 function getModelVariations(model) {
     if (typeof model !== 'string') {
-        console.error("Expected a string for 'model', received:", model);
+        console.error("Expected a string for 'model'.");
         return [];  // Return an empty array to handle the error gracefully
     }
     const aliases = modelAliases[model.toUpperCase()] || [model];
@@ -222,8 +219,6 @@ function queryVehicles(yardId, make, model, yearInput, status) {
             conditions.push(`(${modelPredicates.join(" OR ")})`);
             params = params.concat(modelParams);
         }
-    } else {
-        console.log("Model set to 'Any', skipping model criteria in query.");
     }
 
     if (yearInput !== 'ANY') {
@@ -238,16 +233,12 @@ function queryVehicles(yardId, make, model, yearInput, status) {
         baseQuery += " WHERE " + conditions.join(" AND ");
     }
 
-    console.log("Executing query:", baseQuery);
-    console.log("With parameters:", params);
-
     return new Promise((resolve, reject) => {
         db.all(baseQuery, params, (err, rows) => {
             if (err) {
                 console.error('Failed to query vehicles:', err);
                 reject(err);
             } else {
-                console.log("Rows found:", rows.length);
                 resolve(rows);
             }
         });

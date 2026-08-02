@@ -353,34 +353,19 @@ async function handleSearchCommand(interaction) {
   let yearInput = (interaction.options.getString('year') || 'Any');
   let status = (interaction.options.getString('status') || 'ACTIVE').toUpperCase();
 
-  console.log('🔍 DB Lookup for:');
-  console.log(`   🏞️ Location: ${location}`);
-  console.log(`   🚗 Make: ${userMakeInput}`);
-  console.log(`   📋 Model: ${model}`);
-  console.log(`   📅 Year: ${yearInput}`);
-  console.log(`   📊 Status: ${status}`);
-
-  if (userMakeInput === 'ANY') {
-    console.log('Make is empty, skipping validation.');
-  } else {
-    if (vehicleMakes.includes(userMakeInput)) {
-      console.log(`Direct make found: ${userMakeInput}`);
+  if (userMakeInput !== 'ANY' && !vehicleMakes.includes(userMakeInput)) {
+    const canonicalMake = reverseMakeAliases[userMakeInput];
+    if (canonicalMake && vehicleMakes.includes(canonicalMake.toUpperCase())) {
+      userMakeInput = canonicalMake;
     } else {
-      const canonicalMake = reverseMakeAliases[userMakeInput];
-      if (canonicalMake && vehicleMakes.includes(canonicalMake.toUpperCase())) {
-        userMakeInput = canonicalMake;
-        console.log(` 🚗 Canonical Make Found: ${canonicalMake}`);
-      } else {
-        const makesEmbed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle('Available Vehicle Makes')
-          .setDescription('The make you entered is not recognized. Please choose from the list below.')
-          .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
+      const makesEmbed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('Available Vehicle Makes')
+        .setDescription('The make you entered is not recognized. Please choose from the list below.')
+        .addFields({ name: 'Valid Makes', value: vehicleMakes.join(', ') });
 
-        await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
-        console.log('No valid make found, search ended.');
-        return;
-      }
+      await interaction.reply({ embeds: [makesEmbed], ephemeral: true });
+      return;
     }
   }
 
@@ -569,8 +554,6 @@ async function handleSearchCommand(interaction) {
               break;
 
             case 'save':
-              console.log(`Attempting to save or check existing search: YardID=${searchState.yardId}, Make=${userMakeInput}, Model=${model}, Year=${yearInput}, Status=${status}`);
-
               try {
                 const cleanedYardId = canonicalizeYardIdForSavedSearch(searchState.yardId);
                 const cleanedYardName = convertYardIdToLocation(cleanedYardId).replace(/\s{2,}/g, ' ').trim();
