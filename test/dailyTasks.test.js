@@ -131,7 +131,7 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
         vehicle_year: 2004,
         first_seen: now,
         last_updated: now,
-        notes: '',
+        notes: 'Needs tires',
       },
     ];
   };
@@ -155,10 +155,64 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
   assert.ok(Array.isArray(channelSends[0].payload.embeds));
   assert.equal(channelSends[0].id, '111111111111111111');
 
+  const dmEmbed = dmSends[0].payload.embeds[0].toJSON();
+  const channelEmbed = channelSends[0].payload.embeds[0].toJSON();
+  assert.equal(
+    dmEmbed.title,
+    'Daily Search Results for TOYOTA CAMRY (ANY) at BOISE with ACTIVE status'
+  );
+  assert.equal(dmEmbed.description, 'Results found: 1');
+  assert.equal(dmEmbed.fields[0].name, 'TOYOTA CAMRY (2004)');
+  assert.match(dmEmbed.fields[0].value, /Yard: BOISE, Row: 77/);
+  assert.match(dmEmbed.fields[0].value, /Notes: Needs tires/);
+  assert.equal(channelEmbed.title, 'New Vehicles Added Today');
+  assert.equal(channelEmbed.fields[0].name, 'TOYOTA CAMRY (2005)');
+
   const logOutput = joinedConsoleText(consoleCalls);
   for (const privateValue of ['user-1', 'user#1', '111111111111111111']) {
     assert.equal(logOutput.includes(privateValue), false, privateValue);
   }
+});
+
+test('notifyNewVehicles creates a new embed after every 25 vehicle fields', async () => {
+  const channelSends = [];
+  const timestamp = '2026-08-02T06:00:00.000Z';
+  const vehicles = Array.from({ length: 26 }, (_value, index) => ({
+    yard_name: 'BOISE',
+    row_number: index + 1,
+    vehicle_make: 'TEST',
+    vehicle_model: `MODEL-${index + 1}`,
+    vehicle_year: 2000 + index,
+    first_seen: timestamp,
+    last_updated: timestamp,
+    notes: '',
+  }));
+
+  await withDailyTasksMocks(
+    {
+      client: {
+        isReady: () => true,
+        channels: {
+          cache: {
+            get: (id) => ({
+              id,
+              send: async (payload) => channelSends.push(payload),
+            }),
+          },
+        },
+      },
+      getAllSavedSearches: async () => [],
+      queryVehicles: async () => vehicles,
+    },
+    async ({ notifyNewVehicles }) => {
+      await notifyNewVehicles();
+    }
+  );
+
+  const embeds = channelSends.flatMap((payload) => payload.embeds);
+  assert.equal(embeds.length, 2);
+  assert.equal(embeds[0].toJSON().fields.length, 25);
+  assert.equal(embeds[1].toJSON().fields.length, 1);
 });
 
 test('notifyNewVehicles skips delivery when its channel is not configured', async () => {
