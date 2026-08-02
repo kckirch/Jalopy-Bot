@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
@@ -75,4 +76,28 @@ test('saved_searches table includes username and yard_name columns', async () =>
 
   assert.ok(columnNames.includes('username'));
   assert.ok(columnNames.includes('yard_name'));
+});
+
+test('setupDatabase redacts errors while preserving the rejection', async () => {
+  const privateErrorDetails = 'private SQL value /home/kc/private-inventory.db';
+  const originalRun = db.run;
+
+  db.run = function failRun(_sql, _params, callback) {
+    callback.call(this, new TypeError(privateErrorDetails));
+    return this;
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      await assert.rejects(setupDatabase(), {
+        name: 'TypeError',
+        message: privateErrorDetails,
+      });
+    });
+
+    assert.match(joinedConsoleText(consoleCalls), /Database setup failed: TypeError/);
+    assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+  } finally {
+    db.run = originalRun;
+  }
 });
