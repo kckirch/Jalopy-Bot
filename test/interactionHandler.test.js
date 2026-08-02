@@ -79,8 +79,7 @@ test('commands dispatch after permission checks without fetching a guild member'
     ['permission', interaction, 'search'],
     ['search', interaction],
   ]);
-  assert.match(logger.messages[0][0], /search from user#0001 in channel channel-1/);
-  assert.equal(logger.messages[1][0], 'Options: location: boise');
+  assert.deepEqual(logger.messages, []);
 });
 
 test('denied commands do not reach their command handler', async () => {
@@ -98,15 +97,17 @@ test('denied commands do not reach their command handler', async () => {
 
 test('button interactions pass the custom ID to the button handler', async () => {
   const calls = [];
+  const logger = createLogger();
   const interaction = createInteraction({ customId: 'quit', isButton: () => true });
   const handler = createInteractionHandler({
     handleButton: async (...values) => calls.push(values),
-    logger: createLogger(),
+    logger,
   });
 
   await handler(interaction);
 
   assert.deepEqual(calls, [[interaction, 'quit']]);
+  assert.deepEqual(logger.messages, []);
 });
 
 test('interaction errors use an initial reply when no response has started', async () => {
@@ -130,6 +131,7 @@ test('interaction errors use an initial reply when no response has started', asy
 
   assert.deepEqual(replies, [errorMessage]);
   assert.equal(logger.errors.length, 1);
+  assert.deepEqual(logger.errors[0], ['Error processing interaction:', 'Error']);
 });
 
 test('interaction errors follow up after a response has started', async () => {
