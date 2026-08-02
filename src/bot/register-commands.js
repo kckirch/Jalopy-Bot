@@ -2,6 +2,7 @@ const path = require('node:path');
 const { REST, Routes } = require('discord.js');
 
 const { buildCommandDefinitions } = require('./commandDefinitions');
+const { summarizeError } = require('../utils/errorSummary');
 
 const REQUIRED_ENVIRONMENT_VARIABLES = Object.freeze([
   'TOKEN',
@@ -52,11 +53,17 @@ async function registerCommandsFromEnvironment({
   return commandDefinitions;
 }
 
-if (require.main === module) {
-  registerCommandsFromEnvironment().catch((error) => {
-    console.error('Failed to register slash commands:', error);
+async function runRegistrationCli(register = registerCommandsFromEnvironment) {
+  try {
+    await register();
+  } catch (error) {
+    console.error('Failed to register slash commands:', summarizeError(error));
     process.exitCode = 1;
-  });
+  }
+}
+
+if (require.main === module) {
+  runRegistrationCli();
 }
 
 module.exports = {
@@ -64,4 +71,5 @@ module.exports = {
   readRegistrationConfig,
   registerCommands,
   registerCommandsFromEnvironment,
+  runRegistrationCli,
 };

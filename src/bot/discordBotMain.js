@@ -6,13 +6,14 @@ const { client } = require('./utils/client.js');
 const { setupDatabase } = require('../database/database');
 const { startScheduledTasks } = require('../notifications/scheduler');
 const { handleInteraction } = require('./handlers/interactionHandler');
+const { summarizeError } = require('../utils/errorSummary');
 let readyHandled = false;
 
 // Initialize database
 setupDatabase().then(() => {
   console.log('Database setup completed successfully.');
 }).catch((error) => {
-  console.error('Failed to set up database:', error);
+  console.error('Failed to set up database:', summarizeError(error));
 });
 
 client.on(Events.ClientReady, async () => {
@@ -24,7 +25,7 @@ client.on(Events.ClientReady, async () => {
       console.log('Scheduled tasks started.');
       console.log("Current server time:", new Date().toLocaleString());
     } catch (error) {
-      console.error('Failed to start scheduled tasks:', error);
+      console.error('Failed to start scheduled tasks:', summarizeError(error));
     }
   } else {
     console.log('Ready event received again; scheduled tasks already initialized.');
@@ -34,5 +35,5 @@ client.on(Events.ClientReady, async () => {
 client.on(Events.InteractionCreate, handleInteraction);
 
 client.login(process.env.TOKEN).catch((error) => {
-  console.error('Failed to login:', error);
+  console.error('Failed to login:', summarizeError(error));
 });

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PermissionFlagsBits, Routes } = require('discord.js');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const {
   ALL_LOCATION_CHOICE,
@@ -12,6 +13,7 @@ const {
   readRegistrationConfig,
   registerCommands,
   registerCommandsFromEnvironment,
+  runRegistrationCli,
 } = require('../src/bot/register-commands');
 
 const registrationEnvironment = {
@@ -159,4 +161,27 @@ test('registerCommandsFromEnvironment remains injectable for isolated execution'
     'Registering slash commands...',
     'Slash commands were registered successfully!',
   ]);
+});
+
+test('registration CLI redacts failures and sets a failing exit code', async () => {
+  const privateErrorDetails = 'private Discord token /home/kc/private.env';
+  const previousExitCode = process.exitCode;
+
+  try {
+    process.exitCode = undefined;
+    const consoleCalls = await captureConsole(async () => {
+      await runRegistrationCli(async () => {
+        throw new TypeError(privateErrorDetails);
+      });
+    });
+
+    assert.equal(process.exitCode, 1);
+    assert.match(
+      joinedConsoleText(consoleCalls),
+      /Failed to register slash commands: TypeError/
+    );
+    assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+  } finally {
+    process.exitCode = previousExitCode;
+  }
 });
