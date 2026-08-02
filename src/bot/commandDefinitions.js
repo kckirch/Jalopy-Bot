@@ -1,13 +1,11 @@
 const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { YARDS } = require('../config/yards');
 
-const YARD_LOCATION_CHOICES = Object.freeze([
-  { name: 'Boise', value: 'boise' },
-  { name: 'Garden City', value: 'gardencity' },
-  { name: 'Nampa', value: 'nampa' },
-  { name: 'Caldwell', value: 'caldwell' },
-  { name: 'Twin Falls', value: 'twinfalls' },
-  { name: 'Trusty Pick A Part', value: 'trustypickapart' },
-]);
+const YARD_LOCATION_CHOICES = Object.freeze(
+  [...YARDS]
+    .sort((left, right) => left.commandOrder - right.commandOrder)
+    .map((yard) => ({ name: yard.displayName, value: yard.slug }))
+);
 
 const ALL_LOCATION_CHOICE = Object.freeze({ name: 'All', value: 'all' });
 const TREASURE_VALLEY_CHOICE = Object.freeze({
