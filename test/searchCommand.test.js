@@ -5,6 +5,9 @@ const { captureConsole, joinedConsoleText } = require('../test-support/consoleCa
 const {
   buildQuickActionCustomId,
 } = require('../src/bot/utils/interactionParameters');
+const {
+  SEARCH_LOCATION_CHOICES,
+} = require('../src/bot/locationChoices');
 
 const repoRoot = path.resolve(__dirname, '..');
 const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
@@ -597,6 +600,16 @@ test('location dropdown reruns search with same filters in selected location', a
     async ({ handleSearchCommand }) => {
       await handleSearchCommand(interaction);
 
+      const relocateMenu = interaction.replies[0].components[2].components[0];
+      assert.deepEqual(
+        relocateMenu
+          .toJSON()
+          .options.map(({ label, value }) => ({ label, value })),
+        SEARCH_LOCATION_CHOICES.map(({ name, value }) => ({
+          label: name,
+          value,
+        }))
+      );
       const relocateCustomId = interaction.replies[0].components[2].components[0].data.custom_id;
       const selectInteraction = {
         customId: relocateCustomId,

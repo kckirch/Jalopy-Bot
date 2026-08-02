@@ -1,17 +1,10 @@
 const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
-const { YARDS } = require('../config/yards');
-
-const YARD_LOCATION_CHOICES = Object.freeze(
-  [...YARDS]
-    .sort((left, right) => left.commandOrder - right.commandOrder)
-    .map((yard) => ({ name: yard.displayName, value: yard.slug }))
-);
-
-const ALL_LOCATION_CHOICE = Object.freeze({ name: 'All', value: 'all' });
-const TREASURE_VALLEY_CHOICE = Object.freeze({
-  name: 'Treasure Valley Yards',
-  value: 'treasurevalleyyards',
-});
+const {
+  ALL_LOCATION_CHOICE,
+  SEARCH_LOCATION_CHOICES,
+  TREASURE_VALLEY_CHOICE,
+  YARD_LOCATION_CHOICES,
+} = require('./locationChoices');
 
 function buildScrapeCommand() {
   return new SlashCommandBuilder()
@@ -43,11 +36,7 @@ function buildSearchCommand() {
       .setName('location')
       .setDescription('The yard location to search')
       .setRequired(true)
-      .addChoices(
-        ...YARD_LOCATION_CHOICES,
-        TREASURE_VALLEY_CHOICE,
-        ALL_LOCATION_CHOICE
-      ))
+      .addChoices(...SEARCH_LOCATION_CHOICES))
     .addStringOption((option) => option
       .setName('make')
       .setDescription('The make of the vehicle')
@@ -81,11 +70,7 @@ function buildSavedSearchCommand() {
       .setName('location')
       .setDescription('The yard location to search')
       .setRequired(false)
-      .addChoices(
-        ...YARD_LOCATION_CHOICES,
-        TREASURE_VALLEY_CHOICE,
-        ALL_LOCATION_CHOICE
-      ));
+      .addChoices(...SEARCH_LOCATION_CHOICES));
 }
 
 function buildCommandDefinitions() {
@@ -113,6 +98,7 @@ function buildCommandDefinitions() {
 
 module.exports = {
   ALL_LOCATION_CHOICE,
+  SEARCH_LOCATION_CHOICES,
   TREASURE_VALLEY_CHOICE,
   YARD_LOCATION_CHOICES,
   buildCommandDefinitions,

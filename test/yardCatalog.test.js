@@ -3,8 +3,9 @@ const assert = require('node:assert/strict');
 const { YARDS } = require('../src/config/yards');
 const junkyards = require('../src/config/junkyards');
 const {
+  SEARCH_LOCATION_CHOICES,
   YARD_LOCATION_CHOICES,
-} = require('../src/bot/commandDefinitions');
+} = require('../src/bot/locationChoices');
 
 test('yard catalog is immutable and has unique identities', () => {
   assert.equal(Object.isFrozen(YARDS), true);
@@ -45,5 +46,10 @@ test('yard catalog preserves command and Treasure Valley ordering', () => {
     .map((yard) => yard.id);
 
   assert.deepEqual(YARD_LOCATION_CHOICES, commandYards);
+  assert.equal(Object.isFrozen(SEARCH_LOCATION_CHOICES), true);
+  assert.equal(
+    SEARCH_LOCATION_CHOICES.every((choice) => Object.isFrozen(choice)),
+    true
+  );
   assert.deepEqual(treasureValleyOrder, [1020, 1119, 1021, 1022, 999999]);
 });
