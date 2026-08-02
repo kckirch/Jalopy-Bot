@@ -1,9 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const {
   COVERAGE_MINIMUMS,
   buildNodeArgs,
+  runTestCli,
   supportsCoverageThresholds,
 } = require('../scripts/run-tests');
 
@@ -39,4 +41,24 @@ test('coverage mode rejects runtimes that cannot enforce thresholds', () => {
     () => buildNodeArgs(['--coverage'], '20.20.2'),
     /Node\.js 22\.8\.0 or newer/
   );
+});
+
+test('test runner CLI redacts failures and sets a failing exit code', async () => {
+  const privateErrorDetails = 'private spawn path /home/kc/private-node';
+  const previousExitCode = process.exitCode;
+
+  try {
+    process.exitCode = undefined;
+    const consoleCalls = await captureConsole(async () => {
+      runTestCli(() => {
+        throw new TypeError(privateErrorDetails);
+      });
+    });
+
+    assert.equal(process.exitCode, 1);
+    assert.match(joinedConsoleText(consoleCalls), /Test runner failed: TypeError/);
+    assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+  } finally {
+    process.exitCode = previousExitCode;
+  }
 });

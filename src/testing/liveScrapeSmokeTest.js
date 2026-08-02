@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { summarizeError } = require('../utils/errorSummary');
 
 function parseArgs(argv) {
   const args = {
@@ -357,8 +358,10 @@ async function runLiveScrapeSmokeTest({
   return smokeResult;
 }
 
-if (require.main === module) {
-  runLiveScrapeSmokeTest().catch((error) => {
+async function runLiveScrapeSmokeCli(run = runLiveScrapeSmokeTest) {
+  try {
+    await run();
+  } catch (error) {
     const message = String((error && error.message) || error || '');
     if (message.includes('chromedriver') && message.includes('ENOENT')) {
       console.error('[smoke] Chromedriver not found.');
@@ -368,9 +371,13 @@ if (require.main === module) {
       console.error('[smoke] Missing HTTP scraper dependencies.');
       console.error('[smoke] Run: npm install');
     }
-    console.error('[smoke] FAIL:', error);
+    console.error('[smoke] FAIL:', summarizeError(error));
     process.exitCode = 1;
-  });
+  }
+}
+
+if (require.main === module) {
+  runLiveScrapeSmokeCli();
 }
 
 module.exports = {
@@ -378,6 +385,7 @@ module.exports = {
   resolveScrapeTarget,
   resolveScrapeTargets,
   runLiveScrapeSmokeTest,
+  runLiveScrapeSmokeCli,
   __testables: {
     normalizeSessionId,
     selectSentinelYard,
