@@ -7,15 +7,7 @@ const discordBotMainPath = path.join(repoRoot, 'src/bot/discordBotMain.js');
 const clientPath = path.join(repoRoot, 'src/bot/utils/client.js');
 const databasePath = path.join(repoRoot, 'src/database/database.js');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
-const buttonHandlerPath = path.join(repoRoot, 'src/bot/handlers/buttonClickHandler.js');
-const autocompleteHandlerPath = path.join(repoRoot, 'src/bot/handlers/autocompleteHandler.js');
-const scrapeCommandPath = path.join(repoRoot, 'src/bot/commands/scrapeCommand.js');
-const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
-const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
-const dailySavedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/dailySavedSearchCommand.js');
-const runTestSchedulerCommandPath = path.join(repoRoot, 'src/bot/commands/runTestSchedulerCommand.js');
-const commandsCommandPath = path.join(repoRoot, 'src/bot/commands/commandsCommand.js');
-const manualNotifyCommandPath = path.join(repoRoot, 'src/bot/commands/manualNotifyNewVehiclesCommand.js');
+const interactionHandlerPath = path.join(repoRoot, 'src/bot/handlers/interactionHandler.js');
 
 function noopHandler() {}
 
@@ -25,15 +17,7 @@ async function withDiscordBotMainMocks(runTest) {
     clientPath,
     databasePath,
     schedulerPath,
-    buttonHandlerPath,
-    autocompleteHandlerPath,
-    scrapeCommandPath,
-    searchCommandPath,
-    savedSearchCommandPath,
-    dailySavedSearchCommandPath,
-    runTestSchedulerCommandPath,
-    commandsCommandPath,
-    manualNotifyCommandPath,
+    interactionHandlerPath,
   ];
 
   const previous = new Map();
@@ -87,60 +71,11 @@ async function withDiscordBotMainMocks(runTest) {
     },
   };
 
-  require.cache[buttonHandlerPath] = {
-    id: buttonHandlerPath,
-    filename: buttonHandlerPath,
+  require.cache[interactionHandlerPath] = {
+    id: interactionHandlerPath,
+    filename: interactionHandlerPath,
     loaded: true,
-    exports: { handleButtonClick: noopHandler },
-  };
-  require.cache[autocompleteHandlerPath] = {
-    id: autocompleteHandlerPath,
-    filename: autocompleteHandlerPath,
-    loaded: true,
-    exports: { handleAutocompleteInteraction: noopHandler },
-  };
-
-  require.cache[scrapeCommandPath] = {
-    id: scrapeCommandPath,
-    filename: scrapeCommandPath,
-    loaded: true,
-    exports: { handleScrapeCommand: noopHandler },
-  };
-  require.cache[searchCommandPath] = {
-    id: searchCommandPath,
-    filename: searchCommandPath,
-    loaded: true,
-    exports: { handleSearchCommand: noopHandler },
-  };
-  require.cache[savedSearchCommandPath] = {
-    id: savedSearchCommandPath,
-    filename: savedSearchCommandPath,
-    loaded: true,
-    exports: { handleSavedSearchCommand: noopHandler },
-  };
-  require.cache[dailySavedSearchCommandPath] = {
-    id: dailySavedSearchCommandPath,
-    filename: dailySavedSearchCommandPath,
-    loaded: true,
-    exports: { handleDailySavedSearchCommand: noopHandler },
-  };
-  require.cache[runTestSchedulerCommandPath] = {
-    id: runTestSchedulerCommandPath,
-    filename: runTestSchedulerCommandPath,
-    loaded: true,
-    exports: { handleRunTestSchedulerCommand: noopHandler },
-  };
-  require.cache[commandsCommandPath] = {
-    id: commandsCommandPath,
-    filename: commandsCommandPath,
-    loaded: true,
-    exports: { handleCommandsCommand: noopHandler },
-  };
-  require.cache[manualNotifyCommandPath] = {
-    id: manualNotifyCommandPath,
-    filename: manualNotifyCommandPath,
-    loaded: true,
-    exports: { handleManualNotifyNewVehiclesCommand: noopHandler },
+    exports: { handleInteraction: noopHandler },
   };
 
   try {
@@ -160,6 +95,7 @@ test('discordBotMain uses clientReady and initializes scheduled tasks only once 
     assert.equal(state.loginCalls, 1);
     assert.equal(handlers.ready, undefined);
     assert.ok(typeof handlers.clientReady === 'function');
+    assert.equal(handlers.interactionCreate, noopHandler);
 
     await handlers.clientReady({ user: { tag: 'jalopy#0001' } });
     await handlers.clientReady({ user: { tag: 'jalopy#0001' } });
