@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const handlerPath = path.join(repoRoot, 'src/bot/handlers/buttonClickHandler.js');
@@ -64,6 +65,47 @@ test('handleButtonClick routes saved-search quick actions to search command hand
 
     await handleButtonClick(interaction, 'sq:abc123');
     assert.deepEqual(routedHashes, ['abc123']);
+  } finally {
+    if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
+    else delete require.cache[searchCommandPath];
+  }
+});
+
+test('handleButtonClick redacts saved-search quick-action errors', async () => {
+  const previousSearchCommand = require.cache[searchCommandPath];
+  const privateErrorDetails = 'private Discord user /home/kc/private-inventory.db';
+
+  require.cache[searchCommandPath] = {
+    id: searchCommandPath,
+    filename: searchCommandPath,
+    loaded: true,
+    exports: {
+      handleSavedSearchQuickActionButton: async () => {
+        throw new TypeError(privateErrorDetails);
+      },
+    },
+  };
+
+  try {
+    const replies = [];
+    const interaction = {
+      deferred: false,
+      replied: false,
+      async reply(payload) {
+        replies.push(payload);
+      },
+    };
+
+    const consoleCalls = await captureConsole(async () => {
+      await handleButtonClick(interaction, 'sq:private-hash');
+    });
+
+    assert.deepEqual(replies, [{
+      content: 'Unable to process that quick action.',
+      ephemeral: true,
+    }]);
+    assert.match(joinedConsoleText(consoleCalls), /Saved-search quick action failed: TypeError/);
+    assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
   } finally {
     if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
     else delete require.cache[searchCommandPath];

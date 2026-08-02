@@ -1,5 +1,6 @@
 const { vehicleMakes, reverseMakeAliases } = require('../utils/locationUtils');
 const { getModelSuggestions } = require('../../database/vehicleQueryManager');
+const { summarizeError } = require('../../utils/errorSummary');
 
 const AUTOCOMPLETE_LIMIT = 25;
 
@@ -71,11 +72,14 @@ async function handleAutocompleteInteraction(interaction) {
 
     await interaction.respond([]);
   } catch (error) {
-    console.error('Autocomplete interaction error:', error);
+    console.error('Autocomplete interaction error:', summarizeError(error));
     try {
       await interaction.respond([]);
     } catch (respondError) {
-      console.error('Failed to respond to autocomplete interaction:', respondError);
+      console.error(
+        'Failed to respond to autocomplete interaction:',
+        summarizeError(respondError)
+      );
     }
   }
 }
@@ -89,4 +93,3 @@ module.exports = {
     normalizeOptionValue,
   },
 };
-

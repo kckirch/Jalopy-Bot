@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const handlerPath = path.join(repoRoot, 'src/bot/handlers/autocompleteHandler.js');
@@ -151,3 +152,34 @@ test('autocomplete responds with empty array for unsupported focused option', as
   );
 });
 
+test('autocomplete redacts lookup and response errors', async () => {
+  const lookupDetails = 'private lookup /home/kc/private-inventory.db';
+  const responseDetails = 'private Discord user 123456789';
+
+  await withAutocompleteMocks(
+    async () => {
+      throw new TypeError(lookupDetails);
+    },
+    async ({ handleAutocompleteInteraction }) => {
+      const interaction = makeAutocompleteInteraction({
+        commandName: 'search',
+        focusedName: 'model',
+        focusedValue: 'ca',
+        selectedMake: 'toyota',
+      });
+      interaction.respond = async () => {
+        throw new RangeError(responseDetails);
+      };
+
+      const consoleCalls = await captureConsole(async () => {
+        await handleAutocompleteInteraction(interaction);
+      });
+      const consoleText = joinedConsoleText(consoleCalls);
+
+      assert.match(consoleText, /Autocomplete interaction error: TypeError/);
+      assert.match(consoleText, /Failed to respond to autocomplete interaction: RangeError/);
+      assert.equal(consoleText.includes(lookupDetails), false);
+      assert.equal(consoleText.includes(responseDetails), false);
+    }
+  );
+});
