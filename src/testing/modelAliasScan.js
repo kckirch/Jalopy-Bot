@@ -1,4 +1,4 @@
-const { db } = require('../database/vehicleQueryManager');
+const { summarizeError } = require('../utils/errorSummary');
 
 const DEFAULT_LIMIT = 200;
 
@@ -44,9 +44,13 @@ function parseArgs(argv) {
   return args;
 }
 
-function queryRows(sql, params = []) {
+function getDefaultDatabase() {
+  return require('../database/vehicleQueryManager').db;
+}
+
+function queryRows(database, sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (error, rows) => {
+    database.all(sql, params, (error, rows) => {
       if (error) {
         reject(error);
         return;
@@ -56,9 +60,9 @@ function queryRows(sql, params = []) {
   });
 }
 
-function closeDb() {
+function closeDatabase(database) {
   return new Promise((resolve, reject) => {
-    db.close((error) => {
+    database.close((error) => {
       if (error) {
         reject(error);
         return;
@@ -75,8 +79,12 @@ function formatGroupLine(group) {
   return `${group.make} :: ${group.key} => ${variants}`;
 }
 
-async function run() {
-  const options = parseArgs(process.argv.slice(2));
+async function runModelAliasScan({
+  argv = process.argv.slice(2),
+  database = getDefaultDatabase(),
+  logger = console,
+} = {}) {
+  const options = parseArgs(argv);
 
   const whereClauses = ['1 = 1'];
   const params = [];
@@ -100,7 +108,7 @@ async function run() {
     GROUP BY UPPER(vehicle_make), vehicle_model
   `;
 
-  const rows = await queryRows(sql, params);
+  const rows = await queryRows(database, sql, params);
   const groupsMap = new Map();
 
   for (const row of rows) {
@@ -140,33 +148,64 @@ async function run() {
     )
     .slice(0, options.limit);
 
-  console.log(`[alias-scan] analyzed models: ${rows.length}`);
-  console.log(`[alias-scan] variant groups found: ${variantGroups.length}`);
+  logger.log(`[alias-scan] analyzed models: ${rows.length}`);
+  logger.log(`[alias-scan] variant groups found: ${variantGroups.length}`);
   if (options.make) {
-    console.log(`[alias-scan] make filter: ${options.make}`);
+    logger.log(`[alias-scan] make filter: ${options.make}`);
   }
   if (options.activeOnly) {
-    console.log('[alias-scan] status filter: ACTIVE + NEW only');
+    logger.log('[alias-scan] status filter: ACTIVE + NEW only');
   } else {
-    console.log('[alias-scan] status filter: all historical rows');
+    logger.log('[alias-scan] status filter: all historical rows');
   }
-  console.log(`[alias-scan] showing top ${variantGroups.length} groups\n`);
+  logger.log(`[alias-scan] showing top ${variantGroups.length} groups\n`);
 
   variantGroups.forEach((group, index) => {
-    console.log(`${index + 1}. ${formatGroupLine(group)}`);
+    logger.log(`${index + 1}. ${formatGroupLine(group)}`);
   });
+
+  return variantGroups;
 }
 
-run()
-  .catch((error) => {
-    console.error('[alias-scan] failed:', error);
+async function runModelAliasScanCli({
+  databaseFactory = getDefaultDatabase,
+  runScan = runModelAliasScan,
+  close = closeDatabase,
+  logger = console,
+} = {}) {
+  let database;
+
+  try {
+    database = databaseFactory();
+    await runScan({ database, logger });
+  } catch (error) {
+    logger.error('[alias-scan] failed:', summarizeError(error));
     process.exitCode = 1;
-  })
-  .finally(async () => {
-    try {
-      await closeDb();
-    } catch (closeError) {
-      console.error('[alias-scan] failed to close database:', closeError);
-      process.exitCode = 1;
+  } finally {
+    if (database) {
+      try {
+        await close(database);
+      } catch (closeError) {
+        logger.error(
+          '[alias-scan] failed to close database:',
+          summarizeError(closeError)
+        );
+        process.exitCode = 1;
+      }
     }
-  });
+  }
+}
+
+if (require.main === module) {
+  runModelAliasScanCli();
+}
+
+module.exports = {
+  closeDatabase,
+  formatGroupLine,
+  normalizeModel,
+  parseArgs,
+  queryRows,
+  runModelAliasScan,
+  runModelAliasScanCli,
+};
