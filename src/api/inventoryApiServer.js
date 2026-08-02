@@ -5,7 +5,7 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 const { VEHICLE_DB_PATH } = require('../database/dbPath');
 const { createPublicInventorySnapshotProvider } = require('./publicInventorySnapshot');
