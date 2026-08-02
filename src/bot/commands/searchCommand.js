@@ -15,6 +15,11 @@ const {
   resolveQuickActionPayload,
   storeInteractionParameters,
 } = require('../utils/interactionParameters');
+const {
+  buildSearchResultsEmbed,
+  getSearchResultPageCount,
+  sortVehiclesForSearchView,
+} = require('../utils/vehicleSearchResults');
 
 const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
 
@@ -289,78 +294,36 @@ async function handleSearchCommand(interaction) {
 
   if (location) {
     try {
-      const itemsPerPage = 20;
-      const sortVehicles = (rows) => rows.sort((a, b) => {
-        const firstSeenA = new Date(a.first_seen);
-        const firstSeenB = new Date(b.first_seen);
-        return firstSeenB - firstSeenA || a.vehicle_model.localeCompare(b.vehicle_model);
-      });
-
       const runSearchForLocation = async (targetLocation) => {
         const targetYardId = convertLocationToYardId(targetLocation);
         const targetVehicles = await queryVehicles(targetYardId, userMakeInput, model, yearInput, status);
         const suggestedModels = (targetVehicles.length === 0 && model !== 'ANY')
           ? await getModelSuggestionsForNoResults(userMakeInput, model, targetYardId, 8)
           : [];
-        sortVehicles(targetVehicles);
+        const sortedVehicles = sortVehiclesForSearchView(targetVehicles);
         return {
           location: targetLocation,
           yardId: targetYardId,
-          vehicles: targetVehicles,
+          vehicles: sortedVehicles,
           suggestedModels,
           currentPage: 0,
-          totalPages: Math.ceil(targetVehicles.length / itemsPerPage),
+          totalPages: getSearchResultPageCount(sortedVehicles),
         };
       };
 
       let searchState = await runSearchForLocation(location);
 
-      const getPage = (state) => {
-        const safePage = state.vehicles.length === 0
-          ? 0
-          : Math.min(Math.max(state.currentPage, 0), state.totalPages - 1);
-        const start = safePage * itemsPerPage;
-        const end = start + itemsPerPage;
-        const pageItems = state.vehicles.slice(start, end);
-
-        const embed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle(`Database search results for ${state.location} ${userMakeInput || 'Any'} ${model} (${yearInput}) ${status}`)
-          .setTimestamp();
-
-        if (state.vehicles.length === 0) {
-          let description = 'No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)';
-          if (Array.isArray(state.suggestedModels) && state.suggestedModels.length > 0) {
-            const suggestions = state.suggestedModels.slice(0, 8).join(', ');
-            description += `\n\nPossible model names we have seen: ${suggestions}`;
-          }
-          embed
-            .setDescription(description)
-            .setFooter({ text: 'Page 0 of 0' });
-        } else {
-          embed.setFooter({ text: `Page ${safePage + 1} of ${state.totalPages}` });
-          pageItems.forEach(v => {
-            const firstSeen = new Date(v.first_seen);
-            const lastUpdated = new Date(v.last_updated);
-            const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-            const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-            let vehicleDescription = `Yard: ${v.yard_name}, Row: ${v.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
-
-
-            if (v.notes) {
-              vehicleDescription += `\nNotes: ${v.notes}`;
-            }
-
-            embed.addFields({
-              name: `${v.vehicle_make} ${v.vehicle_model} (${v.vehicle_year})`,
-              value: vehicleDescription,
-              inline: false
-            });
-          });
-        }
-
-        return embed;
-      };
+      const getPage = (state) => buildSearchResultsEmbed({
+        location: state.location,
+        make: userMakeInput,
+        model,
+        yearRange: yearInput,
+        status,
+        vehicles: state.vehicles,
+        currentPage: state.currentPage,
+        totalPages: state.totalPages,
+        suggestedModels: state.suggestedModels,
+      });
 
       const updateComponents = (state, userId) => {
         try {

@@ -4,9 +4,13 @@ const { convertLocationToYardId, convertYardIdToLocation } = require('../utils/l
 const { queryVehicles, getModelSuggestionsForNoResults } = require('../../database/vehicleQueryManager');
 const { summarizeError } = require('../../utils/errorSummary');
 const { YARDS } = require('../../config/yards');
+const {
+  buildSearchResultsEmbed,
+  getSearchResultPageCount,
+  sortVehiclesForSearchView,
+} = require('../utils/vehicleSearchResults');
 
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
-const RESULTS_ITEMS_PER_PAGE = 20;
 const ALL_YARD_IDS_CANONICAL = Object.freeze(
   YARDS.map((yard) => String(yard.id)).sort()
 );
@@ -62,14 +66,6 @@ function inferSearchLocation(yardId) {
     return SINGLE_YARD_LOCATION_BY_ID[normalizedIds[0]];
   }
   return convertYardIdToLocation(yardId).toLowerCase().replace(/\s+/g, '');
-}
-
-function sortVehiclesForSearchView(rows) {
-  return [...rows].sort((a, b) => {
-    const firstSeenA = new Date(a.first_seen);
-    const firstSeenB = new Date(b.first_seen);
-    return firstSeenB - firstSeenA || String(a.vehicle_model || '').localeCompare(String(b.vehicle_model || ''));
-  });
 }
 
 function formatSavedSearchDate(rawDate) {
@@ -136,56 +132,6 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount) {
   return embed;
 }
 
-function buildSearchResultsEmbed(search, location, vehicles, currentPage, totalPages, suggestedModels = []) {
-  const make = search.make || 'Any';
-  const model = search.model || 'Any';
-  const yearRange = search.year_range || 'Any';
-  const status = search.status || 'ACTIVE';
-
-  const embed = new EmbedBuilder()
-    .setColor(0x0099FF)
-    .setTitle(`Database search results for ${location} ${make} ${model} (${yearRange}) ${status}`)
-    .setTimestamp();
-
-  if (vehicles.length === 0) {
-    let description = 'No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)';
-    if (Array.isArray(suggestedModels) && suggestedModels.length > 0) {
-      description += `\n\nPossible model names we have seen: ${suggestedModels.slice(0, 8).join(', ')}`;
-    }
-    embed
-      .setDescription(description)
-      .setFooter({ text: 'Page 0 of 0' });
-    return embed;
-  }
-
-  const safePage = Math.min(Math.max(currentPage, 0), totalPages - 1);
-  const start = safePage * RESULTS_ITEMS_PER_PAGE;
-  const end = start + RESULTS_ITEMS_PER_PAGE;
-  const pageItems = vehicles.slice(start, end);
-
-  embed.setFooter({ text: `Page ${safePage + 1} of ${totalPages}` });
-
-  pageItems.forEach((vehicle) => {
-    const firstSeen = new Date(vehicle.first_seen);
-    const lastUpdated = new Date(vehicle.last_updated);
-    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
-
-    let valueText = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
-    if (vehicle.notes) {
-      valueText += `\nNotes: ${vehicle.notes}`;
-    }
-
-    embed.addFields({
-      name: `${vehicle.vehicle_make} ${vehicle.vehicle_model} (${vehicle.vehicle_year})`,
-      value: valueText,
-      inline: false,
-    });
-  });
-
-  return embed;
-}
-
 async function handleSavedSearchCommand(interaction) {
   const userId = interaction.user.id;
   const location = interaction.options.getString('location');
@@ -211,14 +157,17 @@ async function handleSavedSearchCommand(interaction) {
 
     const buildResultsViewPayload = () => {
       const currentSearch = savedSearches[currentIndex];
-      const embed = buildSearchResultsEmbed(
-        currentSearch,
-        resultsState.location,
-        resultsState.vehicles,
-        resultsState.currentPage,
-        resultsState.totalPages,
-        resultsState.suggestedModels
-      );
+      const embed = buildSearchResultsEmbed({
+        location: resultsState.location,
+        make: currentSearch.make || 'Any',
+        model: currentSearch.model || 'Any',
+        yearRange: currentSearch.year_range || 'Any',
+        status: currentSearch.status || 'ACTIVE',
+        vehicles: resultsState.vehicles,
+        currentPage: resultsState.currentPage,
+        totalPages: resultsState.totalPages,
+        suggestedModels: resultsState.suggestedModels,
+      });
       const components = buildSearchResultsComponents(
         resultsState.currentPage,
         resultsState.totalPages,
@@ -269,7 +218,7 @@ async function handleSavedSearchCommand(interaction) {
             currentSearch.status || 'ACTIVE'
           );
           const sortedVehicles = sortVehiclesForSearchView(vehicles);
-          const totalPages = Math.ceil(sortedVehicles.length / RESULTS_ITEMS_PER_PAGE);
+          const totalPages = getSearchResultPageCount(sortedVehicles);
           const normalizedModelInput = String(currentSearch.model || 'ANY').toUpperCase();
           const suggestedModels = (sortedVehicles.length === 0 && normalizedModelInput !== 'ANY')
             ? await getModelSuggestionsForNoResults(currentSearch.make || 'ANY', normalizedModelInput, currentSearch.yard_id, 8)
