@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardIdToLocation, yardIdMapping } = require('../utils/locationUtils');
 const { checkExistingSearch, addSavedSearch, getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
+const { summarizeError } = require('../../utils/errorSummary');
 const crypto = require('crypto');
 
 const parameterStore = new Map();
@@ -503,7 +504,7 @@ async function handleSearchCommand(interaction) {
 
           return [pagingRow, savedSearchActionsRow, locationRow];
         } catch (error) {
-          console.error('Error creating custom ID:', error);
+          console.error('Error creating custom ID:', summarizeError(error));
           throw error;
         }
       };
@@ -589,7 +590,7 @@ async function handleSearchCommand(interaction) {
                   await i.reply(responsePayload);
                 }
               } catch (error) {
-                console.error('Error checking for existing search:', error);
+                console.error('Error checking for existing search:', summarizeError(error));
                 await i.reply({ content: 'Error checking for existing searches.', ephemeral: true });
               }
               break;
@@ -626,7 +627,10 @@ async function handleSearchCommand(interaction) {
                   ephemeral: true,
                 });
               } catch (error) {
-                console.error('Error deleting saved search from quick action:', error);
+                console.error(
+                  'Error deleting saved search from quick action:',
+                  summarizeError(error)
+                );
                 await i.reply({
                   content: 'Error deleting saved search.',
                   ephemeral: true,
@@ -654,14 +658,17 @@ async function handleSearchCommand(interaction) {
                     ephemeral: true,
                   });
                 } catch (dmError) {
-                  console.error('Unable to DM saved searches:', dmError);
+                  console.error('Unable to DM saved searches:', summarizeError(dmError));
                   await i.reply({
                     content: 'I could not DM you. Please enable DMs or use /savedsearch.',
                     ephemeral: true,
                   });
                 }
               } catch (error) {
-                console.error('Error listing saved searches from quick action:', error);
+                console.error(
+                  'Error listing saved searches from quick action:',
+                  summarizeError(error)
+                );
                 await i.reply({
                   content: 'Error retrieving saved searches.',
                   ephemeral: true,
@@ -687,7 +694,7 @@ async function handleSearchCommand(interaction) {
               break;
           }
         } catch (error) {
-          console.error('Error processing button interaction:', error);
+          console.error('Error processing button interaction:', summarizeError(error));
           await i.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
         }
       });
@@ -699,7 +706,7 @@ async function handleSearchCommand(interaction) {
       });
 
     } catch (error) {
-      console.error('Error querying vehicles:', error);
+      console.error('Error querying vehicles:', summarizeError(error));
       await interaction.reply({ content: 'Error fetching data from the database.', ephemeral: true });
     }
 

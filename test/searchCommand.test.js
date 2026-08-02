@@ -71,6 +71,21 @@ function makeInteraction(options, userId = 'user-1') {
   };
 }
 
+function makeVehicleRow(overrides = {}) {
+  const now = new Date().toISOString();
+  return {
+    yard_name: 'BOISE',
+    row_number: 7,
+    vehicle_make: 'TOYOTA',
+    vehicle_model: 'CAMRY',
+    vehicle_year: 2005,
+    first_seen: now,
+    last_updated: now,
+    notes: '',
+    ...overrides,
+  };
+}
+
 async function withSearchCommandMocks(mocks, runTest) {
   const previousSearchCommand = require.cache[searchCommandPath];
   const previousQueryManager = require.cache[vehicleQueryManagerPath];
@@ -701,6 +716,193 @@ test('saved-search quick action delete reports the number removed', async () => 
       assert.equal(interaction.updates.length, 1);
       assert.match(interaction.updates[0].content, /Deleted 1 saved search/);
       assert.match(interaction.updates[0].content, /no saved searches left/i);
+    }
+  );
+});
+
+test('search command redacts initial query errors', async () => {
+  const privateErrorDetails = 'private query /home/kc/private-inventory.db';
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  const consoleCalls = await captureConsole(async () => {
+    await withSearchCommandMocks(
+      {
+        queryVehicles: async () => {
+          throw new TypeError(privateErrorDetails);
+        },
+      },
+      async ({ handleSearchCommand }) => {
+        await handleSearchCommand(interaction);
+      }
+    );
+  });
+
+  assert.deepEqual(interaction.replies, [{
+    content: 'Error fetching data from the database.',
+    ephemeral: true,
+  }]);
+  assert.match(joinedConsoleText(consoleCalls), /Error querying vehicles: TypeError/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+});
+
+test('search command redacts save-check errors', async () => {
+  const privateErrorDetails = 'private saved search /home/kc/private-inventory.db';
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow()],
+      checkExistingSearch: async () => {
+        throw new RangeError(privateErrorDetails);
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const saveCustomId = interaction.replies[0].components[0].components[2].data.custom_id;
+      const buttonInteraction = {
+        customId: saveCustomId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      const consoleCalls = await captureConsole(async () => {
+        await interaction.message.collector.emitCollect(buttonInteraction);
+      });
+
+      assert.deepEqual(buttonInteraction.replyCalls, [{
+        content: 'Error checking for existing searches.',
+        ephemeral: true,
+      }]);
+      assert.match(
+        joinedConsoleText(consoleCalls),
+        /Error checking for existing search: RangeError/
+      );
+      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+    }
+  );
+});
+
+test('search command redacts saved-search DM errors', async () => {
+  const privateErrorDetails = 'private Discord user 123456789';
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow()],
+      getSavedSearches: async () => [
+        {
+          id: 91,
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const savedListCustomId = interaction.replies[0].components[1].components[1].data.custom_id;
+      const buttonInteraction = {
+        customId: savedListCustomId,
+        user: {
+          id: 'user-1',
+          tag: 'user-1#0001',
+          async send() {
+            throw new URIError(privateErrorDetails);
+          },
+        },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      const consoleCalls = await captureConsole(async () => {
+        await interaction.message.collector.emitCollect(buttonInteraction);
+      });
+
+      assert.deepEqual(buttonInteraction.replyCalls, [{
+        content: 'I could not DM you. Please enable DMs or use /savedsearch.',
+        ephemeral: true,
+      }]);
+      assert.match(joinedConsoleText(consoleCalls), /Unable to DM saved searches: URIError/);
+      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+    }
+  );
+});
+
+test('search command redacts outer collector errors', async () => {
+  const privateErrorDetails = 'private relocated query /home/kc/private-inventory.db';
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'TOYOTA',
+    model: 'CAMRY',
+    year: '2005',
+    status: 'ACTIVE',
+  });
+  let queryCalls = 0;
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => {
+        queryCalls += 1;
+        if (queryCalls === 1) {
+          return [makeVehicleRow()];
+        }
+        throw new EvalError(privateErrorDetails);
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const relocateCustomId = interaction.replies[0].components[2].components[0].data.custom_id;
+      const selectInteraction = {
+        customId: relocateCustomId,
+        values: ['caldwell'],
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      const consoleCalls = await captureConsole(async () => {
+        await interaction.message.collector.emitCollect(selectInteraction);
+      });
+
+      assert.deepEqual(selectInteraction.replyCalls, [{
+        content: 'An error occurred while processing your request.',
+        ephemeral: true,
+      }]);
+      assert.match(
+        joinedConsoleText(consoleCalls),
+        /Error processing button interaction: EvalError/
+      );
+      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
     }
   );
 });
