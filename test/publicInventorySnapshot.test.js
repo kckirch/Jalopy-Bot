@@ -10,6 +10,10 @@ const {
   buildPublicInventorySnapshot,
   createPublicInventorySnapshotProvider,
 } = require('../src/api/publicInventorySnapshot');
+const { __testables } = require('../src/api/inventoryApiServer');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
+
+const { sendVehicleDbFile } = __testables;
 
 function openDatabase(databasePath, mode = sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE) {
   return new Promise((resolve, reject) => {
@@ -434,6 +438,47 @@ test('snapshot provider reports a failed background refresh and keeps serving go
     await closeDatabase(writerDatabase);
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   }
+});
+
+test('inventory API redacts snapshot errors without changing the failure response', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-inventory.db';
+  const response = {
+    headersSent: false,
+    statusCode: null,
+    headers: null,
+    body: '',
+    writeHead(statusCode, headers) {
+      this.headersSent = true;
+      this.statusCode = statusCode;
+      this.headers = headers;
+    },
+    end(body = '') {
+      this.body = body;
+    },
+  };
+
+  const consoleCalls = await captureConsole(async () => {
+    await sendVehicleDbFile(
+      { method: 'GET', headers: {} },
+      response,
+      { 'Access-Control-Allow-Origin': '*' },
+      3600,
+      {
+        async getSnapshot() {
+          throw new TypeError(privateErrorDetails);
+        },
+      }
+    );
+  });
+
+  assert.equal(response.statusCode, 500);
+  assert.deepEqual(JSON.parse(response.body), { error: 'Database snapshot not available' });
+  assert.equal(response.headers['Access-Control-Allow-Origin'], '*');
+  assert.match(
+    joinedConsoleText(consoleCalls),
+    /failed to build public vehicle snapshot: TypeError/
+  );
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
 });
 
 test('HTTP database endpoint serves the vehicles-only snapshot instead of the runtime database', async () => {
