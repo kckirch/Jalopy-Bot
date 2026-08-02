@@ -1,0 +1,19 @@
+[Unit]
+Description=JalopyBot read-only inventory API
+Documentation=https://github.com/kckirch/Jalopy-Bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Jalopy-Bot
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node src/api/inventoryApiServer.js
+Restart=always
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+
+[Install]
+WantedBy=default.target
