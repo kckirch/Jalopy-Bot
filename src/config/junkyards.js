@@ -1,16 +1,20 @@
-// src/config/junkyards.js
+const { YARDS } = require('./yards');
+
+const jalopyJungleLocationMapping = Object.fromEntries(
+  YARDS.filter((yard) => yard.junkyardKey === 'jalopyJungle').map((yard) => [
+    String(yard.id),
+    yard.databaseName,
+  ])
+);
+const trustyYard = YARDS.find(
+  (yard) => yard.junkyardKey === 'trustyJunkyard'
+);
 
 const junkyards = {
   jalopyJungle: {
     inventoryUrl: 'https://inventory.pickapartjalopyjungle.com/',
     hasMultipleLocations: true,
-    locationMapping: {
-      '1020': 'BOISE',
-      '1021': 'CALDWELL',
-      '1022': 'NAMPA',
-      '1119': 'GARDENCITY',
-      '1099': 'TWINFALLS',
-    },
+    locationMapping: jalopyJungleLocationMapping,
     selectors: {
       yardSelect: '#yard-id',
       makeSelect: '#car-make',
@@ -21,11 +25,11 @@ const junkyards = {
   },
   trustyJunkyard: {
     inventoryUrl: 'https://inventory.trustypickapart.com/',
-    yardId: '999999', // Trusty is a single-location yard
+    yardId: String(trustyYard.id),
     hasMultipleLocations: false,
     locationMapping: null,
     selectors: {
-      yardSelect: null, // No yard selection for single-location yard
+      yardSelect: null,
       makeSelect: '#car-make',
       modelSelect: '#car-model',
       searchForm: '#searchinventory',
