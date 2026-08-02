@@ -135,6 +135,42 @@ test('insertOrUpdateVehicle updates existing vehicle and moves status to ACTIVE 
   assert.equal(updated.session_id, '20260102');
 });
 
+test('insertOrUpdateVehicle stores an unknown yard without logging the unchecked yard value', async () => {
+  const privateYardValue = 'private-yard /home/kc/private-file';
+  const previousLogMode = process.env.SCRAPE_LOG_MODE;
+  process.env.SCRAPE_LOG_MODE = 'summary';
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      await insertOrUpdateVehicle(
+        privateYardValue,
+        'UNKNOWN',
+        'TEST',
+        2001,
+        1,
+        '',
+        '20260101'
+      );
+    });
+
+    const row = await get(
+      db,
+      "SELECT yard_name FROM vehicles WHERE vehicle_make = 'UNKNOWN' AND vehicle_model = 'TEST';"
+    );
+    const logOutput = joinedConsoleText(consoleCalls);
+
+    assert.equal(row.yard_name, 'Unknown Yard');
+    assert.match(logOutput, /Yard name not found for provided yard ID/);
+    assert.equal(logOutput.includes(privateYardValue), false);
+  } finally {
+    if (typeof previousLogMode === 'string') {
+      process.env.SCRAPE_LOG_MODE = previousLogMode;
+    } else {
+      delete process.env.SCRAPE_LOG_MODE;
+    }
+  }
+});
+
 test('markInactiveVehicles marks only non-current session rows as INACTIVE within scoped yards', async () => {
   await run(
     db,
