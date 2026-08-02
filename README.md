@@ -155,7 +155,7 @@ API downloads are generated from a separate snapshot containing only the
 
 ### Prerequisites
 
-- Node.js v20.18.1 through v24 (Node.js 24 LTS recommended)
+- Node.js v20.19.0 through v24 (Node.js 24 LTS recommended)
 - npm
 - SQLite (for local development)
 
@@ -199,6 +199,13 @@ Lint all source, test, script, and configuration JavaScript:
 
 ```bash
 npm run lint
+```
+
+Check for unused files, dependencies, exports, and production-only dead code:
+
+```bash
+npm run check:dead-code
+npm run check:dead-code:production
 ```
 
 Run fixture-based parser replay tests (no live network calls):

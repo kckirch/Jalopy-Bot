@@ -68,6 +68,12 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Reject unused files, dependencies, and exports
+        run: npm run check:dead-code
+
+      - name: Reject production-only dead code
+        run: npm run check:dead-code:production
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 

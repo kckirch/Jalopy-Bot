@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Keep production markers explicit so every shipped and operational entrypoint
+  // is analyzed by `knip --production`, not only the package `start` script.
+  "entry": [
+    "src/api/inventoryApiServer.js!",
+    "src/bot/discordBotMain.js!",
+    "src/bot/register-commands.js!",
+    "src/testing/liveScrapeSmokeTest.js!",
+    "src/testing/modelAliasScan.js!",
+    "scripts/run-tests.js",
+    "test/**/*.test.js"
+  ],
+  "project": [
+    "src/**/*.js!",
+    "scripts/**/*.js",
+    "test/**/*.js"
+  ],
+  "ignoreExportsUsedInFile": true
+}

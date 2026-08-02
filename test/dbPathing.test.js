@@ -8,6 +8,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
 const databasePath = path.join(repoRoot, 'src/database/database.js');
 const queryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
+const { resolveVehicleDbPath } = require('../src/database/dbPath');
 
 function run(db, sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -28,8 +29,6 @@ function close(db) {
 }
 
 test('resolveVehicleDbPath requires an absolute configured path', () => {
-  const { resolveVehicleDbPath } = require(dbPathModulePath);
-
   assert.throws(
     () => resolveVehicleDbPath({}),
     /VEHICLE_DB_PATH is required/

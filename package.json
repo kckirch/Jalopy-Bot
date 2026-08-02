@@ -9,6 +9,8 @@
     "register:commands": "node src/bot/register-commands.js",
     "start:prod": "npm run register:commands && npm start",
     "start:inventory-api": "node src/api/inventoryApiServer.js",
+    "check:dead-code": "knip --no-config-hints",
+    "check:dead-code:production": "knip --production --no-config-hints",
     "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node scripts/run-tests.js --coverage",
@@ -36,7 +38,7 @@
   "author": "KC Kircher",
   "license": "ISC",
   "engines": {
-    "node": ">=20.18.1 <25"
+    "node": ">=20.19.0 <25"
   },
   "dependencies": {
     "axios": "^1.19.0",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "eslint": "9.39.5",
-    "globals": "17.8.0"
+    "globals": "17.8.0",
+    "knip": "6.31.0"
   }
 }
