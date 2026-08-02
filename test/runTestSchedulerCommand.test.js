@@ -4,19 +4,18 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const commandPath = path.join(repoRoot, 'src/bot/commands/runTestSchedulerCommand.js');
-const testSchedulerPath = path.join(repoRoot, 'src/notifications/testScheduler.js');
+const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
 
 async function withRunTestSchedulerCommandMocks(mocks, runTest) {
   const previousCommand = require.cache[commandPath];
-  const previousTestScheduler = require.cache[testSchedulerPath];
+  const previousScheduler = require.cache[schedulerPath];
 
-  require.cache[testSchedulerPath] = {
-    id: testSchedulerPath,
-    filename: testSchedulerPath,
+  require.cache[schedulerPath] = {
+    id: schedulerPath,
+    filename: schedulerPath,
     loaded: true,
     exports: {
-      performScrape: mocks.performScrape,
-      processSearches: mocks.processSearches,
+      runMissedMorningJobs: mocks.runMissedMorningJobs,
     },
   };
   delete require.cache[commandPath];
@@ -28,14 +27,13 @@ async function withRunTestSchedulerCommandMocks(mocks, runTest) {
     if (previousCommand) require.cache[commandPath] = previousCommand;
     else delete require.cache[commandPath];
 
-    if (previousTestScheduler) require.cache[testSchedulerPath] = previousTestScheduler;
-    else delete require.cache[testSchedulerPath];
+    if (previousScheduler) require.cache[schedulerPath] = previousScheduler;
+    else delete require.cache[schedulerPath];
   }
 }
 
-test('handleRunTestSchedulerCommand calls performScrape and processSearches', async () => {
-  let scrapeCalls = 0;
-  let processCalls = 0;
+test('handleRunTestSchedulerCommand runs the missed morning jobs', async () => {
+  let recoveryCalls = 0;
   const interaction = {
     memberPermissions: {
       has() {
@@ -54,8 +52,7 @@ test('handleRunTestSchedulerCommand calls performScrape and processSearches', as
 
   await withRunTestSchedulerCommandMocks(
     {
-      performScrape: async () => { scrapeCalls += 1; },
-      processSearches: async () => { processCalls += 1; },
+      runMissedMorningJobs: async () => { recoveryCalls += 1; },
     },
     async (handleRunTestSchedulerCommand) => {
       await handleRunTestSchedulerCommand(interaction);
@@ -63,13 +60,12 @@ test('handleRunTestSchedulerCommand calls performScrape and processSearches', as
   );
 
   assert.equal(interaction.deferReplyCalls, 1);
-  assert.equal(scrapeCalls, 1);
-  assert.equal(processCalls, 1);
+  assert.equal(recoveryCalls, 1);
   assert.equal(interaction.editReplyCalls.length, 1);
-  assert.match(interaction.editReplyCalls[0], /executed successfully/i);
+  assert.match(interaction.editReplyCalls[0], /completed successfully/i);
 });
 
-test('handleRunTestSchedulerCommand reports failure when test scheduler throws', async () => {
+test('handleRunTestSchedulerCommand reports a missed-morning recovery failure', async () => {
   const interaction = {
     memberPermissions: {
       has() {
@@ -88,8 +84,7 @@ test('handleRunTestSchedulerCommand reports failure when test scheduler throws',
 
   await withRunTestSchedulerCommandMocks(
     {
-      performScrape: async () => { throw new Error('forced-failure'); },
-      processSearches: async () => {},
+      runMissedMorningJobs: async () => { throw new Error('forced-failure'); },
     },
     async (handleRunTestSchedulerCommand) => {
       await handleRunTestSchedulerCommand(interaction);
@@ -102,8 +97,7 @@ test('handleRunTestSchedulerCommand reports failure when test scheduler throws',
 });
 
 test('handleRunTestSchedulerCommand denies users without elevated permissions', async () => {
-  let scrapeCalls = 0;
-  let processCalls = 0;
+  let recoveryCalls = 0;
   const interaction = {
     memberPermissions: {
       has() {
@@ -135,8 +129,7 @@ test('handleRunTestSchedulerCommand denies users without elevated permissions', 
 
   await withRunTestSchedulerCommandMocks(
     {
-      performScrape: async () => { scrapeCalls += 1; },
-      processSearches: async () => { processCalls += 1; },
+      runMissedMorningJobs: async () => { recoveryCalls += 1; },
     },
     async (handleRunTestSchedulerCommand) => {
       await handleRunTestSchedulerCommand(interaction);
@@ -144,8 +137,7 @@ test('handleRunTestSchedulerCommand denies users without elevated permissions', 
   );
 
   assert.equal(interaction.deferReplyCalls, 0);
-  assert.equal(scrapeCalls, 0);
-  assert.equal(processCalls, 0);
+  assert.equal(recoveryCalls, 0);
   assert.equal(interaction.replyCalls.length, 1);
   assert.deepEqual(interaction.replyCalls[0], {
     content: 'You do not have permission to use this command.',

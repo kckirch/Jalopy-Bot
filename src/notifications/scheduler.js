@@ -70,6 +70,15 @@ async function scrapeAllJunkyards(sessionID) {
   });
 }
 
+async function runMissedMorningJobs({
+  sessionID = getSessionID(),
+  retries = 3,
+  retryDelayMs = 5000,
+} = {}) {
+  await retryOperation(() => scrapeAllJunkyards(sessionID), retries, retryDelayMs);
+  await processDailySavedSearches();
+}
+
 function startScheduledTasks() {
   if (scheduledTasksStarted) {
     console.log('Scheduled tasks already started. Skipping duplicate initialization.');
@@ -118,6 +127,7 @@ function startScheduledTasks() {
 module.exports = {
   startScheduledTasks,
   scrapeAllJunkyards,
+  runMissedMorningJobs,
   __testables: {
     resolveSchedulerTimezone,
     DEFAULT_SCHEDULER_TIMEZONE,

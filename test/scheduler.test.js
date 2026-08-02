@@ -228,6 +228,86 @@ test('scrapeAllJunkyards rejects when another scrape lock is already held', asyn
   assert.equal(scrapeCalls.length, 0);
 });
 
+test('runMissedMorningJobs completes every scrape before sending notifications', async () => {
+  const events = [];
+  const mocks = buildBaseMocks({
+    universalWebScrape: async (options) => {
+      events.push(`scrape:${options.sessionID}`);
+    },
+    processDailySavedSearches: async () => {
+      events.push('notifications');
+    },
+  });
+
+  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
+    await runMissedMorningJobs({
+      sessionID: '20260101',
+      retries: 0,
+      retryDelayMs: 0,
+    });
+  });
+
+  assert.deepEqual(events, [
+    'scrape:20260101',
+    'scrape:20260101',
+    'notifications',
+  ]);
+});
+
+test('runMissedMorningJobs retries a failed scrape before sending notifications', async () => {
+  let scrapeCalls = 0;
+  let shouldFail = true;
+  let notificationCalls = 0;
+  const mocks = buildBaseMocks({
+    universalWebScrape: async (options) => {
+      scrapeCalls += 1;
+      if (options.hasMultipleLocations === false && shouldFail) {
+        shouldFail = false;
+        throw new Error('simulated transient failure');
+      }
+    },
+    processDailySavedSearches: async () => {
+      notificationCalls += 1;
+    },
+  });
+
+  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
+    await runMissedMorningJobs({
+      sessionID: '20260101',
+      retries: 1,
+      retryDelayMs: 0,
+    });
+  });
+
+  assert.equal(scrapeCalls, 4);
+  assert.equal(notificationCalls, 1);
+});
+
+test('runMissedMorningJobs rejects and skips notifications after scrape failure', async () => {
+  let notificationCalls = 0;
+  const mocks = buildBaseMocks({
+    universalWebScrape: async () => {
+      throw new Error('simulated permanent failure');
+    },
+    processDailySavedSearches: async () => {
+      notificationCalls += 1;
+    },
+  });
+
+  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
+    await assert.rejects(
+      () => runMissedMorningJobs({
+        sessionID: '20260101',
+        retries: 0,
+        retryDelayMs: 0,
+      }),
+      /Max retries reached/
+    );
+  });
+
+  assert.equal(notificationCalls, 0);
+});
+
 test('scrape cron callback performs every configured scrape', async () => {
   const schedules = [];
   const scrapeCalls = [];
