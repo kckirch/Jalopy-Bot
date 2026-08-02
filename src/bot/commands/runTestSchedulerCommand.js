@@ -1,22 +1,19 @@
 const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
 async function handleRunTestSchedulerCommand(interaction) {
-    console.log('Test scheduler command received.');
-    if (!(await ensureElevatedCommandAccess(interaction, 'runtestscheduler'))) {
-      return;
-    }
-    await interaction.deferReply({ ephemeral: true });
-  
-    try {
-      const { performScrape, processSearches } = require('../../notifications/testScheduler');
-      await performScrape();
-      await processSearches();
-      await interaction.editReply('Test scheduler functions have been executed successfully.');
-    } catch (error) {
-      console.error('Error running test scheduler:', error);
-      await interaction.editReply('An error occurred while running the test scheduler.');
-    }
+  if (!(await ensureElevatedCommandAccess(interaction, 'runtestscheduler'))) {
+    return;
   }
-  
-  module.exports = { handleRunTestSchedulerCommand };
-  
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const { runMissedMorningJobs } = require('../../notifications/scheduler');
+    await runMissedMorningJobs();
+    await interaction.editReply('Missed morning jobs completed successfully.');
+  } catch (error) {
+    console.error('Morning recovery command failed:', error?.name || 'Error');
+    await interaction.editReply('An error occurred while running the missed morning jobs.');
+  }
+}
+
+module.exports = { handleRunTestSchedulerCommand };
