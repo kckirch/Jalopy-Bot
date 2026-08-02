@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
@@ -43,6 +44,21 @@ async function waitFor(check, timeoutMs = 2500, intervalMs = 20) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   throw new Error('Timed out waiting for condition.');
+}
+
+async function withDbMethodOverrides(overrides, runTest) {
+  const previousGet = db.get;
+  const previousRun = db.run;
+
+  if (overrides.get) db.get = overrides.get;
+  if (overrides.run) db.run = overrides.run;
+
+  try {
+    await runTest();
+  } finally {
+    db.get = previousGet;
+    db.run = previousRun;
+  }
 }
 
 let tempDir;
@@ -167,4 +183,93 @@ test('markInactiveVehicles skips updates when called without scoped yard IDs', a
     "SELECT vehicle_status FROM vehicles WHERE vehicle_make = 'MAZDA' AND vehicle_model = '3';"
   );
   assert.equal(row.vehicle_status, 'ACTIVE');
+});
+
+test('markInactiveVehicles rejects without logging SQLite error details', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+
+  const consoleCalls = await captureConsole(async () => {
+    await withDbMethodOverrides(
+      {
+        run(_sql, _params, callback) {
+          callback(new Error(privateErrorDetails));
+          return this;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () => markInactiveVehicles('20260102', { yardIds: [1020] }),
+          (error) => error.message === privateErrorDetails
+        );
+      }
+    );
+  });
+
+  assert.match(joinedConsoleText(consoleCalls), /Error marking vehicles as INACTIVE: Error/);
+  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+});
+
+test('insertOrUpdateVehicle rejects without logging lookup or write error details', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-file';
+
+  const consoleCalls = await captureConsole(async () => {
+    await withDbMethodOverrides(
+      {
+        get(_sql, _params, callback) {
+          callback(new Error(privateErrorDetails));
+          return this;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () => insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '20260101'),
+          (error) => error.message === privateErrorDetails
+        );
+      }
+    );
+
+    await withDbMethodOverrides(
+      {
+        get(_sql, _params, callback) {
+          callback(null, null);
+          return this;
+        },
+        run(_sql, _params, callback) {
+          callback(new Error(privateErrorDetails));
+          return this;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () => insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '20260101'),
+          (error) => error.message === privateErrorDetails
+        );
+      }
+    );
+
+    await withDbMethodOverrides(
+      {
+        get(_sql, _params, callback) {
+          callback(null, { id: 42, first_seen_date: '20260101' });
+          return this;
+        },
+        run(_sql, _params, callback) {
+          callback(new Error(privateErrorDetails));
+          return this;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () => insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '20260101'),
+          (error) => error.message === privateErrorDetails
+        );
+      }
+    );
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  assert.match(logOutput, /Error searching for existing vehicle: Error/);
+  assert.match(logOutput, /Error inserting new vehicle: Error/);
+  assert.match(logOutput, /Error updating existing vehicle: Error/);
+  assert.equal(logOutput.includes(privateErrorDetails), false);
 });
