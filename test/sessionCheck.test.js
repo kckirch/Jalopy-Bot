@@ -31,29 +31,59 @@ async function withSessionCheck(mockDb, runTest) {
 }
 
 test('checkSessionUpdates returns true when last update is recent', async () => {
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const now = Date.parse('2026-08-02T06:20:00Z');
   const mockDb = {
     get(_sql, callback) {
-      callback(null, { lastUpdate: tenMinutesAgo });
+      callback(null, { lastUpdate: '2026-08-02 06:10:00' });
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
-    const result = await checkSessionUpdates();
+    const result = await checkSessionUpdates({ now: () => now });
     assert.equal(result, true);
   });
 });
 
 test('checkSessionUpdates returns false when last update is stale', async () => {
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const now = Date.parse('2026-08-02T06:20:00Z');
   const mockDb = {
     get(_sql, callback) {
-      callback(null, { lastUpdate: twoHoursAgo });
+      callback(null, { lastUpdate: '2026-08-02 05:49:59' });
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
-    const result = await checkSessionUpdates();
+    const result = await checkSessionUpdates({ now: () => now });
+    assert.equal(result, false);
+  });
+});
+
+test('checkSessionUpdates returns false when no inventory timestamp exists', async () => {
+  const mockDb = {
+    get(_sql, callback) {
+      callback(null, { lastUpdate: null });
+    },
+  };
+
+  await withSessionCheck(mockDb, async (checkSessionUpdates) => {
+    const result = await checkSessionUpdates({
+      now: () => Date.parse('2026-08-02T06:20:00Z'),
+    });
+    assert.equal(result, false);
+  });
+});
+
+test('checkSessionUpdates returns false for timestamps in the future', async () => {
+  const mockDb = {
+    get(_sql, callback) {
+      callback(null, { lastUpdate: '2026-08-02 06:20:01' });
+    },
+  };
+
+  await withSessionCheck(mockDb, async (checkSessionUpdates) => {
+    const result = await checkSessionUpdates({
+      now: () => Date.parse('2026-08-02T06:20:00Z'),
+    });
     assert.equal(result, false);
   });
 });

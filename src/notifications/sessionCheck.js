@@ -1,34 +1,46 @@
-// sessionCheck.js
 const { db } = require('../database/database');
 
-async function checkSessionUpdates() {
-    const sql = 'SELECT MAX(last_updated) as lastUpdate FROM vehicles';
-    return new Promise((resolve, reject) => {
-        db.get(sql, (err, result) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            // Get the last update time from the database result
-            const lastUpdateTimeUTC = new Date(result.lastUpdate);
-            
-            // Convert database time from UTC to your desired time zone (e.g., MST)
-            const lastUpdateTime = new Date(lastUpdateTimeUTC.toLocaleString("en-US", {timeZone: "America/Denver"}));
+const SESSION_FRESHNESS_WINDOW_MS = 30 * 60 * 1000;
+const TIME_ZONE_SUFFIX_PATTERN = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 
-            // Get the current time in the desired time zone
-            const currentTime = new Date().toLocaleString("en-US", {timeZone: "America/Denver"});
+function parseDatabaseTimestamp(timestamp) {
+  if (typeof timestamp !== 'string' || timestamp.trim() === '') {
+    return Number.NaN;
+  }
 
-            // Convert the current time string to a Date object
-            const currentTimeObj = new Date(currentTime);
+  const trimmedTimestamp = timestamp.trim();
+  const isoTimestamp = trimmedTimestamp.includes('T')
+    ? trimmedTimestamp
+    : trimmedTimestamp.replace(' ', 'T');
+  const timestampWithZone = TIME_ZONE_SUFFIX_PATTERN.test(isoTimestamp)
+    ? isoTimestamp
+    : `${isoTimestamp}Z`;
 
-            // Calculate the time difference in milliseconds
-            const timeDifference = currentTimeObj - lastUpdateTime;
-
-            // Check if the time difference is less than 30 minutes (1800000 milliseconds)
-            resolve(timeDifference < 1800000);
-        });
-    });
+  return Date.parse(timestampWithZone);
 }
 
-module.exports = { checkSessionUpdates };
+function checkSessionUpdates({ database = db, now = Date.now } = {}) {
+  const sql = 'SELECT MAX(last_updated) AS lastUpdate FROM vehicles';
 
+  return new Promise((resolve, reject) => {
+    database.get(sql, (error, result) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      const lastUpdateTime = parseDatabaseTimestamp(result?.lastUpdate);
+      const age = now() - lastUpdateTime;
+      const isRecent =
+        Number.isFinite(lastUpdateTime) &&
+        age >= 0 &&
+        age < SESSION_FRESHNESS_WINDOW_MS;
+
+      resolve(isRecent);
+    });
+  });
+}
+
+module.exports = {
+  checkSessionUpdates,
+};
