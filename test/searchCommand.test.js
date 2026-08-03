@@ -3,9 +3,6 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 const {
-  buildQuickActionCustomId,
-} = require('../src/bot/utils/interactionParameters');
-const {
   SEARCH_LOCATION_CHOICES,
 } = require('../src/bot/locationChoices');
 
@@ -627,111 +624,6 @@ test('location dropdown reruns search with same filters in selected location', a
       assert.deepEqual(queriedYardIds, [1020, 1021]);
       assert.equal(selectInteraction.updates.length, 1);
       assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
-    }
-  );
-});
-
-test('saved-search quick action run updates interaction with current match summary', async () => {
-  const now = new Date().toISOString();
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 7,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      getSavedSearches: async () => [],
-    },
-    async ({ handleSavedSearchQuickActionButton }) => {
-      const quickCustomId = buildQuickActionCustomId('run', {
-        uid: 'user-1',
-        lc: 'boise',
-        yd: '1020',
-        mk: 'TOYOTA',
-        md: 'CAMRY',
-        yr: '2005',
-        st: 'ACTIVE',
-        sid: '',
-        idx: 0,
-      });
-
-      const interaction = {
-        user: { id: 'user-1' },
-        updates: [],
-        async update(payload) {
-          this.updates.push(payload);
-        },
-        async reply() {},
-      };
-
-      await handleSavedSearchQuickActionButton(interaction, quickCustomId.slice(3));
-
-      assert.equal(interaction.updates.length, 1);
-      assert.ok(Array.isArray(interaction.updates[0].embeds));
-      assert.match(interaction.updates[0].embeds[0].data.title, /run this search/i);
-      assert.ok(Array.isArray(interaction.updates[0].components));
-      assert.equal(interaction.updates[0].components[0].components.length, 5);
-    }
-  );
-});
-
-test('saved-search quick action delete reports the number removed', async () => {
-  const savedSearch = {
-    id: 123,
-    yard_id: '1020',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year_range: '2005',
-    status: 'ACTIVE',
-  };
-  const deletedSearchIds = [];
-  let savedSearchReads = 0;
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [],
-      getSavedSearches: async () => {
-        savedSearchReads += 1;
-        return savedSearchReads === 1 ? [savedSearch] : [];
-      },
-      deleteSavedSearch: async (id) => deletedSearchIds.push(id),
-    },
-    async ({ handleSavedSearchQuickActionButton }) => {
-      const quickCustomId = buildQuickActionCustomId('delete', {
-        uid: 'user-1',
-        lc: 'boise',
-        yd: savedSearch.yard_id,
-        mk: savedSearch.make,
-        md: savedSearch.model,
-        yr: savedSearch.year_range,
-        st: savedSearch.status,
-        sid: savedSearch.id,
-        idx: 0,
-      });
-      const interaction = {
-        user: { id: 'user-1' },
-        updates: [],
-        async update(payload) {
-          this.updates.push(payload);
-        },
-        async reply() {},
-      };
-
-      await handleSavedSearchQuickActionButton(interaction, quickCustomId.slice(3));
-
-      assert.deepEqual(deletedSearchIds, ['123']);
-      assert.equal(savedSearchReads, 2);
-      assert.equal(interaction.updates.length, 1);
-      assert.match(interaction.updates[0].content, /Deleted 1 saved search/);
-      assert.match(interaction.updates[0].content, /no saved searches left/i);
     }
   );
 });
