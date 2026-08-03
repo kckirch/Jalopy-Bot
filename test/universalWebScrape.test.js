@@ -422,7 +422,7 @@ test('selenium scraper discovers multiple yards and scopes reconciliation to num
   const driver = createDriver(
     [[2005, 'TOYOTA', 'CAMRY', 7]],
     {
-      yardOptionValues: ['', '1020', '', 'invalid-yard', '1021'],
+      yardOptionValues: ['', '1020', '1020junk', 'invalid-yard', '1021'],
     }
   );
 
@@ -446,7 +446,7 @@ test('selenium scraper discovers multiple yards and scopes reconciliation to num
 
   assert.deepEqual(
     upserts.map(([yardId]) => yardId),
-    ['1020', 'invalid-yard', '1021']
+    ['1020', '1020junk', 'invalid-yard', '1021']
   );
   assert.deepEqual(markCalls, [['20260101', { yardIds: [1020, 1021] }]]);
 });

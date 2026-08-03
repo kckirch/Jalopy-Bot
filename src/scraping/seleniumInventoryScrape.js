@@ -3,11 +3,7 @@ const chrome = require('selenium-webdriver/chrome');
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 const { resolveChromedriverPath } = require('./chromedriverResolver');
 const { summarizeError } = require('../utils/errorSummary');
-
-function normalizeYardId(yardId) {
-  const parsed = parseInt(yardId, 10);
-  return Number.isNaN(parsed) ? null : parsed;
-}
+const { normalizeYardId } = require('./yardIdNormalization');
 
 function setElementValue(driver, elementId, value) {
   return driver.executeScript(
