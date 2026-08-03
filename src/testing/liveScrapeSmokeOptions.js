@@ -7,49 +7,65 @@ const TRUSTY_YARD = YARDS.find(
   (yard) => yard.junkyardKey === 'trustyJunkyard'
 );
 
+const DEFAULT_SMOKE_OPTIONS = Object.freeze({
+  location: 'boise',
+  locations: null,
+  make: 'TOYOTA',
+  model: 'CAMRY',
+  engine: null,
+  dbPath: null,
+  keepDb: false,
+});
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeLocations(value) {
+  return normalizeText(value)
+    .split(',')
+    .map((location) => location.trim())
+    .filter(Boolean);
+}
+
+function normalizeEngine(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+const VALUE_OPTIONS = new Map([
+  ['--location', ['location', normalizeText]],
+  ['--locations', ['locations', normalizeLocations]],
+  ['--make', ['make', normalizeText]],
+  ['--model', ['model', normalizeText]],
+  ['--engine', ['engine', normalizeEngine]],
+  ['--db-path', ['dbPath', normalizeText]],
+]);
+
+const FLAG_OPTIONS = new Map([
+  ['--keep-db', 'keepDb'],
+  ['--help', 'help'],
+  ['-h', 'help'],
+]);
+
 function parseArgs(argv) {
-  const args = {
-    location: 'boise',
-    locations: null,
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    engine: null,
-    dbPath: null,
-    keepDb: false,
-  };
+  const args = { ...DEFAULT_SMOKE_OPTIONS };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    const flagName = FLAG_OPTIONS.get(arg);
+    if (flagName) {
+      args[flagName] = true;
+      continue;
+    }
 
-    if (arg === '--location') {
-      args.location = String(argv[i + 1] || '').trim();
-      i += 1;
-    } else if (arg === '--locations') {
-      const raw = String(argv[i + 1] || '').trim();
-      args.locations = raw
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-      i += 1;
-    } else if (arg === '--make') {
-      args.make = String(argv[i + 1] || '').trim();
-      i += 1;
-    } else if (arg === '--model') {
-      args.model = String(argv[i + 1] || '').trim();
-      i += 1;
-    } else if (arg === '--engine') {
-      args.engine = String(argv[i + 1] || '').trim().toLowerCase();
-      i += 1;
-    } else if (arg === '--db-path') {
-      args.dbPath = String(argv[i + 1] || '').trim();
-      i += 1;
-    } else if (arg === '--keep-db') {
-      args.keepDb = true;
-    } else if (arg === '--help' || arg === '-h') {
-      args.help = true;
-    } else {
+    const option = VALUE_OPTIONS.get(arg);
+    if (!option) {
       throw new Error(`Unknown argument: ${arg}`);
     }
+
+    const [name, normalize] = option;
+    args[name] = normalize(argv[i + 1]);
+    i += 1;
   }
 
   return args;
