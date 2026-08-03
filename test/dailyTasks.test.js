@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
+const { createNotificationScenario } = require('../test-support/dailyTasksScenario');
 
 const repoRoot = path.resolve(__dirname, '..');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
@@ -65,80 +66,14 @@ async function withDailyTasksMocks(mocks, runTest) {
   }
 }
 
-test('processDailySavedSearches sends matching user notifications and new-vehicle channel alert', async () => {
-  const dmSends = [];
-  const channelSends = [];
-  const queryCalls = [];
-  const now = new Date().toISOString();
-
-  const client = {
-    isReady: () => true,
-    users: {
-      fetch: async (id) => ({
-        id,
-        send: async (payload) => {
-          dmSends.push({ id, payload });
-        },
-      }),
-    },
-    channels: {
-      cache: {
-        get: (id) => ({
-          id,
-          send: async (payload) => {
-            channelSends.push({ id, payload });
-          },
-        }),
-      },
-    },
-  };
-
-  const getAllSavedSearches = async () => [
-    {
-      user_id: 'user-1',
-      username: 'user#1',
-      yard_id: '1020',
-      yard_name: 'BOISE',
-      make: 'TOYOTA',
-      model: 'CAMRY',
-      year_range: 'ANY',
-      status: 'ACTIVE',
-    },
-  ];
-
-  const queryVehicles = async (yardId, make, model, yearRange, status) => {
-    queryCalls.push({ yardId, make, model, yearRange, status });
-    if (status === 'NEW') {
-      return [
-        {
-          yard_name: 'BOISE',
-          row_number: 12,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ];
-    }
-    return [
-      {
-        yard_name: 'BOISE',
-        row_number: 77,
-        vehicle_make: 'TOYOTA',
-        vehicle_model: 'CAMRY',
-        vehicle_year: 2004,
-        first_seen: now,
-        last_updated: now,
-        notes: 'Needs tires',
-      },
-    ];
-  };
-
-  const consoleCalls = await captureConsole(async () => {
+async function runDailySavedSearchScenario(scenario) {
+  return captureConsole(async () => {
     await withDailyTasksMocks(
-      { client, getAllSavedSearches, queryVehicles },
+      {
+        client: scenario.client,
+        getAllSavedSearches: scenario.getAllSavedSearches,
+        queryVehicles: scenario.queryVehicles,
+      },
       async ({ processDailySavedSearches }) => {
         await processDailySavedSearches();
         await tick();
@@ -146,6 +81,10 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
       }
     );
   });
+}
+
+function assertDailySavedSearchNotifications(scenario, consoleCalls) {
+  const { dmSends, channelSends, queryCalls } = scenario;
 
   assert.ok(queryCalls.some((call) => call.status === 'ACTIVE'));
   assert.ok(queryCalls.some((call) => call.status === 'NEW'));
@@ -172,6 +111,13 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
   for (const privateValue of ['user-1', 'user#1', '111111111111111111']) {
     assert.equal(logOutput.includes(privateValue), false, privateValue);
   }
+}
+
+test('processDailySavedSearches sends matching user notifications and new-vehicle channel alert', async () => {
+  const scenario = createNotificationScenario();
+  const consoleCalls = await runDailySavedSearchScenario(scenario);
+
+  assertDailySavedSearchNotifications(scenario, consoleCalls);
 });
 
 test('notifyNewVehicles creates a new embed after every 25 vehicle fields', async () => {
