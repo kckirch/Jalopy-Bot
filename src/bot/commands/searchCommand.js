@@ -10,7 +10,6 @@ const { vehicleMakes, reverseMakeAliases, convertLocationToYardId, convertYardId
 const { checkExistingSearch, addSavedSearch, getSavedSearches, deleteSavedSearch } = require('../../database/savedSearchManager');
 const { summarizeError } = require('../../utils/errorSummary');
 const {
-  buildQuickActionCustomId,
   resolveInteractionParameters,
   resolveQuickActionPayload,
   storeInteractionParameters,
@@ -26,182 +25,15 @@ const {
   serializeYardId,
 } = require('../utils/savedSearchCriteria');
 const { SEARCH_LOCATION_CHOICES } = require('../locationChoices');
-
-const SAVED_SEARCH_DM_PREVIEW_LIMIT = 15;
-
-function normalizeLocationName(location, yardId) {
-  if (location && location.trim() !== '') {
-    return location;
-  }
-  return convertYardIdToLocation(yardId).replace(/\s{2,}/g, ' ').trim();
-}
-
-function buildQuickActionButtons(payload) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildQuickActionCustomId('delete', payload))
-      .setLabel('Delete This Search')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(buildQuickActionCustomId('view', payload))
-      .setLabel('See Saved')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(buildQuickActionCustomId('next', payload))
-      .setLabel('Next Saved')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(buildQuickActionCustomId('run', payload))
-      .setLabel('Run This Search')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(buildQuickActionCustomId('close', payload))
-      .setLabel('Close')
-      .setStyle(ButtonStyle.Secondary)
-  );
-}
-
-function createQuickActionPayload({
-  userId,
-  location,
-  yardId,
-  make,
-  model,
-  yearRange,
-  status,
-  savedSearchId,
-  savedIndex = 0,
-}) {
-  const canonicalYardId = canonicalizeYardIdForSavedSearch(yardId);
-  return {
-    uid: userId,
-    lc: normalizeLocationName(location, canonicalYardId),
-    yd: canonicalYardId,
-    mk: make,
-    md: model,
-    yr: yearRange,
-    st: status,
-    sid: savedSearchId || '',
-    idx: Number.isInteger(savedIndex) && savedIndex >= 0 ? savedIndex : 0,
-  };
-}
-
-function buildSavedSearchActionEmbed({
-  title,
-  message,
-  payload,
-  savedCount,
-  selectedPosition = null,
-}) {
-  const embed = new EmbedBuilder()
-    .setColor(0x2ecc71)
-    .setTitle(title)
-    .setDescription(message)
-    .addFields(
-      { name: 'Location', value: payload.lc || 'Any', inline: true },
-      { name: 'Make', value: payload.mk || 'ANY', inline: true },
-      { name: 'Model', value: payload.md || 'ANY', inline: true },
-      { name: 'Year', value: payload.yr || 'ANY', inline: true },
-      { name: 'Status', value: payload.st || 'ACTIVE', inline: true }
-    );
-
-  if (Number.isInteger(savedCount)) {
-    const positionText = Number.isInteger(selectedPosition) ? ` (showing ${selectedPosition} of ${savedCount})` : '';
-    embed.addFields({
-      name: 'Saved Searches',
-      value: `${savedCount}${positionText}`,
-      inline: true,
-    });
-  }
-
-  return embed;
-}
-
-function buildRunNowEmbed(payload, vehicles) {
-  const embed = new EmbedBuilder()
-    .setColor(0x0099FF)
-    .setTitle('Run This Search')
-    .setDescription(`Current match count: **${vehicles.length}**`)
-    .addFields(
-      { name: 'Location', value: payload.lc || 'Any', inline: true },
-      { name: 'Make', value: payload.mk || 'ANY', inline: true },
-      { name: 'Model', value: payload.md || 'ANY', inline: true },
-      { name: 'Year', value: payload.yr || 'ANY', inline: true },
-      { name: 'Status', value: payload.st || 'ACTIVE', inline: true }
-    );
-
-  const previewRows = vehicles.slice(0, 5);
-  if (previewRows.length > 0) {
-    const preview = previewRows
-      .map((vehicle) => `${vehicle.vehicle_year} ${vehicle.vehicle_make} ${vehicle.vehicle_model} | ${vehicle.yard_name} Row ${vehicle.row_number}`)
-      .join('\n')
-      .slice(0, 1024);
-    embed.addFields({ name: 'Top Matches', value: preview });
-  } else {
-    embed.addFields({ name: 'Top Matches', value: 'No active matches right now.' });
-  }
-
-  if (vehicles.length > previewRows.length) {
-    embed.setFooter({ text: `Showing ${previewRows.length} of ${vehicles.length} matches` });
-  }
-
-  return embed;
-}
-
-async function buildSavedSearchActionMessage({
-  userId,
-  location,
-  yardId,
-  make,
-  model,
-  yearRange,
-  status,
-  savedSearchId = '',
-  savedIndex = 0,
-  title,
-  message,
-}) {
-  const payload = createQuickActionPayload({
-    userId,
-    location,
-    yardId,
-    make,
-    model,
-    yearRange,
-    status,
-    savedSearchId,
-    savedIndex,
-  });
-
-  const savedSearches = await getSavedSearches(userId);
-  const selectedPosition = savedSearches.length > 0 ? (payload.idx + 1) : null;
-  const embed = buildSavedSearchActionEmbed({
-    title,
-    message,
-    payload,
-    savedCount: savedSearches.length,
-    selectedPosition,
-  });
-
-  return {
-    embeds: [embed],
-    components: [buildQuickActionButtons(payload)],
-    ephemeral: true,
-  };
-}
-
-function formatSavedSearchPreview(savedSearches) {
-  const previewRows = savedSearches.slice(0, SAVED_SEARCH_DM_PREVIEW_LIMIT);
-  const lines = previewRows.map((search) =>
-    `- ${search.yard_name} | ${search.make} ${search.model} (${search.year_range}) | ${search.status}`
-  );
-
-  if (savedSearches.length > SAVED_SEARCH_DM_PREVIEW_LIMIT) {
-    lines.push(`- ...and ${savedSearches.length - SAVED_SEARCH_DM_PREVIEW_LIMIT} more`);
-  }
-
-  return lines.join('\n');
-}
+const {
+  buildQuickActionButtons,
+  buildRunNowEmbed,
+  buildSavedSearchActionEmbed,
+  buildSavedSearchActionMessage,
+  createQuickActionPayload,
+  formatSavedSearchPreview,
+  normalizeLocationName,
+} = require('../utils/savedSearchQuickActions');
 
 async function handleSearchCommand(interaction) {
   const location = interaction.options.getString('location');
@@ -376,7 +208,8 @@ async function handleSearchCommand(interaction) {
                 const exists = await checkExistingSearch(i.user.id, cleanedYardId, userMakeInput, model, yearInput, status);
                 if (!exists) {
                   const savedSearchId = await addSavedSearch(i.user.id, i.user.tag, cleanedYardId, cleanedYardName, userMakeInput, model, yearInput, status, '');
-                  const responsePayload = await buildSavedSearchActionMessage({
+                  const savedSearches = await getSavedSearches(i.user.id);
+                  const responsePayload = buildSavedSearchActionMessage({
                     userId: i.user.id,
                     location: searchState.location,
                     yardId: cleanedYardId,
@@ -385,12 +218,14 @@ async function handleSearchCommand(interaction) {
                     yearRange: yearInput,
                     status,
                     savedSearchId,
+                    savedSearches,
                     title: 'Search Saved',
                     message: 'Saved this search. Use the buttons below to keep working without retyping.',
                   });
                   await i.reply(responsePayload);
                 } else {
-                  const responsePayload = await buildSavedSearchActionMessage({
+                  const savedSearches = await getSavedSearches(i.user.id);
+                  const responsePayload = buildSavedSearchActionMessage({
                     userId: i.user.id,
                     location: searchState.location,
                     yardId: cleanedYardId,
@@ -398,6 +233,7 @@ async function handleSearchCommand(interaction) {
                     model,
                     yearRange: yearInput,
                     status,
+                    savedSearches,
                     title: 'Search Already Saved',
                     message: 'This search is already in your saved list. You can run it now, jump through saved searches, or delete it.',
                   });
