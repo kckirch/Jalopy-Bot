@@ -59,6 +59,16 @@ function isNotModified(request, etag, lastModifiedMillis) {
   return false;
 }
 
+function parseRequestUrl(requestUrl) {
+  if (typeof requestUrl !== 'string') return null;
+
+  try {
+    return new URL(requestUrl, 'http://localhost');
+  } catch {
+    return null;
+  }
+}
+
 async function sendVehicleDbFile(
   request,
   response,
@@ -183,10 +193,11 @@ function createInventoryApiRequestHandler({
       return;
     }
 
-    const url = new URL(
-      request.url,
-      `http://${request.headers.host || 'localhost'}`
-    );
+    const url = parseRequestUrl(request.url);
+    if (!url) {
+      writeJson(response, 400, { error: 'Bad request' }, corsHeaders);
+      return;
+    }
 
     if (
       url.pathname === '/health' &&
