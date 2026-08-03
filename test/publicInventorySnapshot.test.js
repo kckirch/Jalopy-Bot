@@ -182,6 +182,10 @@ async function createPrivateRuntimeDatabase(databasePath) {
   );
   await run(
     database,
+    'CREATE INDEX idx_vehicles_make_model ON vehicles(vehicle_make, vehicle_model);'
+  );
+  await run(
+    database,
     `INSERT INTO vehicles (
       yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
       first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
@@ -212,7 +216,7 @@ async function createPrivateRuntimeDatabase(databasePath) {
 
 test('public inventory snapshot contains vehicles and no private saved-search data', async () => {
   const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-public-snapshot-'));
-  const sourcePath = path.join(tempDirectory, 'private-runtime.db');
+  const sourcePath = path.join(tempDirectory, 'private runtime #1.db');
   const snapshotPath = path.join(tempDirectory, 'public', 'inventory.db');
   const sourceDatabase = await createPrivateRuntimeDatabase(sourcePath);
   let snapshotDatabase;
@@ -234,6 +238,15 @@ test('public inventory snapshot contains vehicles and no private saved-search da
        ORDER BY name;`
     );
     assert.deepEqual(tables, [{ name: 'vehicles' }]);
+
+    const indexes = await all(
+      snapshotDatabase,
+      `SELECT name
+       FROM sqlite_master
+       WHERE type = 'index' AND tbl_name = 'vehicles' AND sql IS NOT NULL
+       ORDER BY name;`
+    );
+    assert.deepEqual(indexes, [{ name: 'idx_vehicles_make_model' }]);
 
     const vehicle = await get(
       snapshotDatabase,
@@ -257,6 +270,75 @@ test('public inventory snapshot contains vehicles and no private saved-search da
     if (snapshotDatabase) {
       await closeDatabase(snapshotDatabase);
     }
+    await closeDatabase(sourceDatabase);
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('snapshot build does not create a missing source or replace the last good snapshot', async () => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-missing-source-'));
+  const sourcePath = path.join(tempDirectory, 'missing private #1.db');
+  const snapshotDirectory = path.join(tempDirectory, 'public');
+  const snapshotPath = path.join(snapshotDirectory, 'inventory.db');
+  const lastGoodSnapshot = Buffer.from('last-good-public-snapshot');
+  fs.mkdirSync(snapshotDirectory);
+  fs.writeFileSync(snapshotPath, lastGoodSnapshot, { mode: 0o600 });
+
+  try {
+    await assert.rejects(
+      buildPublicInventorySnapshot(sourcePath, snapshotPath),
+      /unable to open database/
+    );
+
+    assert.equal(fs.existsSync(sourcePath), false);
+    assert.deepEqual(fs.readFileSync(snapshotPath), lastGoodSnapshot);
+    assert.deepEqual(fs.readdirSync(snapshotDirectory), ['inventory.db']);
+  } finally {
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('snapshot build preserves the last good snapshot when the source is corrupt', async () => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-corrupt-source-'));
+  const sourcePath = path.join(tempDirectory, 'corrupt-private.db');
+  const snapshotDirectory = path.join(tempDirectory, 'public');
+  const snapshotPath = path.join(snapshotDirectory, 'inventory.db');
+  const lastGoodSnapshot = Buffer.from('last-good-public-snapshot');
+  fs.mkdirSync(snapshotDirectory);
+  fs.writeFileSync(sourcePath, 'this is not a SQLite database');
+  fs.writeFileSync(snapshotPath, lastGoodSnapshot, { mode: 0o600 });
+
+  try {
+    await assert.rejects(
+      buildPublicInventorySnapshot(sourcePath, snapshotPath),
+      /file is not a database/
+    );
+
+    assert.deepEqual(fs.readFileSync(snapshotPath), lastGoodSnapshot);
+    assert.deepEqual(fs.readdirSync(snapshotDirectory), ['inventory.db']);
+  } finally {
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('snapshot build refuses to replace the private runtime database in place', async () => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-same-snapshot-'));
+  const sourcePath = path.join(tempDirectory, 'private-runtime.db');
+  const sourceDatabase = await createPrivateRuntimeDatabase(sourcePath);
+
+  try {
+    await assert.rejects(
+      buildPublicInventorySnapshot(sourcePath, sourcePath),
+      /snapshot path must differ/
+    );
+    const vehicleCount = await get(sourceDatabase, 'SELECT COUNT(*) AS count FROM vehicles;');
+    assert.equal(vehicleCount.count, 1);
+    assert.deepEqual(fs.readdirSync(tempDirectory).sort(), [
+      'private-runtime.db',
+      'private-runtime.db-shm',
+      'private-runtime.db-wal',
+    ]);
+  } finally {
     await closeDatabase(sourceDatabase);
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   }
@@ -376,6 +458,10 @@ test('snapshot provider serves the last good snapshot while refreshing in the ba
     assert.equal(staleSnapshot.vehicleCount, 1);
     await secondBuildStarted;
 
+    const concurrentStaleSnapshot = await provider.getSnapshot();
+    assert.equal(concurrentStaleSnapshot, staleSnapshot);
+    assert.equal(buildCount, 2);
+
     const staleDatabase = await openDatabase(snapshotPath, sqlite3.OPEN_READONLY);
     const staleCount = await get(staleDatabase, 'SELECT COUNT(*) AS count FROM vehicles;');
     await closeDatabase(staleDatabase);
@@ -415,7 +501,10 @@ test('snapshot provider reports a failed background refresh and keeps serving go
       }
       return buildPublicInventorySnapshot(...args);
     },
-    onRefreshError: reportRefreshError,
+    onRefreshError(error) {
+      reportRefreshError(error);
+      throw new Error('simulated reporting failure');
+    },
   });
 
   try {
@@ -438,6 +527,24 @@ test('snapshot provider reports a failed background refresh and keeps serving go
     await closeDatabase(writerDatabase);
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   }
+});
+
+test('snapshot provider rejects an invalid SQLite data version', async () => {
+  const sourceDatabase = {
+    get(_sql, _params, callback) {
+      callback(null, { data_version: 'not-an-integer' });
+    },
+  };
+  const provider = createPublicInventorySnapshotProvider({
+    sourceDatabase,
+    sourcePath: '/private/runtime.db',
+    snapshotPath: '/public/inventory.db',
+  });
+
+  await assert.rejects(
+    provider.getSnapshot(),
+    /Unable to read SQLite data_version/
+  );
 });
 
 test('inventory API redacts snapshot errors without changing the failure response', async () => {
