@@ -1,12 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-
-const repoRoot = path.resolve(__dirname, '..');
-const scrapeCommandPath = path.join(repoRoot, 'src/bot/commands/scrapeCommand.js');
-const universalWebScrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
-const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
-const sessionIdPath = path.join(repoRoot, 'src/utils/sessionId.js');
+const {
+  handleScrapeCommand,
+} = require('../src/bot/commands/scrapeCommand');
+const {
+  withScrapeLock,
+  __testables: scrapeLockTestables,
+} = require('../src/scraping/scrapeLock');
 
 function createInteraction({ location, make, model }) {
   const values = { location, make, model };
@@ -23,7 +23,9 @@ function createInteraction({ location, make, model }) {
     },
     options: {
       getString(name) {
-        return Object.prototype.hasOwnProperty.call(values, name) ? values[name] : null;
+        return Object.prototype.hasOwnProperty.call(values, name)
+          ? values[name]
+          : null;
       },
     },
     async reply(payload) {
@@ -49,164 +51,171 @@ function createInteraction({ location, make, model }) {
   };
 }
 
-async function withScrapeCommandMocks({ scrapeMock, sessionID }, runTest) {
-  const previousScrape = require.cache[universalWebScrapePath];
-  const previousSessionId = require.cache[sessionIdPath];
-  const previousCommand = require.cache[scrapeCommandPath];
-
-  require.cache[universalWebScrapePath] = {
-    id: universalWebScrapePath,
-    filename: universalWebScrapePath,
-    loaded: true,
-    exports: { universalWebScrape: scrapeMock },
+function createDependencies(scrapeCalls, sessionID = '20260101') {
+  return {
+    async scrape(options) {
+      scrapeCalls.push(options);
+    },
+    getSession() {
+      return sessionID;
+    },
   };
-  require.cache[sessionIdPath] = {
-    id: sessionIdPath,
-    filename: sessionIdPath,
-    loaded: true,
-    exports: { getSessionID: () => sessionID },
-  };
-  delete require.cache[scrapeCommandPath];
-
-  try {
-    const { handleScrapeCommand } = require(scrapeCommandPath);
-    await runTest(handleScrapeCommand);
-  } finally {
-    if (previousScrape) require.cache[universalWebScrapePath] = previousScrape;
-    else delete require.cache[universalWebScrapePath];
-
-    if (previousSessionId) require.cache[sessionIdPath] = previousSessionId;
-    else delete require.cache[sessionIdPath];
-
-    if (previousCommand) require.cache[scrapeCommandPath] = previousCommand;
-    else delete require.cache[scrapeCommandPath];
-  }
 }
 
-test('location=all triggers scrape of all configured yards with normalized make/model', async () => {
+test('location=all triggers every configured yard with normalized make/model', async () => {
   const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'all', make: 'toyota', model: 'camry' });
+  const interaction = createInteraction({
+    location: 'all',
+    make: 'toyota',
+    model: 'camry',
+  });
 
-  await withScrapeCommandMocks(
-    {
-      scrapeMock: async (options) => {
-        scrapeCalls.push(options);
-      },
-      sessionID: '20260101',
-    },
-    async (handleScrapeCommand) => {
-      await handleScrapeCommand(interaction);
-    }
-  );
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
 
   assert.equal(scrapeCalls.length, 6);
-  assert.ok(scrapeCalls.some((call) => call.yardId === '1020'));
-  assert.ok(scrapeCalls.some((call) => call.yardId === '1021'));
-  assert.ok(scrapeCalls.some((call) => call.yardId === '1022'));
-  assert.ok(scrapeCalls.some((call) => call.yardId === '1119'));
-  assert.ok(scrapeCalls.some((call) => call.yardId === '1099'));
-  assert.ok(scrapeCalls.some((call) => call.yardId === '999999'));
+  assert.deepEqual(
+    new Set(scrapeCalls.map(({ yardId }) => yardId)),
+    new Set(['1020', '1021', '1022', '1099', '1119', '999999'])
+  );
   assert.ok(scrapeCalls.every((call) => call.make === 'TOYOTA'));
   assert.ok(scrapeCalls.every((call) => call.model === 'CAMRY'));
   assert.ok(scrapeCalls.every((call) => call.sessionID === '20260101'));
   assert.ok(scrapeCalls.every((call) => call.shouldMarkInactive === false));
   assert.equal(interaction.deferReplyCalls.length, 1);
   assert.equal(interaction.editReplyCalls.length, 1);
+  const completionEmbed = interaction.editReplyCalls[0].embeds[0].toJSON();
+  assert.equal(
+    completionEmbed.description,
+    'Finished scraping all configured junkyards.'
+  );
+  assert.deepEqual(
+    completionEmbed.fields.map(({ name, value }) => ({ name, value })),
+    [
+      { name: 'Make', value: 'TOYOTA' },
+      { name: 'Model', value: 'CAMRY' },
+      { name: 'Session ID', value: '20260101' },
+    ]
+  );
 });
 
 test('specific location routes to a single scrape call', async () => {
   const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'boise', make: 'honda', model: 'civic' });
+  const interaction = createInteraction({
+    location: 'boise',
+    make: 'honda',
+    model: 'civic',
+  });
 
-  await withScrapeCommandMocks(
-    {
-      scrapeMock: async (options) => {
-        scrapeCalls.push(options);
-      },
-      sessionID: '20260101',
-    },
-    async (handleScrapeCommand) => {
-      await handleScrapeCommand(interaction);
-    }
-  );
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
 
   assert.equal(scrapeCalls.length, 1);
   assert.equal(scrapeCalls[0].yardId, 1020);
   assert.equal(scrapeCalls[0].make, 'HONDA');
   assert.equal(scrapeCalls[0].model, 'CIVIC');
   assert.equal(scrapeCalls[0].sessionID, '20260101');
-  assert.equal(scrapeCalls[0].inventoryUrl, 'https://inventory.pickapartjalopyjungle.com/');
+  assert.equal(
+    scrapeCalls[0].inventoryUrl,
+    'https://inventory.pickapartjalopyjungle.com/'
+  );
   assert.equal(scrapeCalls[0].shouldMarkInactive, false);
   assert.equal(interaction.deferReplyCalls.length, 1);
   assert.equal(interaction.editReplyCalls.length, 1);
+  const completionEmbed = interaction.editReplyCalls[0].embeds[0].toJSON();
+  assert.equal(
+    completionEmbed.description,
+    'Scrape finished with these parameters:'
+  );
+  assert.deepEqual(
+    completionEmbed.fields.map(({ name, value }) => ({ name, value })),
+    [
+      { name: 'Location', value: 'boise' },
+      { name: 'Make', value: 'HONDA' },
+      { name: 'Model', value: 'CIVIC' },
+      { name: 'Session ID', value: '20260101' },
+    ]
+  );
 });
 
-test('specific location full scrape (ANY/ANY) enables inactive reconciliation for scoped yard', async () => {
+test('specific location full scrape enables scoped inactive reconciliation', async () => {
   const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'boise', make: null, model: null });
+  const interaction = createInteraction({
+    location: 'boise',
+    make: null,
+    model: null,
+  });
 
-  await withScrapeCommandMocks(
-    {
-      scrapeMock: async (options) => {
-        scrapeCalls.push(options);
-      },
-      sessionID: '20260101',
-    },
-    async (handleScrapeCommand) => {
-      await handleScrapeCommand(interaction);
-    }
-  );
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
 
   assert.equal(scrapeCalls.length, 1);
   assert.equal(scrapeCalls[0].yardId, 1020);
   assert.equal(scrapeCalls[0].make, 'ANY');
   assert.equal(scrapeCalls[0].model, 'ANY');
   assert.equal(scrapeCalls[0].shouldMarkInactive, true);
-  assert.equal(interaction.deferReplyCalls.length, 1);
-  assert.equal(interaction.editReplyCalls.length, 1);
 });
 
-test('location=trustypickapart routes to trusty config', async () => {
+test('location=trustypickapart routes to the Trusty configuration', async () => {
   const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'trustypickapart', make: 'ford', model: 'focus' });
+  const interaction = createInteraction({
+    location: 'trustypickapart',
+    make: 'ford',
+    model: 'focus',
+  });
 
-  await withScrapeCommandMocks(
-    {
-      scrapeMock: async (options) => {
-        scrapeCalls.push(options);
-      },
-      sessionID: '20260101',
-    },
-    async (handleScrapeCommand) => {
-      await handleScrapeCommand(interaction);
-    }
-  );
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
 
   assert.equal(scrapeCalls.length, 1);
-  assert.equal(scrapeCalls[0].inventoryUrl, 'https://inventory.trustypickapart.com/');
+  assert.equal(
+    scrapeCalls[0].inventoryUrl,
+    'https://inventory.trustypickapart.com/'
+  );
   assert.equal(scrapeCalls[0].yardId, '999999');
   assert.equal(scrapeCalls[0].shouldMarkInactive, false);
+});
+
+test('scrape command requires a location before deferring', async () => {
+  const scrapeCalls = [];
+  const interaction = createInteraction({
+    location: null,
+    make: 'toyota',
+    model: 'camry',
+  });
+
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
+
+  assert.deepEqual(interaction.replies, ['Please provide a location to scrape.']);
+  assert.equal(interaction.deferReplyCalls.length, 0);
+  assert.equal(interaction.editReplyCalls.length, 0);
+  assert.equal(scrapeCalls.length, 0);
+});
+
+test('scrape command rejects unknown locations without broadening the scrape', async () => {
+  const scrapeCalls = [];
+  const interaction = createInteraction({
+    location: 'not-a-configured-yard',
+    make: 'toyota',
+    model: 'camry',
+  });
+
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
+
+  assert.equal(scrapeCalls.length, 0);
   assert.equal(interaction.deferReplyCalls.length, 1);
-  assert.equal(interaction.editReplyCalls.length, 1);
+  assert.deepEqual(interaction.editReplyCalls, [
+    { content: 'Unknown location: not-a-configured-yard' },
+  ]);
 });
 
 test('scrape command denies requests without elevated permissions', async () => {
   const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'boise', make: 'toyota', model: 'camry' });
+  const interaction = createInteraction({
+    location: 'boise',
+    make: 'toyota',
+    model: 'camry',
+  });
   interaction.memberPermissions = { has: () => false };
   interaction.member = { roles: { cache: { some: () => false } } };
 
-  await withScrapeCommandMocks(
-    {
-      scrapeMock: async (options) => {
-        scrapeCalls.push(options);
-      },
-      sessionID: '20260101',
-    },
-    async (handleScrapeCommand) => {
-      await handleScrapeCommand(interaction);
-    }
-  );
+  await handleScrapeCommand(interaction, createDependencies(scrapeCalls));
 
   assert.equal(scrapeCalls.length, 0);
   assert.equal(interaction.replies.length, 1);
@@ -218,25 +227,42 @@ test('scrape command denies requests without elevated permissions', async () => 
   });
 });
 
-test('scrape command reports busy state when another scrape is already in progress', async () => {
-  const scrapeCalls = [];
-  const interaction = createInteraction({ location: 'boise', make: 'toyota', model: 'camry' });
-  const { withScrapeLock, __testables } = require(scrapeLockPath);
-  __testables.resetScrapeLockForTests();
-
-  await withScrapeLock('scheduled:20260101', async () => {
-    await withScrapeCommandMocks(
-      {
-        scrapeMock: async (options) => {
-          scrapeCalls.push(options);
-        },
-        sessionID: '20260101',
-      },
-      async (handleScrapeCommand) => {
-        await handleScrapeCommand(interaction);
-      }
-    );
+test('scrape command preserves scraper failures for the interaction error boundary', async () => {
+  const scrapeFailure = new Error('simulated scrape failure');
+  const interaction = createInteraction({
+    location: 'boise',
+    make: 'toyota',
+    model: 'camry',
   });
+
+  await assert.rejects(
+    handleScrapeCommand(interaction, {
+      async scrape() {
+        throw scrapeFailure;
+      },
+      getSession() {
+        return '20260101';
+      },
+    }),
+    scrapeFailure
+  );
+
+  assert.equal(interaction.deferReplyCalls.length, 1);
+  assert.equal(interaction.editReplyCalls.length, 0);
+});
+
+test('scrape command reports busy state when another scrape holds the lock', async () => {
+  const scrapeCalls = [];
+  const interaction = createInteraction({
+    location: 'boise',
+    make: 'toyota',
+    model: 'camry',
+  });
+  scrapeLockTestables.resetScrapeLockForTests();
+
+  await withScrapeLock('scheduled:20260101', () =>
+    handleScrapeCommand(interaction, createDependencies(scrapeCalls))
+  );
 
   assert.equal(scrapeCalls.length, 0);
   assert.equal(interaction.deferReplyCalls.length, 1);
