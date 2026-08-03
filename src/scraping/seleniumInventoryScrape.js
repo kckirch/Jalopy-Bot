@@ -3,7 +3,12 @@ const chrome = require('selenium-webdriver/chrome');
 const { insertOrUpdateVehicle, markInactiveVehicles } = require('../database/vehicleDbInventoryManager');
 const { resolveChromedriverPath } = require('./chromedriverResolver');
 const { summarizeError } = require('../utils/errorSummary');
-const { normalizeYardId } = require('./yardIdNormalization');
+const {
+  createScrapeRun,
+  logScrapeDuration,
+  logScrapeRequest,
+  reconcileScrapeRun,
+} = require('./scrapeLifecycle');
 
 function setElementValue(driver, elementId, value) {
   return driver.executeScript(
@@ -89,14 +94,7 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID, hasMu
 async function scrapeWithSelenium(options, deps = {}) {
   const upsertVehicle = deps.insertOrUpdateVehicle || insertOrUpdateVehicle;
   const reconcileInactiveVehicles = deps.markInactiveVehicles || markInactiveVehicles;
-  let upsertCount = 0;
-  const trackingUpsertVehicle = async (...args) => {
-    await upsertVehicle(...args);
-    upsertCount += 1;
-  };
-  const startTime = Date.now();
-  const scrapedYardIds = new Set();
-  let scrapeSucceeded = false;
+  const run = createScrapeRun(upsertVehicle);
 
   const chromeOptions = new chrome.Options();
   chromeOptions.addArguments('--ignore-certificate-errors');
@@ -119,10 +117,7 @@ async function scrapeWithSelenium(options, deps = {}) {
   const driver = await builder.build();
 
   try {
-    console.log('🔍 Scraping for:');
-    console.log(`   🏞️ Yard ID: ${options.yardId || 'ALL'}`);
-    console.log(`   🚗 Make: ${options.make}`);
-    console.log(`   📋 Model: ${options.model}`);
+    logScrapeRequest(options);
 
     await driver.get(options.inventoryUrl);
 
@@ -130,10 +125,7 @@ async function scrapeWithSelenium(options, deps = {}) {
       await driver.wait(until.elementLocated(By.css('#yard-id')), 5000);
 
       if (options.yardId) {
-        const normalizedYardId = normalizeYardId(options.yardId);
-        if (normalizedYardId !== null) {
-          scrapedYardIds.add(normalizedYardId);
-        }
+        run.trackYard(options.yardId);
         await setElementValue(driver, 'yard-id', options.yardId);
         await driver.executeScript(`document.getElementById('searchinventory').submit();`);
         await scrapeYardMakeModel(
@@ -143,7 +135,7 @@ async function scrapeWithSelenium(options, deps = {}) {
           options.model,
           options.sessionID,
           options.hasMultipleLocations,
-          trackingUpsertVehicle
+          run.upsertVehicle
         );
       } else {
         let yardOptions = await driver.findElements(By.css('#yard-id option'));
@@ -152,10 +144,7 @@ async function scrapeWithSelenium(options, deps = {}) {
           yardOptions = await driver.findElements(By.css('#yard-id option'));
           const currentYardId = await yardOptions[i].getAttribute('value');
           if (currentYardId) {
-            const normalizedYardId = normalizeYardId(currentYardId);
-            if (normalizedYardId !== null) {
-              scrapedYardIds.add(normalizedYardId);
-            }
+            run.trackYard(currentYardId);
             await setElementValue(driver, 'yard-id', currentYardId);
             await driver.executeScript(`document.getElementById('searchinventory').submit();`);
             await scrapeYardMakeModel(
@@ -165,16 +154,13 @@ async function scrapeWithSelenium(options, deps = {}) {
               options.model,
               options.sessionID,
               options.hasMultipleLocations,
-              trackingUpsertVehicle
+              run.upsertVehicle
             );
           }
         }
       }
     } else {
-      const normalizedYardId = normalizeYardId(options.yardId);
-      if (normalizedYardId !== null) {
-        scrapedYardIds.add(normalizedYardId);
-      }
+      run.trackYard(options.yardId);
       await scrapeYardMakeModel(
         driver,
         options.yardId,
@@ -182,10 +168,10 @@ async function scrapeWithSelenium(options, deps = {}) {
         options.model,
         options.sessionID,
         options.hasMultipleLocations,
-        trackingUpsertVehicle
+        run.upsertVehicle
       );
     }
-    scrapeSucceeded = true;
+    run.markSucceeded();
   } catch (error) {
     const errorMessage = typeof error?.message === 'string' ? error.message : '';
     if (errorMessage.includes('spawn') && errorMessage.includes('ENOENT')) {
@@ -197,30 +183,12 @@ async function scrapeWithSelenium(options, deps = {}) {
     }
     throw error;
   } finally {
-    try {
-      if (options.shouldMarkInactive === true && scrapeSucceeded && scrapedYardIds.size > 0 && upsertCount > 0) {
-        await reconcileInactiveVehicles(options.sessionID, { yardIds: [...scrapedYardIds] });
-      } else {
-        console.log(`Skipping inactive reconciliation. shouldMarkInactive=${options.shouldMarkInactive === true}, scrapeSucceeded=${scrapeSucceeded}, scopedYards=${scrapedYardIds.size}, upserts=${upsertCount}`);
-      }
-    } catch (markInactiveError) {
-      console.error('Error during inactive reconciliation:', summarizeError(markInactiveError));
-    }
+    await reconcileScrapeRun(run, options, reconcileInactiveVehicles);
 
     console.log('🛑 Closing browser');
     await driver.quit();
-
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    const minutes = Math.floor(duration / 60000);
-    const seconds = ((duration % 60000) / 1000).toFixed(0);
-    console.log(`Scraping Duration: ${minutes} minutes and ${seconds} seconds.`);
+    logScrapeDuration(run.startedAt);
   }
 }
 
-module.exports = {
-  scrapeWithSelenium,
-  __testables: {
-    normalizeYardId,
-  },
-};
+module.exports = { scrapeWithSelenium };
