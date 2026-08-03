@@ -4,7 +4,12 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const modulePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
-const { scrapeWithHttp, __testables } = require(modulePath);
+const { scrapeWithHttp } = require(modulePath);
+const {
+  buildSubmissionPayload,
+  normalizeSearchValue,
+  uniqueNonEmptyStrings,
+} = require('../src/scraping/httpInventoryParser');
 
 test('HTTP scraper preserves the axios load failure as the error cause', async () => {
   const loadError = new Error('simulated axios load failure');
@@ -42,7 +47,7 @@ test('HTTP scraper preserves the cheerio load failure as the error cause', async
 });
 
 test('buildSubmissionPayload maps ANY make/model to empty values', () => {
-  const payload = __testables.buildSubmissionPayload(
+  const payload = buildSubmissionPayload(
     {
       hiddenInputs: { __RequestVerificationToken: 'abc123' },
       fields: {
@@ -68,7 +73,7 @@ test('buildSubmissionPayload maps ANY make/model to empty values', () => {
 });
 
 test('buildSubmissionPayload omits yard field when location is not multi-select', () => {
-  const payload = __testables.buildSubmissionPayload(
+  const payload = buildSubmissionPayload(
     {
       hiddenInputs: { __RequestVerificationToken: 'abc123' },
       fields: {
@@ -93,9 +98,9 @@ test('buildSubmissionPayload omits yard field when location is not multi-select'
 });
 
 test('normalizeSearchValue and uniqueNonEmptyStrings normalize values safely', () => {
-  assert.equal(__testables.normalizeSearchValue('ANY'), '');
-  assert.equal(__testables.normalizeSearchValue(' toyota '), 'toyota');
+  assert.equal(normalizeSearchValue('ANY'), '');
+  assert.equal(normalizeSearchValue(' toyota '), 'toyota');
 
-  const values = __testables.uniqueNonEmptyStrings(['TOYOTA', 'toyota', '  ', 'HONDA', 'Honda']);
+  const values = uniqueNonEmptyStrings(['TOYOTA', 'toyota', '  ', 'HONDA', 'Honda']);
   assert.deepEqual(values, ['TOYOTA', 'HONDA']);
 });
