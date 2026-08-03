@@ -4,10 +4,52 @@ function normalizeSearchValue(value) {
   return normalized.toUpperCase() === 'ANY' ? '' : normalized;
 }
 
+function findInventoryForm($) {
+  const inventoryForm = $('#searchinventory').first();
+  return inventoryForm.length ? inventoryForm : $('form').first();
+}
+
+function resolveFormActionUrl(form, inventoryUrl) {
+  const inventoryBaseUrl = new URL(inventoryUrl);
+  if (inventoryBaseUrl.protocol !== 'http:' && inventoryBaseUrl.protocol !== 'https:') {
+    throw new Error('Inventory URL must use HTTP or HTTPS.');
+  }
+
+  const action = String(form.attr('action') || '').trim();
+  const actionUrl = new URL(action || inventoryUrl, inventoryBaseUrl);
+  if (
+    actionUrl.origin !== inventoryBaseUrl.origin ||
+    actionUrl.username ||
+    actionUrl.password
+  ) {
+    throw new Error('Inventory search form action must stay on the configured origin.');
+  }
+  return actionUrl.toString();
+}
+
+function extractHiddenInputs($, form) {
+  const hiddenInputs = {};
+  form.find('input[type="hidden"][name]').each((index, input) => {
+    const name = String($(input).attr('name') || '').trim();
+    if (name) {
+      hiddenInputs[name] = String($(input).attr('value') || '');
+    }
+  });
+  return hiddenInputs;
+}
+
+function resolveFieldName($, form, selector, fallbackName) {
+  const formField = form.find(selector).first();
+  const field = formField.length ? formField : $(selector).first();
+  if (!field.length) return fallbackName;
+  return (
+    String(field.attr('name') || field.attr('id') || fallbackName).trim() ||
+    fallbackName
+  );
+}
+
 function resolveFormMeta($, inventoryUrl, previousMeta = null) {
-  const form = $('#searchinventory').first().length
-    ? $('#searchinventory').first()
-    : $('form').first();
+  const form = findInventoryForm($);
 
   if (!form.length) {
     if (previousMeta) return previousMeta;
@@ -19,46 +61,14 @@ function resolveFormMeta($, inventoryUrl, previousMeta = null) {
     throw new Error('Inventory search form uses an unsupported method.');
   }
 
-  const inventoryBaseUrl = new URL(inventoryUrl);
-  if (inventoryBaseUrl.protocol !== 'http:' && inventoryBaseUrl.protocol !== 'https:') {
-    throw new Error('Inventory URL must use HTTP or HTTPS.');
-  }
-  const action = String(form.attr('action') || '').trim();
-  const actionUrl = new URL(action || inventoryUrl, inventoryBaseUrl);
-  if (
-    actionUrl.origin !== inventoryBaseUrl.origin ||
-    actionUrl.username ||
-    actionUrl.password
-  ) {
-    throw new Error('Inventory search form action must stay on the configured origin.');
-  }
-
-  const hiddenInputs = {};
-  form.find('input[type="hidden"][name]').each((index, input) => {
-    const name = String($(input).attr('name') || '').trim();
-    if (!name) return;
-    hiddenInputs[name] = String($(input).attr('value') || '');
-  });
-
-  const resolveFieldName = (selector, fallbackName) => {
-    const field = form.find(selector).first().length
-      ? form.find(selector).first()
-      : $(selector).first();
-    if (!field.length) return fallbackName;
-    return (
-      String(field.attr('name') || field.attr('id') || fallbackName).trim() ||
-      fallbackName
-    );
-  };
-
   return {
     method,
-    actionUrl: actionUrl.toString(),
-    hiddenInputs,
+    actionUrl: resolveFormActionUrl(form, inventoryUrl),
+    hiddenInputs: extractHiddenInputs($, form),
     fields: {
-      yard: resolveFieldName('#yard-id', 'yard-id'),
-      make: resolveFieldName('#car-make', 'car-make'),
-      model: resolveFieldName('#car-model', 'car-model'),
+      yard: resolveFieldName($, form, '#yard-id', 'yard-id'),
+      make: resolveFieldName($, form, '#car-make', 'car-make'),
+      model: resolveFieldName($, form, '#car-model', 'car-model'),
     },
   };
 }

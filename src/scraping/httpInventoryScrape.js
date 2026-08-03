@@ -3,12 +3,12 @@ const {
   markInactiveVehicles,
 } = require('../database/vehicleDbInventoryManager');
 const {
-  createHttpClientState,
   fetchMakesForYard,
   fetchModelsForMake,
   loadInitialInventoryPage,
   submitSearch,
 } = require('./httpInventoryClient');
+const { createHttpClientState } = require('./httpInventoryTransport');
 const {
   extractOptionValues,
   extractResultRows,
@@ -59,6 +59,41 @@ async function scrapeMakeModelHttp(
   return rows.length;
 }
 
+async function scrapeModelsForMake(
+  clientState,
+  context,
+  yardId,
+  make,
+  requestedModel,
+  sessionID
+) {
+  let models = [requestedModel];
+  if (requestedModel === 'ANY') {
+    models = await fetchModelsForMake(
+      clientState,
+      context.inventoryUrl,
+      yardId,
+      make,
+      context.runState,
+      { hasMultipleLocations: context.hasMultipleLocations }
+    );
+    if (models.length === 0) models = [''];
+  }
+
+  let rowCount = 0;
+  for (const model of models) {
+    rowCount += await scrapeMakeModelHttp(
+      clientState,
+      context,
+      yardId,
+      make,
+      model,
+      sessionID
+    );
+  }
+  return rowCount;
+}
+
 async function scrapeAllMakes(
   clientState,
   context,
@@ -78,46 +113,19 @@ async function scrapeAllMakes(
   }
 
   if (makeValues.length === 0) {
-    makeValues = extractOptionValues(basePage.$, '#car-make')
-      .map((value) => String(value || '').trim())
-      .filter(Boolean);
+    makeValues = extractOptionValues(basePage.$, '#car-make');
   }
 
   let totalRows = 0;
   for (const currentMake of makeValues) {
-    let makeRows = 0;
-    if (model === 'ANY') {
-      let modelValues = await fetchModelsForMake(
-        clientState,
-        context.inventoryUrl,
-        yardId,
-        currentMake,
-        context.runState,
-        { hasMultipleLocations: context.hasMultipleLocations }
-      );
-      if (modelValues.length === 0) modelValues = [''];
-
-      for (const currentModel of modelValues) {
-        makeRows += await scrapeMakeModelHttp(
-          clientState,
-          context,
-          yardId,
-          currentMake,
-          currentModel,
-          sessionID
-        );
-      }
-    } else {
-      makeRows += await scrapeMakeModelHttp(
-        clientState,
-        context,
-        yardId,
-        currentMake,
-        model,
-        sessionID
-      );
-    }
-    totalRows += makeRows;
+    totalRows += await scrapeModelsForMake(
+      clientState,
+      context,
+      yardId,
+      currentMake,
+      model,
+      sessionID
+    );
   }
 
   if (makeValues.length === 0) {
@@ -132,49 +140,6 @@ async function scrapeAllMakes(
   }
 
   return totalRows;
-}
-
-async function scrapeSelectedMake(
-  clientState,
-  context,
-  yardId,
-  make,
-  model,
-  sessionID
-) {
-  if (model !== 'ANY') {
-    return scrapeMakeModelHttp(
-      clientState,
-      context,
-      yardId,
-      make,
-      model,
-      sessionID
-    );
-  }
-
-  let modelValues = await fetchModelsForMake(
-    clientState,
-    context.inventoryUrl,
-    yardId,
-    make,
-    context.runState,
-    { hasMultipleLocations: context.hasMultipleLocations }
-  );
-  if (modelValues.length === 0) modelValues = [''];
-
-  let count = 0;
-  for (const currentModel of modelValues) {
-    count += await scrapeMakeModelHttp(
-      clientState,
-      context,
-      yardId,
-      make,
-      currentModel,
-      sessionID
-    );
-  }
-  return count;
 }
 
 async function scrapeYardMakeModelHttp(
@@ -207,7 +172,7 @@ async function scrapeYardMakeModelHttp(
           sessionID,
           basePage
         )
-      : await scrapeSelectedMake(
+      : await scrapeModelsForMake(
           clientState,
           context,
           yardId,
@@ -237,10 +202,10 @@ async function scrapeWithHttp(options, dependencies = {}) {
     dependencies.markInactiveVehicles || markInactiveVehicles;
   const run = createScrapeRun(upsertVehicle);
   const runState = { hadSoftFailure: false };
-  const clientState = createHttpClientState(dependencies);
 
   try {
     logScrapeRequest(options);
+    const clientState = createHttpClientState(dependencies);
 
     const initialPage = await loadInitialInventoryPage(
       clientState,
