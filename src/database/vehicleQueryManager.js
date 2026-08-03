@@ -1,5 +1,4 @@
-const sqlite3 = require('sqlite3').verbose();
-const { VEHICLE_DB_PATH } = require('./dbPath');
+const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
 const {
   buildNormalizedSqlExpression,
@@ -10,22 +9,6 @@ const {
   parseYearInput,
   scoreModelSuggestion,
 } = require('./vehicleSearchNormalization');
-
-const db = new sqlite3.Database(
-  VEHICLE_DB_PATH,
-  sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
-  (error) => {
-    if (error) {
-      console.error(
-        'Error when connecting to the database:',
-        summarizeError(error)
-      );
-      return;
-    }
-
-    console.log('Vehicle database connection established.');
-  }
-);
 
 function queryAll(sql, params, failureMessage) {
   return new Promise((resolve, reject) => {

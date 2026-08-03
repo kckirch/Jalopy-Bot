@@ -8,6 +8,7 @@ const { captureConsole, joinedConsoleText } = require('../test-support/consoleCa
 
 const repoRoot = path.resolve(__dirname, '..');
 const dbPathModulePath = path.join(repoRoot, 'src/database/dbPath.js');
+const databaseModulePath = path.join(repoRoot, 'src/database/database.js');
 const queryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
 
 function run(db, sql, params = []) {
@@ -35,6 +36,7 @@ let queryVehicles;
 let getModelSuggestions;
 let getModelSuggestionsForNoResults;
 let queryDb;
+let sharedDb;
 
 test.before(async () => {
   originalCwd = process.cwd();
@@ -90,6 +92,7 @@ test.before(async () => {
   await close(seedDb);
 
   delete require.cache[dbPathModulePath];
+  delete require.cache[databaseModulePath];
   delete require.cache[queryManagerPath];
   ({
     queryVehicles,
@@ -97,6 +100,7 @@ test.before(async () => {
     getModelSuggestionsForNoResults,
     db: queryDb,
   } = require(queryManagerPath));
+  ({ db: sharedDb } = require(databaseModulePath));
 });
 
 test.after(async () => {
@@ -104,6 +108,7 @@ test.after(async () => {
     await close(queryDb);
   }
   delete require.cache[dbPathModulePath];
+  delete require.cache[databaseModulePath];
   delete require.cache[queryManagerPath];
   if (typeof previousDbPathEnv === 'string') {
     process.env.VEHICLE_DB_PATH = previousDbPathEnv;
@@ -112,6 +117,10 @@ test.after(async () => {
   }
   process.chdir(originalCwd);
   fs.rmSync(tempDir, { recursive: true, force: true });
+});
+
+test('query manager uses the shared application database connection', () => {
+  assert.equal(queryDb, sharedDb);
 });
 
 test('ACTIVE status query excludes inactive vehicles and respects yard filter', async () => {
