@@ -6,6 +6,44 @@ const YARD_NAMES = Object.freeze(
   Object.fromEntries(YARDS.map((yard) => [yard.id, yard.databaseName]))
 );
 
+const FIND_VEHICLE_SQL = `
+  SELECT id, strftime('%Y%m%d', first_seen) AS first_seen_date
+  FROM vehicles
+  WHERE yard_id = ?
+    AND vehicle_make = ?
+    AND vehicle_model = ?
+    AND vehicle_year = ?
+    AND row_number = ?
+`;
+
+const UPDATE_VEHICLE_SQL = `
+  UPDATE vehicles
+  SET vehicle_status = ?,
+      last_seen = datetime('now'),
+      last_updated = datetime('now'),
+      session_id = ?
+  WHERE id = ?;
+`;
+
+const INSERT_VEHICLE_SQL = `
+  INSERT INTO vehicles (
+    yard_id,
+    yard_name,
+    vehicle_make,
+    vehicle_model,
+    vehicle_year,
+    row_number,
+    first_seen,
+    last_seen,
+    vehicle_status,
+    notes,
+    date_added,
+    last_updated,
+    session_id
+  )
+  VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'), ?)
+`;
+
 function resolveScrapeLogMode() {
   const value = String(process.env.SCRAPE_LOG_MODE || 'summary')
     .trim()
@@ -72,7 +110,77 @@ function markInactiveVehicles(sessionID, options = {}) {
   });
 }
 
-function insertOrUpdateVehicle(
+function findExistingVehicle({ yardId, make, model, year, rowNumber }) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      FIND_VEHICLE_SQL,
+      [yardId, make, model, year, rowNumber],
+      (error, row) => {
+        if (error) {
+          console.error(
+            'Error searching for existing vehicle:',
+            summarizeError(error)
+          );
+          reject(error);
+          return;
+        }
+        resolve(row);
+      }
+    );
+  });
+}
+
+function updateExistingVehicle(row, sessionID) {
+  const finalStatus = row.first_seen_date === sessionID ? 'NEW' : 'ACTIVE';
+  return new Promise((resolve, reject) => {
+    db.run(
+      UPDATE_VEHICLE_SQL,
+      [finalStatus, sessionID, row.id],
+      (error) => {
+        if (error) {
+          console.error(
+            'Error updating existing vehicle:',
+            summarizeError(error)
+          );
+          reject(error);
+          return;
+        }
+
+        logFullScrapeDetails(
+          `Updated existing vehicle with ID ${row.id} to status '${finalStatus}' and session ID ${sessionID}`
+        );
+        resolve({ action: 'updated', id: row.id, status: finalStatus });
+      }
+    );
+  });
+}
+
+function insertNewVehicle(vehicle, yardName) {
+  const { yardId, make, model, year, rowNumber, notes, sessionID } = vehicle;
+  return new Promise((resolve, reject) => {
+    db.run(
+      INSERT_VEHICLE_SQL,
+      [yardId, yardName, make, model, year, rowNumber, notes, sessionID],
+      function onInsertVehicle(error) {
+        if (error) {
+          console.error(
+            'Error inserting new vehicle:',
+            summarizeError(error)
+          );
+          reject(error);
+          return;
+        }
+
+        logFullScrapeDetails(
+          `🆕 Inserted new vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID} 🆕`
+        );
+        resolve({ action: 'inserted', id: this.lastID, status: 'NEW' });
+      }
+    );
+  });
+}
+
+async function insertOrUpdateVehicle(
   yardId,
   make,
   model,
@@ -81,6 +189,7 @@ function insertOrUpdateVehicle(
   notes,
   sessionID
 ) {
+  const vehicle = { yardId, make, model, year, rowNumber, notes, sessionID };
   logFullScrapeDetails(
     `Processing vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID}`
   );
@@ -93,105 +202,10 @@ function insertOrUpdateVehicle(
     console.warn('Warning: Yard name not found for provided yard ID.');
   }
 
-  const findSQL = `
-    SELECT id, session_id, strftime('%Y%m%d', first_seen) AS first_seen_date
-    FROM vehicles
-    WHERE yard_id = ?
-      AND vehicle_make = ?
-      AND vehicle_model = ?
-      AND vehicle_year = ?
-      AND row_number = ?
-  `;
-
-  return new Promise((resolve, reject) => {
-    db.get(
-      findSQL,
-      [yardId, make, model, year, rowNumber],
-      function onFindVehicle(error, row) {
-        if (error) {
-          console.error(
-            'Error searching for existing vehicle:',
-            summarizeError(error)
-          );
-          reject(error);
-          return;
-        }
-
-        if (row) {
-          const finalStatus =
-            row.first_seen_date === sessionID ? 'NEW' : 'ACTIVE';
-          const updateSQL = `
-            UPDATE vehicles
-            SET vehicle_status = ?,
-                last_seen = datetime('now'),
-                last_updated = datetime('now'),
-                session_id = ?
-            WHERE id = ?;
-          `;
-
-          db.run(
-            updateSQL,
-            [finalStatus, sessionID, row.id],
-            function onUpdateVehicle(updateError) {
-              if (updateError) {
-                console.error(
-                  'Error updating existing vehicle:',
-                  summarizeError(updateError)
-                );
-                reject(updateError);
-                return;
-              }
-
-              logFullScrapeDetails(
-                `Updated existing vehicle with ID ${row.id} to status '${finalStatus}' and session ID ${sessionID}`
-              );
-              resolve({ action: 'updated', id: row.id, status: finalStatus });
-            }
-          );
-          return;
-        }
-
-        const insertSQL = `
-          INSERT INTO vehicles (
-            yard_id,
-            yard_name,
-            vehicle_make,
-            vehicle_model,
-            vehicle_year,
-            row_number,
-            first_seen,
-            last_seen,
-            vehicle_status,
-            notes,
-            date_added,
-            last_updated,
-            session_id
-          )
-          VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'NEW', ?, datetime('now'), datetime('now'), ?)
-        `;
-
-        db.run(
-          insertSQL,
-          [yardId, yardName, make, model, year, rowNumber, notes, sessionID],
-          function onInsertVehicle(insertError) {
-            if (insertError) {
-              console.error(
-                'Error inserting new vehicle:',
-                summarizeError(insertError)
-              );
-              reject(insertError);
-              return;
-            }
-
-            logFullScrapeDetails(
-              `🆕 Inserted new vehicle: Yard ID = ${yardId}, Make = ${make}, Model = ${model}, Year = ${year}, Row = ${rowNumber}, Session ID = ${sessionID} 🆕`
-            );
-            resolve({ action: 'inserted', id: this.lastID, status: 'NEW' });
-          }
-        );
-      }
-    );
-  });
+  const existingVehicle = await findExistingVehicle(vehicle);
+  return existingVehicle
+    ? updateExistingVehicle(existingVehicle, sessionID)
+    : insertNewVehicle(vehicle, yardName);
 }
 
 module.exports = {
