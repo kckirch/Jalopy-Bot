@@ -8,7 +8,10 @@ const cheerio = require('cheerio');
 const repoRoot = path.resolve(__dirname, '..');
 const fixtureRoot = path.join(repoRoot, 'test/fixtures/http-replay');
 const scrapeModulePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
-const { scrapeWithHttp, __testables } = require(scrapeModulePath);
+const { scrapeWithHttp } = require(scrapeModulePath);
+const {
+  extractResultRows,
+} = require('../src/scraping/httpInventoryParser');
 
 function readFixtureText(name) {
   return fs.readFileSync(path.join(fixtureRoot, name), 'utf8');
@@ -102,7 +105,7 @@ function createFixtureReplayHttpClient() {
 test('fixture replay parser preserves duplicate CAMRY rows from real HTML', () => {
   const html = readFixtureText('boise_toyota_camry.html');
   const $ = cheerio.load(html);
-  const rows = __testables.extractResultRows($);
+  const rows = extractResultRows($);
 
   assert.equal(rows.length, 19);
   const duplicateRows = rows.filter(
