@@ -158,34 +158,49 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount) {
     .setFooter({ text: `Viewing ${currentIndex + 1} of ${totalCount}` });
 }
 
-function createSavedSearchSession(initialSavedSearches) {
-  const savedSearches = [...initialSavedSearches];
-  let currentIndex = 0;
-  let resultsState = null;
+class SavedSearchSession {
+  #savedSearches;
+  #currentIndex;
+  #resultsState;
 
-  const clampIndex = (index) =>
-    Math.min(Math.max(index, 0), Math.max(savedSearches.length - 1, 0));
+  constructor(initialSavedSearches) {
+    this.#savedSearches = [...initialSavedSearches];
+    this.#currentIndex = 0;
+    this.#resultsState = null;
+  }
 
-  const resolveIndex = (rawIndex) => {
+  #clampIndex(index) {
+    return Math.min(
+      Math.max(index, 0),
+      Math.max(this.#savedSearches.length - 1, 0)
+    );
+  }
+
+  resolveIndex(rawIndex) {
     const parsedIndex = Number.parseInt(rawIndex, 10);
-    return clampIndex(Number.isInteger(parsedIndex) ? parsedIndex : currentIndex);
-  };
+    const fallbackIndex = Number.isInteger(parsedIndex)
+      ? parsedIndex
+      : this.#currentIndex;
+    return this.#clampIndex(fallbackIndex);
+  }
 
-  const getSearch = (index = currentIndex) => savedSearches[clampIndex(index)];
+  getSearch(index = this.#currentIndex) {
+    return this.#savedSearches[this.#clampIndex(index)];
+  }
 
-  const showSaved = (index) => {
-    resultsState = null;
-    currentIndex = clampIndex(index);
-  };
+  showSaved(index) {
+    this.#resultsState = null;
+    this.#currentIndex = this.#clampIndex(index);
+  }
 
-  const moveSaved = (index, offset) => {
-    showSaved(clampIndex(index) + offset);
-  };
+  moveSaved(index, offset) {
+    this.showSaved(this.#clampIndex(index) + offset);
+  }
 
-  const activateResults = (index, vehicles, suggestedModels) => {
-    currentIndex = clampIndex(index);
-    const currentSearch = getSearch();
-    resultsState = {
+  activateResults(index, vehicles, suggestedModels) {
+    this.#currentIndex = this.#clampIndex(index);
+    const currentSearch = this.getSearch();
+    this.#resultsState = {
       searchId: currentSearch.id,
       location: inferSearchLocation(currentSearch.yard_id),
       vehicles,
@@ -193,98 +208,118 @@ function createSavedSearchSession(initialSavedSearches) {
       totalPages: getSearchResultPageCount(vehicles),
       suggestedModels,
     };
-  };
+  }
 
-  const moveResultsPage = (offset) => {
-    if (!resultsState) return false;
-    resultsState.currentPage = Math.min(
-      Math.max(resultsState.currentPage + offset, 0),
-      Math.max(resultsState.totalPages - 1, 0)
+  moveResultsPage(offset) {
+    if (!this.#resultsState) return false;
+    this.#resultsState.currentPage = Math.min(
+      Math.max(this.#resultsState.currentPage + offset, 0),
+      Math.max(this.#resultsState.totalPages - 1, 0)
     );
     return true;
-  };
+  }
 
-  const remove = (index) => {
-    const removalIndex = clampIndex(index);
-    const [removedSearch] = savedSearches.splice(removalIndex, 1);
-    if (resultsState && resultsState.searchId === removedSearch.id) {
-      resultsState = null;
+  remove(index) {
+    const removalIndex = this.#clampIndex(index);
+    const [removedSearch] = this.#savedSearches.splice(removalIndex, 1);
+    if (
+      this.#resultsState &&
+      this.#resultsState.searchId === removedSearch.id
+    ) {
+      this.#resultsState = null;
     }
-    currentIndex = clampIndex(removalIndex);
+    this.#currentIndex = this.#clampIndex(removalIndex);
     return removedSearch;
-  };
+  }
 
-  const getNextFrequency = (index) =>
-    normalizeFrequency(getSearch(index).frequency) === 'paused'
+  getNextFrequency(index) {
+    return normalizeFrequency(this.getSearch(index).frequency) === 'paused'
       ? 'daily'
       : 'paused';
+  }
 
-  const updateFrequency = (index, frequency, updateDate) => {
-    const search = getSearch(index);
+  updateFrequency(index, frequency, updateDate) {
+    const search = this.getSearch(index);
     search.frequency = frequency;
     search.update_date = updateDate;
-    currentIndex = clampIndex(index);
-  };
+    this.#currentIndex = this.#clampIndex(index);
+  }
 
-  const buildSavedViewPayload = () => {
-    const currentSearch = getSearch();
+  buildSavedViewPayload() {
+    const currentSearch = this.getSearch();
     return {
       embeds: [
         buildSavedSearchEmbed(
           currentSearch,
-          currentIndex,
-          savedSearches.length
+          this.#currentIndex,
+          this.#savedSearches.length
         ),
       ],
       components: buildSavedSearchComponents(
-        currentIndex,
-        savedSearches.length,
+        this.#currentIndex,
+        this.#savedSearches.length,
         currentSearch
       ),
     };
-  };
+  }
 
-  const buildResultsViewPayload = () => {
-    const currentSearch = getSearch();
+  buildResultsViewPayload() {
+    const currentSearch = this.getSearch();
     return {
       embeds: [
         buildSearchResultsEmbed({
-          location: resultsState.location,
+          location: this.#resultsState.location,
           make: currentSearch.make || 'Any',
           model: currentSearch.model || 'Any',
           yearRange: currentSearch.year_range || 'Any',
           status: currentSearch.status || 'ACTIVE',
-          vehicles: resultsState.vehicles,
-          currentPage: resultsState.currentPage,
-          totalPages: resultsState.totalPages,
-          suggestedModels: resultsState.suggestedModels,
+          vehicles: this.#resultsState.vehicles,
+          currentPage: this.#resultsState.currentPage,
+          totalPages: this.#resultsState.totalPages,
+          suggestedModels: this.#resultsState.suggestedModels,
         }),
       ],
       components: buildSearchResultsComponents(
-        resultsState.currentPage,
-        resultsState.totalPages,
+        this.#resultsState.currentPage,
+        this.#resultsState.totalPages,
         currentSearch,
-        currentIndex
+        this.#currentIndex
       ),
     };
-  };
+  }
 
+  buildActiveViewPayload() {
+    return this.#resultsState
+      ? this.buildResultsViewPayload()
+      : this.buildSavedViewPayload();
+  }
+
+  hasResults() {
+    return this.#resultsState !== null;
+  }
+
+  isEmpty() {
+    return this.#savedSearches.length === 0;
+  }
+}
+
+function createSavedSearchSession(initialSavedSearches) {
+  const session = new SavedSearchSession(initialSavedSearches);
   return Object.freeze({
-    activateResults,
-    buildActiveViewPayload: () =>
-      resultsState ? buildResultsViewPayload() : buildSavedViewPayload(),
-    buildResultsViewPayload,
-    buildSavedViewPayload,
-    getNextFrequency,
-    getSearch,
-    hasResults: () => resultsState !== null,
-    isEmpty: () => savedSearches.length === 0,
-    moveResultsPage,
-    moveSaved,
-    remove,
-    resolveIndex,
-    showSaved,
-    updateFrequency,
+    activateResults: session.activateResults.bind(session),
+    buildActiveViewPayload: session.buildActiveViewPayload.bind(session),
+    buildResultsViewPayload: session.buildResultsViewPayload.bind(session),
+    buildSavedViewPayload: session.buildSavedViewPayload.bind(session),
+    getNextFrequency: session.getNextFrequency.bind(session),
+    getSearch: session.getSearch.bind(session),
+    hasResults: session.hasResults.bind(session),
+    isEmpty: session.isEmpty.bind(session),
+    moveResultsPage: session.moveResultsPage.bind(session),
+    moveSaved: session.moveSaved.bind(session),
+    remove: session.remove.bind(session),
+    resolveIndex: session.resolveIndex.bind(session),
+    showSaved: session.showSaved.bind(session),
+    updateFrequency: session.updateFrequency.bind(session),
   });
 }
 
