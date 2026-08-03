@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const sqlite3 = require('sqlite3').verbose();
 
 function openDatabase(databasePath, mode) {
@@ -89,6 +90,8 @@ async function buildPublicInventorySnapshot(sourcePath, destinationPath) {
   });
 
   const temporaryPath = `${resolvedDestinationPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  const sourceUri = pathToFileURL(resolvedSourcePath);
+  sourceUri.searchParams.set('mode', 'ro');
   let database;
   let sourceAttached = false;
   let transactionStarted = false;
@@ -96,9 +99,9 @@ async function buildPublicInventorySnapshot(sourcePath, destinationPath) {
   try {
     database = await openDatabase(
       temporaryPath,
-      sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE
+      sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE | sqlite3.OPEN_URI
     );
-    await run(database, 'ATTACH DATABASE ? AS source;', [resolvedSourcePath]);
+    await run(database, 'ATTACH DATABASE ? AS source;', [sourceUri.href]);
     sourceAttached = true;
 
     await exec(database, 'BEGIN TRANSACTION;');
