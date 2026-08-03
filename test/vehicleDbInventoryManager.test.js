@@ -105,11 +105,19 @@ test.after(async () => {
 });
 
 test('insertOrUpdateVehicle inserts new vehicle as NEW with mapped yard name', async () => {
-  await insertOrUpdateVehicle(1020, 'TOYOTA', 'CAMRY', 2005, 11, 'test note', '20260101');
+  const result = await insertOrUpdateVehicle(
+    1020,
+    'TOYOTA',
+    'CAMRY',
+    2005,
+    11,
+    'test note',
+    '20260101'
+  );
 
   const row = await get(
     db,
-    `SELECT yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number, vehicle_status, notes, session_id
+    `SELECT id, yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number, vehicle_status, notes, session_id
      FROM vehicles
      WHERE yard_id = 1020 AND vehicle_make = 'TOYOTA' AND vehicle_model = 'CAMRY';`
   );
@@ -121,11 +129,33 @@ test('insertOrUpdateVehicle inserts new vehicle as NEW with mapped yard name', a
   assert.equal(row.vehicle_status, 'NEW');
   assert.equal(row.notes, 'test note');
   assert.equal(row.session_id, '20260101');
+  assert.deepEqual(result, {
+    action: 'inserted',
+    id: row.id,
+    status: 'NEW',
+  });
+  assert.equal(Number.isInteger(result.id), true);
 });
 
 test('insertOrUpdateVehicle updates existing vehicle and moves status to ACTIVE for later session', async () => {
-  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '20260101');
-  await insertOrUpdateVehicle(1022, 'HONDA', 'CIVIC', 2008, 44, '', '20260102');
+  const inserted = await insertOrUpdateVehicle(
+    1022,
+    'HONDA',
+    'CIVIC',
+    2008,
+    44,
+    '',
+    '20260101'
+  );
+  const updatedResult = await insertOrUpdateVehicle(
+    1022,
+    'HONDA',
+    'CIVIC',
+    2008,
+    44,
+    '',
+    '20260102'
+  );
 
   const updated = await get(
     db,
@@ -133,6 +163,52 @@ test('insertOrUpdateVehicle updates existing vehicle and moves status to ACTIVE 
   );
   assert.equal(updated.vehicle_status, 'ACTIVE');
   assert.equal(updated.session_id, '20260102');
+  assert.deepEqual(updatedResult, {
+    action: 'updated',
+    id: inserted.id,
+    status: 'ACTIVE',
+  });
+});
+
+test('insertOrUpdateVehicle keeps an existing first-seen session NEW', async () => {
+  const inserted = await run(
+    db,
+    `INSERT INTO vehicles (
+      yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+      first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
+    ) VALUES (
+      1020, 'BOISE', 'MAZDA', 'MIATA', 2004, 12,
+      '2026-01-01 08:00:00', '2026-01-01 08:00:00', 'NEW',
+      '2026-01-01 08:00:00', '2026-01-01 08:00:00', 'keep me', '20260101'
+    );`
+  );
+
+  const result = await insertOrUpdateVehicle(
+    1020,
+    'MAZDA',
+    'MIATA',
+    2004,
+    12,
+    'replacement note',
+    '20260101'
+  );
+  const row = await get(
+    db,
+    `SELECT first_seen, vehicle_status, notes, session_id
+     FROM vehicles
+     WHERE id = ?;`,
+    [inserted.lastID]
+  );
+
+  assert.deepEqual(result, {
+    action: 'updated',
+    id: inserted.lastID,
+    status: 'NEW',
+  });
+  assert.equal(row.first_seen, '2026-01-01 08:00:00');
+  assert.equal(row.vehicle_status, 'NEW');
+  assert.equal(row.notes, 'keep me');
+  assert.equal(row.session_id, '20260101');
 });
 
 test('insertOrUpdateVehicle stores an unknown yard without logging the unchecked yard value', async () => {
