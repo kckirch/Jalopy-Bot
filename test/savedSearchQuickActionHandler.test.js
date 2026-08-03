@@ -201,6 +201,92 @@ test('delete reports when the final saved search is removed', async () => {
   );
 });
 
+test('view clears stale actions when the user has no saved searches', async () => {
+  await withHandlerMocks(
+    { getSavedSearches: async () => [] },
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const interaction = makeInteraction();
+      await handleSavedSearchQuickActionButton(
+        interaction,
+        buildQuickHash('view', basePayload)
+      );
+
+      assert.deepEqual(interaction.updates, [
+        {
+          content: 'You have no saved searches.',
+          embeds: [],
+          components: [],
+        },
+      ]);
+    }
+  );
+});
+
+test('legacy delete removes every matching search and renders the remaining item', async () => {
+  const matchingSearches = [
+    {
+      id: 11,
+      yard_id: '1020',
+      make: 'TOYOTA',
+      model: 'CAMRY',
+      year_range: '2005',
+      status: 'ACTIVE',
+    },
+    {
+      id: 12,
+      yard_id: '1020',
+      make: 'TOYOTA',
+      model: 'CAMRY',
+      year_range: '2005',
+      status: 'ACTIVE',
+    },
+  ];
+  const remainingSearch = {
+    id: 13,
+    yard_id: '1021',
+    make: 'HONDA',
+    model: 'ACCORD',
+    year_range: '2010',
+    status: 'INACTIVE',
+  };
+  const deletedSearchIds = [];
+  let reads = 0;
+
+  await withHandlerMocks(
+    {
+      getSavedSearches: async () => {
+        reads += 1;
+        return reads === 1 ? [...matchingSearches, remainingSearch] : [remainingSearch];
+      },
+      deleteSavedSearch: async (id) => deletedSearchIds.push(id),
+    },
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const interaction = makeInteraction();
+      await handleSavedSearchQuickActionButton(
+        interaction,
+        buildQuickHash('delete', {
+          ...basePayload,
+          sid: '',
+          idx: 8,
+        })
+      );
+
+      assert.deepEqual(deletedSearchIds, [11, 12]);
+      assert.equal(reads, 2);
+      assert.equal(interaction.updates.length, 1);
+      assert.match(interaction.updates[0].embeds[0].data.title, /deleted/i);
+      assert.match(interaction.updates[0].embeds[0].data.description, /Deleted 2 saved searches/);
+      assert.equal(
+        interaction.updates[0].embeds[0].data.fields.find(
+          (field) => field.name === 'Make'
+        ).value,
+        'HONDA'
+      );
+      assert.equal(interaction.updates[0].components[0].components.length, 5);
+    }
+  );
+});
+
 test('next cycles through saved searches in the action interface', async () => {
   const savedSearches = [
     {
@@ -236,6 +322,77 @@ test('next cycles through saved searches in the action interface', async () => {
         fields.find((field) => field.name === 'Saved Searches').value,
         '2 (showing 2 of 2)'
       );
+    }
+  );
+});
+
+test('view clamps an out-of-range position to the final saved search', async () => {
+  const savedSearches = [
+    {
+      id: 1,
+      yard_id: '1020',
+      make: 'TOYOTA',
+      model: 'CAMRY',
+      year_range: '2005',
+      status: 'ACTIVE',
+    },
+    {
+      id: 2,
+      yard_id: '1021',
+      make: 'HONDA',
+      model: 'ACCORD',
+      year_range: '2010',
+      status: 'ACTIVE',
+    },
+  ];
+
+  await withHandlerMocks(
+    { getSavedSearches: async () => savedSearches },
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const interaction = makeInteraction();
+      await handleSavedSearchQuickActionButton(
+        interaction,
+        buildQuickHash('view', { ...basePayload, idx: 99 })
+      );
+
+      const fields = interaction.updates[0].embeds[0].data.fields;
+      assert.equal(fields.find((field) => field.name === 'Make').value, 'HONDA');
+      assert.equal(
+        fields.find((field) => field.name === 'Saved Searches').value,
+        '2 (showing 2 of 2)'
+      );
+    }
+  );
+});
+
+test('unsupported quick actions receive a bounded ephemeral reply', async () => {
+  await withHandlerMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 1,
+          yard_id: '1020',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    async ({ handleSavedSearchQuickActionButton }) => {
+      const interaction = makeInteraction();
+      await handleSavedSearchQuickActionButton(
+        interaction,
+        buildQuickHash('unsupported', basePayload)
+      );
+
+      assert.deepEqual(interaction.replies, [
+        {
+          content: 'Unsupported quick action.',
+          ephemeral: true,
+        },
+      ]);
+      assert.equal(interaction.updates.length, 0);
     }
   );
 });
