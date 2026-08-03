@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const { summarizeError } = require('../utils/errorSummary');
 const { buildVehicleQuery } = require('./inventoryApiQuery');
@@ -30,7 +31,18 @@ function writeJson(response, statusCode, payload, extraHeaders = {}) {
 }
 
 function isAuthorized(request, apiKey) {
-  return !apiKey || request.headers['x-api-key'] === apiKey;
+  const providedApiKey = request.headers['x-api-key'];
+  if (
+    typeof apiKey !== 'string' ||
+    apiKey.length === 0 ||
+    typeof providedApiKey !== 'string'
+  ) {
+    return false;
+  }
+
+  const expected = Buffer.from(apiKey);
+  const provided = Buffer.from(providedApiKey);
+  return expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
 }
 
 function buildDbEtag(stat) {

@@ -65,6 +65,70 @@ test('inventory API returns a bounded 400 response for a malformed request targe
   assert.deepEqual(JSON.parse(response.body), { error: 'Bad request' });
 });
 
+test('inventory API fails closed when its API key is missing', () => {
+  let queryCalled = false;
+  const response = createResponse();
+  const handler = createInventoryApiRequestHandler({
+    allowedOrigins: ['*'],
+    apiKey: '',
+    db: {
+      all() {
+        queryCalled = true;
+      },
+    },
+    dbCacheSeconds: 3600,
+    snapshotProvider: {},
+  });
+
+  handler(
+    { method: 'GET', url: '/api/vehicles', headers: {} },
+    response
+  );
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(JSON.parse(response.body), { error: 'Unauthorized' });
+  assert.equal(queryCalled, false);
+});
+
+test('inventory API accepts only the exact configured API key', () => {
+  let queryCount = 0;
+  const handler = createInventoryApiRequestHandler({
+    allowedOrigins: ['*'],
+    apiKey: 'exact-test-key',
+    db: {
+      all(_sql, _params, callback) {
+        queryCount += 1;
+        callback(null, []);
+      },
+    },
+    dbCacheSeconds: 3600,
+    snapshotProvider: {},
+  });
+  const wrongKeyResponse = createResponse();
+  const exactKeyResponse = createResponse();
+
+  handler(
+    {
+      method: 'GET',
+      url: '/api/vehicles',
+      headers: { 'x-api-key': 'exact-test-key-with-extra-data' },
+    },
+    wrongKeyResponse
+  );
+  handler(
+    {
+      method: 'GET',
+      url: '/api/vehicles',
+      headers: { 'x-api-key': 'exact-test-key' },
+    },
+    exactKeyResponse
+  );
+
+  assert.equal(wrongKeyResponse.statusCode, 401);
+  assert.equal(exactKeyResponse.statusCode, 200);
+  assert.equal(queryCount, 1);
+});
+
 test('a mismatched ETag takes precedence over If-Modified-Since', async () => {
   const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-etag-precedence-'));
   const snapshotPath = path.join(tempDirectory, 'inventory.db');

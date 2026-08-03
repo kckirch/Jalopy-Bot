@@ -24,6 +24,13 @@ const DEFAULT_PORT = 8787;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_DB_CACHE_SECONDS = 3600;
 
+function requireApiKey(value) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error('INVENTORY_API_KEY is required.');
+  }
+  return value;
+}
+
 function createSnapshotProvider(options, db, vehicleDbPath, snapshotPath) {
   if (options.snapshotProvider) return options.snapshotProvider;
   return createPublicInventorySnapshotProvider({
@@ -66,7 +73,9 @@ function startInventoryApiServer(options = {}) {
     options.port || process.env.INVENTORY_API_PORT,
     DEFAULT_PORT
   );
-  const apiKey = options.apiKey || process.env.INVENTORY_API_KEY || '';
+  const apiKey = requireApiKey(
+    options.apiKey ?? process.env.INVENTORY_API_KEY
+  );
   const allowedOrigins = parseList(
     options.allowedOrigins || process.env.INVENTORY_API_ALLOWED_ORIGINS || '*'
   );
