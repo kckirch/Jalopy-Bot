@@ -296,7 +296,7 @@ test('http scraper in multi-yard mode iterates discovered yard options', async (
       return {
         status: 200,
         headers: {},
-        data: buildInventoryHtml({ yardOptions: ['1020', '1021'], makeOptions: ['TOYOTA'], modelOptions: ['CAMRY'] }),
+        data: buildInventoryHtml({ yardOptions: ['1020', '1020junk', '1021'], makeOptions: ['TOYOTA'], modelOptions: ['CAMRY'] }),
       };
     }
 
@@ -339,8 +339,7 @@ test('http scraper in multi-yard mode iterates discovered yard options', async (
     }
   );
 
-  assert.equal(upserts.length, 2);
-  assert.deepEqual(upserts.map((args) => Number(args[0])).sort((a, b) => a - b), [1020, 1021]);
+  assert.deepEqual(upserts.map((args) => args[0]), ['1020', '1020junk', '1021']);
   assert.equal(markCalls.length, 1);
   assert.deepEqual(markCalls[0].options, { yardIds: [1020, 1021] });
 });

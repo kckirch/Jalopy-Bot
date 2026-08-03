@@ -14,8 +14,8 @@ const {
   extractOptionValues,
   extractResultRows,
   normalizeSearchValue,
-  normalizeYardId,
 } = require('./httpInventoryParser');
+const { normalizeYardId } = require('./yardIdNormalization');
 
 async function scrapeMakeModelHttp(
   clientState,

@@ -1,8 +1,3 @@
-function normalizeYardId(yardId) {
-  const parsed = Number.parseInt(yardId, 10);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
 function normalizeSearchValue(value) {
   const normalized = String(value == null ? '' : value).trim();
   if (!normalized) return '';
@@ -140,7 +135,6 @@ module.exports = {
   extractOptionValues,
   extractResultRows,
   normalizeSearchValue,
-  normalizeYardId,
   resolveFormMeta,
   uniqueNonEmptyStrings,
 };
