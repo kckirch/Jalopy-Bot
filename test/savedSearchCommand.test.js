@@ -1,16 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
-
-const repoRoot = path.resolve(__dirname, '..');
-const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
-const savedSearchSessionHandlerPath = path.join(
-  repoRoot,
-  'src/bot/handlers/savedSearchSessionHandler.js'
-);
-const savedSearchManagerPath = path.join(repoRoot, 'src/database/savedSearchManager.js');
-const vehicleQueryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
+const {
+  handleSavedSearchCommand,
+} = require('../src/bot/commands/savedSearchCommand');
+const {
+  startSavedSearchSession,
+} = require('../src/bot/handlers/savedSearchSessionHandler');
 
 class FakeCollector {
   constructor() {
@@ -89,56 +85,28 @@ function makeInteraction(userId = 'user-1', location = null) {
 }
 
 async function withSavedSearchCommandMocks(mocks, runTest) {
-  const previousSavedSearchCommand = require.cache[savedSearchCommandPath];
-  const previousSavedSearchSessionHandler =
-    require.cache[savedSearchSessionHandlerPath];
-  const previousSavedSearchManager = require.cache[savedSearchManagerPath];
-  const previousVehicleQueryManager = require.cache[vehicleQueryManagerPath];
-
-  require.cache[savedSearchManagerPath] = {
-    id: savedSearchManagerPath,
-    filename: savedSearchManagerPath,
-    loaded: true,
-    exports: {
-      getSavedSearches: mocks.getSavedSearches || (async () => []),
-      deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
-      setSavedSearchFrequency: mocks.setSavedSearchFrequency || (async () => {}),
+  const sessionDependencies = {
+    deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
+    getModelSuggestionsForNoResults:
+      mocks.getModelSuggestionsForNoResults || (async () => []),
+    queryVehicles: mocks.queryVehicles || (async () => []),
+    setSavedSearchFrequency:
+      mocks.setSavedSearchFrequency || (async () => {}),
+  };
+  const commandDependencies = {
+    getSavedSearches: mocks.getSavedSearches || (async () => []),
+    startSavedSearchSession(interaction, savedSearches) {
+      return startSavedSearchSession(
+        interaction,
+        savedSearches,
+        sessionDependencies
+      );
     },
   };
 
-  require.cache[vehicleQueryManagerPath] = {
-    id: vehicleQueryManagerPath,
-    filename: vehicleQueryManagerPath,
-    loaded: true,
-    exports: {
-      queryVehicles: mocks.queryVehicles || (async () => []),
-      getModelSuggestionsForNoResults: mocks.getModelSuggestionsForNoResults || (async () => []),
-    },
-  };
-
-  delete require.cache[savedSearchSessionHandlerPath];
-  delete require.cache[savedSearchCommandPath];
-
-  try {
-    const { handleSavedSearchCommand } = require(savedSearchCommandPath);
-    await runTest(handleSavedSearchCommand);
-  } finally {
-    if (previousSavedSearchCommand) require.cache[savedSearchCommandPath] = previousSavedSearchCommand;
-    else delete require.cache[savedSearchCommandPath];
-
-    if (previousSavedSearchSessionHandler) {
-      require.cache[savedSearchSessionHandlerPath] =
-        previousSavedSearchSessionHandler;
-    } else {
-      delete require.cache[savedSearchSessionHandlerPath];
-    }
-
-    if (previousSavedSearchManager) require.cache[savedSearchManagerPath] = previousSavedSearchManager;
-    else delete require.cache[savedSearchManagerPath];
-
-    if (previousVehicleQueryManager) require.cache[vehicleQueryManagerPath] = previousVehicleQueryManager;
-    else delete require.cache[vehicleQueryManagerPath];
-  }
+  await runTest((interaction) =>
+    handleSavedSearchCommand(interaction, commandDependencies)
+  );
 }
 
 test('savedsearch command replies with no-results message when user has no saved searches', async () => {
@@ -160,6 +128,31 @@ test('savedsearch command replies with no-results message when user has no saved
   assert.equal(interaction.editReplyCalls.length, 1);
   assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
   assert.equal(joinedConsoleText(consoleCalls).includes('user-empty'), false);
+});
+
+test('savedsearch command resolves an optional location before loading searches', async () => {
+  const interaction = makeInteraction('user-filtered', 'boise');
+  const calls = [];
+
+  await handleSavedSearchCommand(interaction, {
+    convertLocationToYardId(location) {
+      calls.push(['location', location]);
+      return 1020;
+    },
+    async getSavedSearches(userId, yardId) {
+      calls.push(['load', userId, yardId]);
+      return [];
+    },
+    async startSavedSearchSession() {
+      assert.fail('an empty result must not start a session');
+    },
+  });
+
+  assert.deepEqual(calls, [
+    ['location', 'boise'],
+    ['load', 'user-filtered', 1020],
+  ]);
+  assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
 });
 
 test('savedsearch command renders in-channel carousel with requested actions', async () => {
