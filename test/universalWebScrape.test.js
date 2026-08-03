@@ -1,15 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
-
-const repoRoot = path.resolve(__dirname, '..');
-const scrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
-const seleniumScrapePath = path.join(repoRoot, 'src/scraping/seleniumInventoryScrape.js');
-const managerPath = path.join(repoRoot, 'src/database/vehicleDbInventoryManager.js');
-const resolverPath = path.join(repoRoot, 'src/scraping/chromedriverResolver.js');
-const seleniumPath = require.resolve('selenium-webdriver', { paths: [repoRoot] });
-const chromePath = require.resolve('selenium-webdriver/chrome', { paths: [repoRoot] });
+const { universalWebScrape } = require('../src/scraping/universalWebScrape');
 
 function createSelectOption(value) {
   return {
@@ -36,10 +28,10 @@ function createDriver(
     async sleep() {},
     async quit() {},
     async findElements(selector) {
-      if (selector && selector.kind === 'rows') {
+      if (selector?.value === '.table-responsive table tbody tr') {
         return rowData.map((cols) => ({
           async findElements(tagSelector) {
-            if (!tagSelector || tagSelector.kind !== 'tag' || tagSelector.value !== 'td') {
+            if (tagSelector?.value !== 'td') {
               return [];
             }
             return cols.map((value) => ({
@@ -50,10 +42,10 @@ function createDriver(
           },
         }));
       }
-      if (selector?.kind === 'css' && selector.value === '#car-make option') {
+      if (selector?.value === '#car-make option') {
         return makeOptionValues.map(createSelectOption);
       }
-      if (selector?.kind === 'css' && selector.value === '#yard-id option') {
+      if (selector?.value === '#yard-id option') {
         return yardOptionValues.map(createSelectOption);
       }
       return [];
@@ -61,119 +53,29 @@ function createDriver(
   };
 }
 
-async function withUniversalWebScrapeMocks(
+async function withSeleniumScrape(
   {
     driver,
     insertOrUpdateVehicle,
     markInactiveVehicles,
-    resolvedChromedriverPath = null,
-    onSetChromeService = () => {},
+    driverBuildError = null,
   },
   runTest
 ) {
-  const previousScrape = require.cache[scrapePath];
-  const previousSeleniumScrape = require.cache[seleniumScrapePath];
-  const previousManager = require.cache[managerPath];
-  const previousResolver = require.cache[resolverPath];
-  const previousSelenium = require.cache[seleniumPath];
-  const previousChrome = require.cache[chromePath];
-  const previousEngine = process.env.SCRAPER_ENGINE;
-
-  class FakeBuilder {
-    forBrowser() { return this; }
-    setChromeOptions() { return this; }
-    setChromeService(service) {
-      onSetChromeService(service);
-      return this;
-    }
-    async build() { return driver; }
-  }
-
-  require.cache[managerPath] = {
-    id: managerPath,
-    filename: managerPath,
-    loaded: true,
-    exports: { insertOrUpdateVehicle, markInactiveVehicles },
-  };
-
-  require.cache[resolverPath] = {
-    id: resolverPath,
-    filename: resolverPath,
-    loaded: true,
-    exports: {
-      resolveChromedriverPath: () => resolvedChromedriverPath,
-    },
-  };
-
-  require.cache[seleniumPath] = {
-    id: seleniumPath,
-    filename: seleniumPath,
-    loaded: true,
-    exports: {
-      Builder: FakeBuilder,
-      By: {
-        css: (value) => {
-          if (value === '.table-responsive table tbody tr') {
-            return { kind: 'rows', value };
-          }
-          return { kind: 'css', value };
+  const scrape = (options) =>
+    universalWebScrape(options, {
+      engine: 'selenium',
+      seleniumDeps: {
+        insertOrUpdateVehicle,
+        markInactiveVehicles,
+        async createDriver() {
+          if (driverBuildError) throw driverBuildError;
+          return driver;
         },
-        tagName: (value) => ({ kind: 'tag', value }),
       },
-      until: {
-        elementLocated: () => ({}),
-      },
-    },
-  };
+    });
 
-  require.cache[chromePath] = {
-    id: chromePath,
-    filename: chromePath,
-    loaded: true,
-    exports: {
-      Options: class {
-        addArguments() {}
-      },
-      ServiceBuilder: class {
-        constructor(driverPath) {
-          this.driverPath = driverPath;
-        }
-      },
-    },
-  };
-
-  delete require.cache[scrapePath];
-  delete require.cache[seleniumScrapePath];
-  process.env.SCRAPER_ENGINE = 'selenium';
-
-  try {
-    const { universalWebScrape } = require(scrapePath);
-    await runTest(universalWebScrape);
-  } finally {
-    if (previousScrape) require.cache[scrapePath] = previousScrape;
-    else delete require.cache[scrapePath];
-
-    if (previousSeleniumScrape) require.cache[seleniumScrapePath] = previousSeleniumScrape;
-    else delete require.cache[seleniumScrapePath];
-
-    if (previousManager) require.cache[managerPath] = previousManager;
-    else delete require.cache[managerPath];
-
-    if (previousResolver) require.cache[resolverPath] = previousResolver;
-    else delete require.cache[resolverPath];
-
-    if (previousSelenium) require.cache[seleniumPath] = previousSelenium;
-    else delete require.cache[seleniumPath];
-
-    if (previousChrome) require.cache[chromePath] = previousChrome;
-    else delete require.cache[chromePath];
-
-    if (typeof previousEngine === 'string') {
-      process.env.SCRAPER_ENGINE = previousEngine;
-    } else {
-      delete process.env.SCRAPER_ENGINE;
-    }
-  }
+  await runTest(scrape);
 }
 
 test('universalWebScrape awaits all upserts before markInactiveVehicles', async () => {
@@ -181,7 +83,7 @@ test('universalWebScrape awaits all upserts before markInactiveVehicles', async 
   const upserts = [];
   let insertCount = 0;
 
-  await withUniversalWebScrapeMocks(
+  await withSeleniumScrape(
     {
       driver: createDriver([
         [2005, 'TOYOTA', 'CAMRY', 7],
@@ -226,7 +128,7 @@ test('universalWebScrape awaits all upserts before markInactiveVehicles', async 
 test('universalWebScrape scopes inactive reconciliation and skips when disabled', async () => {
   const markCalls = [];
 
-  await withUniversalWebScrapeMocks(
+  await withSeleniumScrape(
     {
       driver: createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]),
       insertOrUpdateVehicle: async () => {},
@@ -264,7 +166,7 @@ test('universalWebScrape scopes inactive reconciliation and skips when disabled'
 test('universalWebScrape skips inactive reconciliation when scrape produced zero upserts', async () => {
   const markCalls = [];
 
-  await withUniversalWebScrapeMocks(
+  await withSeleniumScrape(
     {
       driver: createDriver([]),
       insertOrUpdateVehicle: async () => {},
@@ -295,7 +197,7 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
 
   const successfulRow = {
     async findElements(tagSelector) {
-      if (!tagSelector || tagSelector.kind !== 'tag' || tagSelector.value !== 'td') {
+      if (tagSelector?.value !== 'td') {
         return [];
       }
       return [2005, 'TOYOTA', 'CAMRY', 7].map((value) => ({
@@ -318,7 +220,7 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
     async sleep() {},
     async quit() {},
     async findElements(selector) {
-      if (selector && selector.kind === 'rows') {
+      if (selector?.value === '.table-responsive table tbody tr') {
         return [successfulRow, failingRow];
       }
       return [];
@@ -326,7 +228,7 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
   };
 
   const consoleCalls = await captureConsole(async () => {
-    await withUniversalWebScrapeMocks(
+    await withSeleniumScrape(
       {
         driver,
         insertOrUpdateVehicle: async () => {
@@ -361,7 +263,6 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
 
 test('selenium scraper passes form values as script arguments and iterates make options', async () => {
   const executionCalls = [];
-  const servicePaths = [];
   const upserts = [];
   const markCalls = [];
   const model = "CAMRY'; window.untrustedValue = true; //";
@@ -374,13 +275,11 @@ test('selenium scraper passes form values as script arguments and iterates make 
   );
 
   const consoleCalls = await captureConsole(() =>
-    withUniversalWebScrapeMocks(
+    withSeleniumScrape(
       {
         driver,
         insertOrUpdateVehicle: async (...args) => upserts.push(args),
         markInactiveVehicles: async (...args) => markCalls.push(args),
-        resolvedChromedriverPath: '/tmp/test-chromedriver',
-        onSetChromeService: (service) => servicePaths.push(service.driverPath),
       },
       async (universalWebScrape) => {
         await universalWebScrape({
@@ -396,13 +295,12 @@ test('selenium scraper passes form values as script arguments and iterates make 
     )
   );
 
-  assert.deepEqual(servicePaths, ['/tmp/test-chromedriver']);
   assert.equal(upserts.length, 2);
   assert.ok(upserts.every((args) => args[0] === '1020'));
   assert.deepEqual(markCalls, [['20260101', { yardIds: [1020] }]]);
 
   const valueCalls = executionCalls.filter(([script]) =>
-    script.includes('arguments[0]')
+    script.includes('.value = arguments[1]')
   );
   assert.ok(
     valueCalls.some(
@@ -429,7 +327,7 @@ test('selenium scraper discovers multiple yards and scopes reconciliation to num
     }
   );
 
-  await withUniversalWebScrapeMocks(
+  await withSeleniumScrape(
     {
       driver,
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
@@ -458,7 +356,7 @@ test('selenium scraper supports a selected yard on a multi-location page', async
   const upserts = [];
   const markCalls = [];
 
-  await withUniversalWebScrapeMocks(
+  await withSeleniumScrape(
     {
       driver: createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]),
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
@@ -485,7 +383,7 @@ test('selenium scraper supports a selected yard on a multi-location page', async
 test('selenium scraper redacts inactive reconciliation failures', async () => {
   const privateErrorDetails = 'private-user /home/kc/private-reconcile';
   const consoleCalls = await captureConsole(async () => {
-    await withUniversalWebScrapeMocks(
+    await withSeleniumScrape(
       {
         driver: createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]),
         insertOrUpdateVehicle: async () => {},
@@ -512,6 +410,85 @@ test('selenium scraper redacts inactive reconciliation failures', async () => {
   assert.equal(logOutput.includes(privateErrorDetails), false);
 });
 
+test('selenium scraper preserves the scrape error when browser cleanup also fails', async () => {
+  const scrapeError = new Error('private scrape failure');
+  const cleanupError = new Error('private cleanup failure');
+  const driver = createDriver([]);
+  driver.get = async () => {
+    throw scrapeError;
+  };
+  driver.quit = async () => {
+    throw cleanupError;
+  };
+
+  const consoleCalls = await captureConsole(async () => {
+    await withSeleniumScrape(
+      {
+        driver,
+        insertOrUpdateVehicle: async () => {},
+        markInactiveVehicles: async () => {},
+      },
+      async (scrape) => {
+        await assert.rejects(
+          scrape({
+            inventoryUrl: 'https://example.test',
+            hasMultipleLocations: false,
+            yardId: '1020',
+            make: 'TOYOTA',
+            model: 'CAMRY',
+            sessionID: '20260101',
+            shouldMarkInactive: true,
+          }),
+          (error) => error === scrapeError
+        );
+      }
+    );
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  assert.match(logOutput, /Failed to close browser: Error/);
+  assert.match(logOutput, /Scraping Duration:/);
+  assert.equal(logOutput.includes(scrapeError.message), false);
+  assert.equal(logOutput.includes(cleanupError.message), false);
+});
+
+test('selenium scraper reports browser cleanup failure after a successful scrape', async () => {
+  const cleanupError = new Error('private cleanup failure');
+  const driver = createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]);
+  driver.quit = async () => {
+    throw cleanupError;
+  };
+
+  const consoleCalls = await captureConsole(async () => {
+    await withSeleniumScrape(
+      {
+        driver,
+        insertOrUpdateVehicle: async () => {},
+        markInactiveVehicles: async () => {},
+      },
+      async (scrape) => {
+        await assert.rejects(
+          scrape({
+            inventoryUrl: 'https://example.test',
+            hasMultipleLocations: false,
+            yardId: '1020',
+            make: 'TOYOTA',
+            model: 'CAMRY',
+            sessionID: '20260101',
+            shouldMarkInactive: false,
+          }),
+          (error) => error === cleanupError
+        );
+      }
+    );
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  assert.match(logOutput, /Failed to close browser: Error/);
+  assert.match(logOutput, /Scraping Duration:/);
+  assert.equal(logOutput.includes(cleanupError.message), false);
+});
+
 test('selenium scraper classifies driver startup failures without leaking details', async () => {
   const scenarios = [
     {
@@ -525,15 +502,11 @@ test('selenium scraper classifies driver startup failures without leaking detail
   ];
 
   for (const { privateErrorDetails, expectedLog } of scenarios) {
-    const driver = createDriver([]);
-    driver.get = async () => {
-      throw new Error(privateErrorDetails);
-    };
-
     const consoleCalls = await captureConsole(async () => {
-      await withUniversalWebScrapeMocks(
+      await withSeleniumScrape(
         {
-          driver,
+          driver: createDriver([]),
+          driverBuildError: new Error(privateErrorDetails),
           insertOrUpdateVehicle: async () => {},
           markInactiveVehicles: async () => {},
         },
@@ -556,6 +529,8 @@ test('selenium scraper classifies driver startup failures without leaking detail
 
     const logOutput = joinedConsoleText(consoleCalls);
     assert.match(logOutput, expectedLog);
+    assert.match(logOutput, /Scraping Duration:/);
+    assert.doesNotMatch(logOutput, /Closing browser/);
     assert.equal(logOutput.includes(privateErrorDetails), false);
   }
 });
