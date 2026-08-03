@@ -41,9 +41,7 @@ function isNotModified(request, etag, lastModifiedMillis) {
   const ifNoneMatch = String(request.headers['if-none-match'] || '').trim();
   if (ifNoneMatch) {
     const candidates = ifNoneMatch.split(',').map((item) => item.trim());
-    if (candidates.includes('*') || candidates.includes(etag)) {
-      return true;
-    }
+    return candidates.includes('*') || candidates.includes(etag);
   }
 
   const ifModifiedSince = request.headers['if-modified-since'];
@@ -51,7 +49,7 @@ function isNotModified(request, etag, lastModifiedMillis) {
     const sinceMillis = Date.parse(ifModifiedSince);
     if (
       !Number.isNaN(sinceMillis) &&
-      sinceMillis >= Math.floor(lastModifiedMillis)
+      sinceMillis >= Math.floor(lastModifiedMillis / 1000) * 1000
     ) {
       return true;
     }
