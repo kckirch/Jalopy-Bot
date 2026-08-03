@@ -62,6 +62,7 @@ test('database modules use VEHICLE_DB_PATH and are not CWD-sensitive', async () 
   const { queryVehicles, db: queryDb } = require(queryManagerPath);
 
   try {
+    assert.equal(queryDb, db);
     await setupDatabase();
     assert.equal(fs.existsSync(customDbPath), true);
 
@@ -77,7 +78,6 @@ test('database modules use VEHICLE_DB_PATH and are not CWD-sensitive', async () 
     const rows = await queryVehicles('ALL', 'ANY', 'ANY', 'ANY', 'ACTIVE');
     assert.ok(rows.some((row) => row.vehicle_make === 'TOYOTA' && row.vehicle_model === 'CAMRY'));
   } finally {
-    await close(queryDb);
     await close(db);
 
     delete require.cache[dbPathModulePath];
