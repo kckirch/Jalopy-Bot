@@ -1,0 +1,236 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  makeSearchInteraction,
+  makeVehicleRow,
+  withSearchCommandMocks,
+} = require('../test-support/searchCommandHarness');
+
+test('save-search button flow calls checkExistingSearch and addSavedSearch', async () => {
+  const interaction = makeSearchInteraction();
+  const addSavedSearchCalls = [];
+  const existingChecks = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow()],
+      checkExistingSearch: async (...args) => {
+        existingChecks.push(args);
+        return false;
+      },
+      addSavedSearch: async (...args) => addSavedSearchCalls.push(args),
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const customId = interaction.replies[0].components[0].components[2].data.custom_id;
+      const buttonInteraction = {
+        customId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      await interaction.message.collector.emitCollect(buttonInteraction);
+
+      assert.equal(existingChecks.length, 1);
+      assert.equal(addSavedSearchCalls.length, 1);
+      assert.equal(addSavedSearchCalls[0][0], 'user-1');
+      assert.equal(addSavedSearchCalls[0][4], 'TOYOTA');
+      assert.equal(addSavedSearchCalls[0][5], 'CAMRY');
+      assert.equal(addSavedSearchCalls[0][6], '2005');
+      assert.equal(buttonInteraction.replyCalls.length, 1);
+      assert.equal(buttonInteraction.replyCalls[0].ephemeral, true);
+      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].embeds));
+      assert.match(buttonInteraction.replyCalls[0].embeds[0].data.title, /search saved/i);
+      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].components));
+      assert.equal(buttonInteraction.replyCalls[0].components[0].components.length, 5);
+      assert.ok(
+        buttonInteraction.replyCalls[0].components[0].components.every((button) =>
+          button.data.custom_id.startsWith('sq:')
+        )
+      );
+    }
+  );
+});
+
+test('save-search for ALL location uses canonical yard ID for duplicate detection and insert', async () => {
+  const interaction = makeSearchInteraction({
+    location: 'all',
+    make: 'ANY',
+    model: 'ANY',
+    year: 'ANY',
+  });
+  const addSavedSearchCalls = [];
+  const existingChecks = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [
+        makeVehicleRow({
+          row_number: 1,
+          vehicle_make: 'FORD',
+          vehicle_model: 'FOCUS',
+          vehicle_year: 2008,
+        }),
+      ],
+      checkExistingSearch: async (...args) => {
+        existingChecks.push(args);
+        return false;
+      },
+      addSavedSearch: async (...args) => addSavedSearchCalls.push(args),
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const customId = interaction.replies[0].components[0].components[2].data.custom_id;
+      await interaction.message.collector.emitCollect({
+        customId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        async reply() {},
+        async update() {},
+      });
+    }
+  );
+
+  const expectedCanonicalAll = '1020,1021,1022,1099,1119,999999';
+  assert.equal(existingChecks.length, 1);
+  assert.equal(existingChecks[0][1], expectedCanonicalAll);
+  assert.equal(addSavedSearchCalls.length, 1);
+  assert.equal(addSavedSearchCalls[0][2], expectedCanonicalAll);
+});
+
+test('duplicate saved search does not call addSavedSearch', async () => {
+  const interaction = makeSearchInteraction();
+  let addCalls = 0;
+  let duplicateReply;
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow({ row_number: 2 })],
+      checkExistingSearch: async () => true,
+      addSavedSearch: async () => {
+        addCalls += 1;
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const customId = interaction.replies[0].components[0].components[2].data.custom_id;
+      await interaction.message.collector.emitCollect({
+        customId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        async reply(payload) {
+          duplicateReply = payload;
+        },
+        async update() {},
+      });
+    }
+  );
+
+  assert.equal(addCalls, 0);
+  assert.ok(Array.isArray(duplicateReply.embeds));
+  assert.match(duplicateReply.embeds[0].data.title, /already saved/i);
+  assert.ok(Array.isArray(duplicateReply.components));
+  assert.equal(duplicateReply.components[0].components.length, 5);
+});
+
+test('delete-saved quick action removes matching saved search criteria', async () => {
+  const interaction = makeSearchInteraction();
+  const deletedSearchIds = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow({ row_number: 2 })],
+      getSavedSearches: async () => [
+        {
+          id: 123,
+          yard_id: '1020',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+      ],
+      deleteSavedSearch: async (id) => deletedSearchIds.push(id),
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const customId = interaction.replies[0].components[1].components[0].data.custom_id;
+      const buttonInteraction = {
+        customId,
+        user: { id: 'user-1', tag: 'user-1#0001' },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      await interaction.message.collector.emitCollect(buttonInteraction);
+
+      assert.deepEqual(deletedSearchIds, [123]);
+      assert.equal(buttonInteraction.replyCalls.length, 1);
+      assert.match(buttonInteraction.replyCalls[0].content, /Removed 1 matching saved search/i);
+    }
+  );
+});
+
+test('my-saved-searches quick action sends a DM summary', async () => {
+  const interaction = makeSearchInteraction();
+  const dmMessages = [];
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => [makeVehicleRow({ row_number: 2 })],
+      getSavedSearches: async () => [
+        {
+          id: 1,
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: '2005',
+          status: 'ACTIVE',
+        },
+        {
+          id: 2,
+          yard_name: 'TRUSTYPICKAPART',
+          make: 'HONDA',
+          model: 'ACCORD',
+          year_range: '2010',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+      const customId = interaction.replies[0].components[1].components[1].data.custom_id;
+      const buttonInteraction = {
+        customId,
+        user: {
+          id: 'user-1',
+          tag: 'user-1#0001',
+          async send(payload) {
+            dmMessages.push(payload);
+          },
+        },
+        replyCalls: [],
+        async reply(payload) {
+          this.replyCalls.push(payload);
+        },
+        async update() {},
+      };
+
+      await interaction.message.collector.emitCollect(buttonInteraction);
+
+      assert.equal(dmMessages.length, 1);
+      assert.match(dmMessages[0].content, /Your saved searches \(2\)/i);
+      assert.equal(buttonInteraction.replyCalls.length, 1);
+      assert.match(
+        buttonInteraction.replyCalls[0].content,
+        /Sent 2 saved search\(es\) to your DMs/i
+      );
+    }
+  );
+});
