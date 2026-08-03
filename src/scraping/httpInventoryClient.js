@@ -132,6 +132,9 @@ async function requestPage(clientState, { method, url, payload }) {
   }
 
   const response = await clientState.httpClient.request(requestConfig);
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Page request failed with status ${response.status} for ${url}`);
+  }
   const normalizedHeaders = normalizeHeaders(response.headers || {});
   clientState.cookieHeader = mergeCookieHeaders(
     clientState.cookieHeader,
@@ -291,7 +294,10 @@ async function submitSearch(
   submission
 ) {
   const payload = buildSubmissionPayload(formMeta, submission);
-  logHttpDebug('submitSearch payload', payload);
+  logHttpDebug('submitSearch payload prepared', {
+    method: String(formMeta.method || 'GET').toUpperCase(),
+    fieldCount: Object.keys(payload).length,
+  });
   const html = await requestPage(clientState, {
     method: formMeta.method,
     url: formMeta.actionUrl,
