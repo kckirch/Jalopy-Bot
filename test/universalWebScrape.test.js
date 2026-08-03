@@ -7,14 +7,32 @@ const repoRoot = path.resolve(__dirname, '..');
 const scrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
 const seleniumScrapePath = path.join(repoRoot, 'src/scraping/seleniumInventoryScrape.js');
 const managerPath = path.join(repoRoot, 'src/database/vehicleDbInventoryManager.js');
+const resolverPath = path.join(repoRoot, 'src/scraping/chromedriverResolver.js');
 const seleniumPath = require.resolve('selenium-webdriver', { paths: [repoRoot] });
 const chromePath = require.resolve('selenium-webdriver/chrome', { paths: [repoRoot] });
 
-function createDriver(rowData) {
+function createSelectOption(value) {
+  return {
+    async getAttribute(attribute) {
+      return attribute === 'value' ? value : null;
+    },
+  };
+}
+
+function createDriver(
+  rowData,
+  {
+    makeOptionValues = [],
+    yardOptionValues = [],
+    onExecuteScript = () => {},
+  } = {}
+) {
   return {
     async get() {},
     async wait() {},
-    async executeScript() {},
+    async executeScript(...args) {
+      onExecuteScript(args);
+    },
     async sleep() {},
     async quit() {},
     async findElements(selector) {
@@ -32,15 +50,31 @@ function createDriver(rowData) {
           },
         }));
       }
+      if (selector?.kind === 'css' && selector.value === '#car-make option') {
+        return makeOptionValues.map(createSelectOption);
+      }
+      if (selector?.kind === 'css' && selector.value === '#yard-id option') {
+        return yardOptionValues.map(createSelectOption);
+      }
       return [];
     },
   };
 }
 
-async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, markInactiveVehicles }, runTest) {
+async function withUniversalWebScrapeMocks(
+  {
+    driver,
+    insertOrUpdateVehicle,
+    markInactiveVehicles,
+    resolvedChromedriverPath = null,
+    onSetChromeService = () => {},
+  },
+  runTest
+) {
   const previousScrape = require.cache[scrapePath];
   const previousSeleniumScrape = require.cache[seleniumScrapePath];
   const previousManager = require.cache[managerPath];
+  const previousResolver = require.cache[resolverPath];
   const previousSelenium = require.cache[seleniumPath];
   const previousChrome = require.cache[chromePath];
   const previousEngine = process.env.SCRAPER_ENGINE;
@@ -48,7 +82,10 @@ async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, mark
   class FakeBuilder {
     forBrowser() { return this; }
     setChromeOptions() { return this; }
-    setChromeService() { return this; }
+    setChromeService(service) {
+      onSetChromeService(service);
+      return this;
+    }
     async build() { return driver; }
   }
 
@@ -57,6 +94,15 @@ async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, mark
     filename: managerPath,
     loaded: true,
     exports: { insertOrUpdateVehicle, markInactiveVehicles },
+  };
+
+  require.cache[resolverPath] = {
+    id: resolverPath,
+    filename: resolverPath,
+    loaded: true,
+    exports: {
+      resolveChromedriverPath: () => resolvedChromedriverPath,
+    },
   };
 
   require.cache[seleniumPath] = {
@@ -88,7 +134,11 @@ async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, mark
       Options: class {
         addArguments() {}
       },
-      ServiceBuilder: class {},
+      ServiceBuilder: class {
+        constructor(driverPath) {
+          this.driverPath = driverPath;
+        }
+      },
     },
   };
 
@@ -108,6 +158,9 @@ async function withUniversalWebScrapeMocks({ driver, insertOrUpdateVehicle, mark
 
     if (previousManager) require.cache[managerPath] = previousManager;
     else delete require.cache[managerPath];
+
+    if (previousResolver) require.cache[resolverPath] = previousResolver;
+    else delete require.cache[resolverPath];
 
     if (previousSelenium) require.cache[seleniumPath] = previousSelenium;
     else delete require.cache[seleniumPath];
@@ -304,4 +357,202 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
   assert.equal(markCalls.length, 0);
   assert.match(joinedConsoleText(consoleCalls), /Scraping failed: Error/);
   assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+});
+
+test('selenium scraper passes form values as script arguments and iterates make options', async () => {
+  const executionCalls = [];
+  const servicePaths = [];
+  const upserts = [];
+  const markCalls = [];
+  const model = "CAMRY'; window.untrustedValue = true; //";
+  const driver = createDriver(
+    [[2005, 'TOYOTA', 'CAMRY', 7]],
+    {
+      makeOptionValues: ['', 'TOYOTA', '', 'HONDA'],
+      onExecuteScript: (args) => executionCalls.push(args),
+    }
+  );
+
+  await withUniversalWebScrapeMocks(
+    {
+      driver,
+      insertOrUpdateVehicle: async (...args) => upserts.push(args),
+      markInactiveVehicles: async (...args) => markCalls.push(args),
+      resolvedChromedriverPath: '/tmp/test-chromedriver',
+      onSetChromeService: (service) => servicePaths.push(service.driverPath),
+    },
+    async (universalWebScrape) => {
+      await universalWebScrape({
+        inventoryUrl: 'https://example.test',
+        hasMultipleLocations: false,
+        yardId: '1020',
+        make: 'ANY',
+        model,
+        sessionID: '20260101',
+        shouldMarkInactive: true,
+      });
+    }
+  );
+
+  assert.deepEqual(servicePaths, ['/tmp/test-chromedriver']);
+  assert.equal(upserts.length, 2);
+  assert.ok(upserts.every((args) => args[0] === '1020'));
+  assert.deepEqual(markCalls, [['20260101', { yardIds: [1020] }]]);
+
+  const valueCalls = executionCalls.filter(([script]) =>
+    script.includes('arguments[0]')
+  );
+  assert.ok(
+    valueCalls.some(
+      ([, elementId, value]) => elementId === 'car-model' && value === model
+    )
+  );
+  assert.deepEqual(
+    valueCalls
+      .filter(([, elementId]) => elementId === 'car-make')
+      .map(([, , value]) => value),
+    ['ANY', 'TOYOTA', 'HONDA']
+  );
+  assert.ok(executionCalls.every(([script]) => !script.includes(model)));
+});
+
+test('selenium scraper discovers multiple yards and scopes reconciliation to numeric IDs', async () => {
+  const upserts = [];
+  const markCalls = [];
+  const driver = createDriver(
+    [[2005, 'TOYOTA', 'CAMRY', 7]],
+    {
+      yardOptionValues: ['', '1020', '', 'invalid-yard', '1021'],
+    }
+  );
+
+  await withUniversalWebScrapeMocks(
+    {
+      driver,
+      insertOrUpdateVehicle: async (...args) => upserts.push(args),
+      markInactiveVehicles: async (...args) => markCalls.push(args),
+    },
+    async (universalWebScrape) => {
+      await universalWebScrape({
+        inventoryUrl: 'https://example.test',
+        hasMultipleLocations: true,
+        make: 'TOYOTA',
+        model: 'CAMRY',
+        sessionID: '20260101',
+        shouldMarkInactive: true,
+      });
+    }
+  );
+
+  assert.deepEqual(
+    upserts.map(([yardId]) => yardId),
+    ['1020', 'invalid-yard', '1021']
+  );
+  assert.deepEqual(markCalls, [['20260101', { yardIds: [1020, 1021] }]]);
+});
+
+test('selenium scraper supports a selected yard on a multi-location page', async () => {
+  const upserts = [];
+  const markCalls = [];
+
+  await withUniversalWebScrapeMocks(
+    {
+      driver: createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]),
+      insertOrUpdateVehicle: async (...args) => upserts.push(args),
+      markInactiveVehicles: async (...args) => markCalls.push(args),
+    },
+    async (universalWebScrape) => {
+      await universalWebScrape({
+        inventoryUrl: 'https://example.test',
+        hasMultipleLocations: true,
+        yardId: '1020',
+        make: 'TOYOTA',
+        model: 'CAMRY',
+        sessionID: '20260101',
+        shouldMarkInactive: true,
+      });
+    }
+  );
+
+  assert.equal(upserts.length, 1);
+  assert.equal(upserts[0][0], '1020');
+  assert.deepEqual(markCalls, [['20260101', { yardIds: [1020] }]]);
+});
+
+test('selenium scraper redacts inactive reconciliation failures', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-reconcile';
+  const consoleCalls = await captureConsole(async () => {
+    await withUniversalWebScrapeMocks(
+      {
+        driver: createDriver([[2005, 'TOYOTA', 'CAMRY', 7]]),
+        insertOrUpdateVehicle: async () => {},
+        markInactiveVehicles: async () => {
+          throw new Error(privateErrorDetails);
+        },
+      },
+      async (universalWebScrape) => {
+        await universalWebScrape({
+          inventoryUrl: 'https://example.test',
+          hasMultipleLocations: false,
+          yardId: '1020',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          sessionID: '20260101',
+          shouldMarkInactive: true,
+        });
+      }
+    );
+  });
+
+  const logOutput = joinedConsoleText(consoleCalls);
+  assert.match(logOutput, /Error during inactive reconciliation: Error/);
+  assert.equal(logOutput.includes(privateErrorDetails), false);
+});
+
+test('selenium scraper classifies driver startup failures without leaking details', async () => {
+  const scenarios = [
+    {
+      privateErrorDetails: 'spawn /home/kc/private-driver ENOENT',
+      expectedLog: /Chromedriver not found/,
+    },
+    {
+      privateErrorDetails: 'session not created: private browser details',
+      expectedLog: /Chromedriver version mismatch/,
+    },
+  ];
+
+  for (const { privateErrorDetails, expectedLog } of scenarios) {
+    const driver = createDriver([]);
+    driver.get = async () => {
+      throw new Error(privateErrorDetails);
+    };
+
+    const consoleCalls = await captureConsole(async () => {
+      await withUniversalWebScrapeMocks(
+        {
+          driver,
+          insertOrUpdateVehicle: async () => {},
+          markInactiveVehicles: async () => {},
+        },
+        async (universalWebScrape) => {
+          await assert.rejects(
+            universalWebScrape({
+              inventoryUrl: 'https://example.test',
+              hasMultipleLocations: false,
+              yardId: '1020',
+              make: 'TOYOTA',
+              model: 'CAMRY',
+              sessionID: '20260101',
+              shouldMarkInactive: true,
+            }),
+            (error) => error.message === privateErrorDetails
+          );
+        }
+      );
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, expectedLog);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
+  }
 });
