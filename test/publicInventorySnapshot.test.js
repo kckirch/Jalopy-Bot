@@ -620,6 +620,7 @@ test('HTTP database endpoint serves the vehicles-only snapshot instead of the ru
     assert.deepEqual(await healthResponse.json(), {
       ok: true,
       service: 'inventory-api',
+      snapshotReady: true,
     });
 
     const optionsResponse = await fetch(`http://127.0.0.1:${port}/api/vehicles`, {

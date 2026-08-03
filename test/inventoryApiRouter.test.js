@@ -49,6 +49,7 @@ test('inventory API ignores an invalid Host header when routing origin-form requ
   assert.deepEqual(JSON.parse(response.body), {
     ok: true,
     service: 'inventory-api',
+    snapshotReady: true,
   });
 });
 

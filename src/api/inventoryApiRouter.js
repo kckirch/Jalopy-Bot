@@ -216,7 +216,7 @@ function createInventoryApiRequestHandler({
       writeJson(
         response,
         200,
-        { ok: true, service: 'inventory-api' },
+        { ok: true, service: 'inventory-api', snapshotReady: true },
         corsHeaders
       );
       return;
