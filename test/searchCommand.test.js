@@ -8,6 +8,14 @@ const {
 
 const repoRoot = path.resolve(__dirname, '..');
 const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
+const searchInteractionActionsPath = path.join(
+  repoRoot,
+  'src/bot/handlers/searchInteractionActions.js'
+);
+const searchInteractionCollectorPath = path.join(
+  repoRoot,
+  'src/bot/handlers/searchInteractionCollector.js'
+);
 const vehicleQueryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
 const savedSearchManagerPath = path.join(repoRoot, 'src/database/savedSearchManager.js');
 
@@ -91,6 +99,10 @@ function makeVehicleRow(overrides = {}) {
 
 async function withSearchCommandMocks(mocks, runTest) {
   const previousSearchCommand = require.cache[searchCommandPath];
+  const previousSearchInteractionActions =
+    require.cache[searchInteractionActionsPath];
+  const previousSearchInteractionCollector =
+    require.cache[searchInteractionCollectorPath];
   const previousQueryManager = require.cache[vehicleQueryManagerPath];
   const previousSavedSearchManager = require.cache[savedSearchManagerPath];
 
@@ -114,6 +126,8 @@ async function withSearchCommandMocks(mocks, runTest) {
       addSavedSearch: mocks.addSavedSearch || (async () => {}),
     },
   };
+  delete require.cache[searchInteractionActionsPath];
+  delete require.cache[searchInteractionCollectorPath];
   delete require.cache[searchCommandPath];
 
   try {
@@ -122,6 +136,20 @@ async function withSearchCommandMocks(mocks, runTest) {
   } finally {
     if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
     else delete require.cache[searchCommandPath];
+
+    if (previousSearchInteractionActions) {
+      require.cache[searchInteractionActionsPath] =
+        previousSearchInteractionActions;
+    } else {
+      delete require.cache[searchInteractionActionsPath];
+    }
+
+    if (previousSearchInteractionCollector) {
+      require.cache[searchInteractionCollectorPath] =
+        previousSearchInteractionCollector;
+    } else {
+      delete require.cache[searchInteractionCollectorPath];
+    }
 
     if (previousQueryManager) require.cache[vehicleQueryManagerPath] = previousQueryManager;
     else delete require.cache[vehicleQueryManagerPath];
@@ -162,6 +190,61 @@ test('invalid make returns ephemeral validation embed and stops query', async ()
   assert.equal(interaction.replies[0].ephemeral, true);
   assert.equal(interaction.replies[0].embeds[0].data.title, 'Available Vehicle Makes');
   assert.equal(joinedConsoleText(consoleCalls).toLowerCase().includes('not-a-real-make'), false);
+});
+
+test('make aliases are normalized before querying vehicles', async () => {
+  const queryCalls = [];
+  const interaction = makeInteraction({
+    location: 'boise',
+    make: 'chevy',
+    model: 'ANY',
+    year: 'ANY',
+    status: 'ACTIVE',
+  });
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async (...args) => {
+        queryCalls.push(args);
+        return [];
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+    }
+  );
+
+  assert.deepEqual(queryCalls, [[1020, 'Chevrolet', 'ANY', 'ANY', 'ACTIVE']]);
+});
+
+test('location is required before the search session starts', async () => {
+  let queryCalled = false;
+  const interaction = makeInteraction({
+    make: 'TOYOTA',
+    model: 'ANY',
+    year: 'ANY',
+    status: 'ACTIVE',
+  });
+
+  await withSearchCommandMocks(
+    {
+      queryVehicles: async () => {
+        queryCalled = true;
+        return [];
+      },
+    },
+    async ({ handleSearchCommand }) => {
+      await handleSearchCommand(interaction);
+    }
+  );
+
+  assert.equal(queryCalled, false);
+  assert.deepEqual(interaction.replies, [
+    {
+      content: 'Location is required for this search.',
+      ephemeral: true,
+    },
+  ]);
 });
 
 test('no-result search responds with no-results embed and disabled pagination', async () => {
