@@ -35,6 +35,22 @@ test('parseArgs parses supported smoke-script flags', () => {
   assert.equal(parsed.keepDb, true);
 });
 
+test('live smoke help returns before loading scraper or database dependencies', async () => {
+  const logs = [];
+  const result = await runLiveScrapeSmokeTest({
+    argv: ['--help'],
+    logger: {
+      log(message) {
+        logs.push(message);
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, skipped: true });
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /Usage: node src\/testing\/liveScrapeSmokeTest\.js/);
+});
+
 test('live smoke CLI redacts failures and sets a failing exit code', async () => {
   const privateErrorDetails = 'private smoke path /home/kc/private-inventory.db';
   const previousExitCode = process.exitCode;
@@ -52,6 +68,47 @@ test('live smoke CLI redacts failures and sets a failing exit code', async () =>
     assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
   } finally {
     process.exitCode = previousExitCode;
+  }
+});
+
+test('live smoke CLI retains actionable dependency diagnostics', async (t) => {
+  const cases = [
+    {
+      name: 'chromedriver',
+      error: new Error('chromedriver spawn ENOENT at /private/path'),
+      expected: /Chromedriver not found/,
+    },
+    {
+      name: 'axios',
+      error: new Error('HTTP scraper requires axios at /private/path'),
+      expected: /Missing HTTP scraper dependencies/,
+    },
+    {
+      name: 'cheerio',
+      error: new Error('HTTP scraper requires cheerio at /private/path'),
+      expected: /Missing HTTP scraper dependencies/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const previousExitCode = process.exitCode;
+      try {
+        process.exitCode = undefined;
+        const consoleCalls = await captureConsole(() =>
+          runLiveScrapeSmokeCli(async () => {
+            throw testCase.error;
+          })
+        );
+        const output = joinedConsoleText(consoleCalls);
+
+        assert.equal(process.exitCode, 1);
+        assert.match(output, testCase.expected);
+        assert.equal(output.includes('/private/path'), false);
+      } finally {
+        process.exitCode = previousExitCode;
+      }
+    });
   }
 });
 
