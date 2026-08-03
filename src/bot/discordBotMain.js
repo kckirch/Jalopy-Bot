@@ -1,39 +1,62 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 const { Events } = require('discord.js');
-
-const { client } = require('./utils/client.js');
-const { setupDatabase } = require('../database/database');
-const { startScheduledTasks } = require('../notifications/scheduler');
-const { handleInteraction } = require('./handlers/interactionHandler');
 const { summarizeError } = require('../utils/errorSummary');
-let readyHandled = false;
 
-// Initialize database
-setupDatabase().then(() => {
+async function startDiscordBot(options = {}) {
+  const botClient = options.client ?? require('./utils/client.js').client;
+  const setupDatabase =
+    options.setupDatabase ?? require('../database/database').setupDatabase;
+  const token = options.token ?? process.env.TOKEN;
+
+  await setupDatabase();
   console.log('Database setup completed successfully.');
-}).catch((error) => {
-  console.error('Failed to set up database:', summarizeError(error));
-});
 
-client.on(Events.ClientReady, async () => {
-  console.log('✅ Discord bot is online. ✅');
-  if (!readyHandled) {
+  const startScheduledTasks =
+    options.startScheduledTasks ??
+    require('../notifications/scheduler').startScheduledTasks;
+  const handleInteraction =
+    options.handleInteraction ??
+    require('./handlers/interactionHandler').handleInteraction;
+  let readyHandled = false;
+
+  botClient.on(Events.ClientReady, async () => {
+    console.log('✅ Discord bot is online. ✅');
+    if (readyHandled) {
+      console.log('Ready event received again; scheduled tasks already initialized.');
+      return;
+    }
+
     readyHandled = true;
     try {
-      startScheduledTasks();
+      await startScheduledTasks();
       console.log('Scheduled tasks started.');
-      console.log("Current server time:", new Date().toLocaleString());
+      console.log('Current server time:', new Date().toLocaleString());
     } catch (error) {
+      readyHandled = false;
       console.error('Failed to start scheduled tasks:', summarizeError(error));
     }
-  } else {
-    console.log('Ready event received again; scheduled tasks already initialized.');
-  }
-});
+  });
+  botClient.on(Events.InteractionCreate, handleInteraction);
 
-client.on(Events.InteractionCreate, handleInteraction);
+  await botClient.login(token);
+  return botClient;
+}
 
-client.login(process.env.TOKEN).catch((error) => {
-  console.error('Failed to login:', summarizeError(error));
-});
+function runDiscordBotCli(start = startDiscordBot) {
+  return Promise.resolve()
+    .then(() => start())
+    .catch((error) => {
+      console.error('Failed to start Discord bot:', summarizeError(error));
+      process.exitCode = 1;
+    });
+}
+
+if (require.main === module) {
+  runDiscordBotCli();
+}
+
+module.exports = {
+  runDiscordBotCli,
+  startDiscordBot,
+};
