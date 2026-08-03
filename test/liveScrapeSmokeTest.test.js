@@ -408,7 +408,7 @@ test('live smoke runner reports a database close failure after successful checks
   );
 
   assert.equal(loggedErrors.length, 1);
-  assert.equal(loggedErrors[0][1], closeError);
+  assert.equal(loggedErrors[0][1], 'Error');
 });
 
 test('live smoke runner preserves its primary error when database close also fails', async () => {
@@ -449,7 +449,7 @@ test('live smoke runner preserves its primary error when database close also fai
   );
 
   assert.equal(loggedErrors.length, 1);
-  assert.equal(loggedErrors[0][1], closeError);
+  assert.equal(loggedErrors[0][1], 'Error');
 });
 
 test('smoke test helpers provide deterministic behavior', () => {

@@ -20,6 +20,7 @@ const {
   logScrapeRequest,
   reconcileScrapeRun,
 } = require('./scrapeLifecycle');
+const { logScrapeYardResult } = require('./scrapeLogging');
 
 async function scrapeMakeModelHttp(
   clientState,
@@ -117,7 +118,6 @@ async function scrapeAllMakes(
       );
     }
     totalRows += makeRows;
-    console.log(`[scrape] Yard ${yardId} make ${currentMake} rows ${makeRows}`);
   }
 
   if (makeValues.length === 0) {
@@ -185,8 +185,6 @@ async function scrapeYardMakeModelHttp(
   model,
   sessionID
 ) {
-  console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
-
   const basePage = await submitSearch(
     clientState,
     context.inventoryUrl,
@@ -218,11 +216,7 @@ async function scrapeYardMakeModelHttp(
           sessionID
         );
 
-  if (make !== 'ANY') {
-    console.log(`[scrape] Yard ${yardId} make ${make} rows ${rowCount}`);
-  }
-  console.log(`HTTP rows processed for yard ${yardId}: ${rowCount}`);
-  console.log(`✅ Finished scraping yard: ${yardId}, make: ${make}, model: ${model}`);
+  logScrapeYardResult(yardId, rowCount);
   return rowCount;
 }
 

@@ -6,6 +6,10 @@ const { getSessionID } = require('../../utils/sessionId');
 const { convertLocationToYardId } = require('../utils/locationUtils');
 const junkyards = require('../../config/junkyards');
 const { withScrapeLock } = require('../../scraping/scrapeLock');
+const {
+  formatScrapeLogValue,
+  formatScrapeYardId,
+} = require('../../scraping/scrapeLogging');
 const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
 // Helper function to scrape all junkyards
@@ -24,7 +28,7 @@ async function scrapeAllJunkyards(make, model, sessionID) {
       shouldMarkInactive: make === 'ANY' && model === 'ANY',
     };
 
-    console.log(`Starting web scrape for Jalopy Jungle yard ID ${yardId} with sessionID: ${sessionID}`);
+    console.log(`[scrape] Starting manual yard=${formatScrapeYardId(yardId)}`);
 
     await universalWebScrape(options);
   }
@@ -40,7 +44,9 @@ async function scrapeAllJunkyards(make, model, sessionID) {
     shouldMarkInactive: make === 'ANY' && model === 'ANY',
   };
 
-  console.log(`Starting web scrape for Trusty yard ID ${trustyConfig.yardId} with sessionID: ${sessionID}`);
+  console.log(
+    `[scrape] Starting manual yard=${formatScrapeYardId(trustyConfig.yardId)}`
+  );
 
   await universalWebScrape(trustyOptions);
 }
@@ -55,7 +61,6 @@ async function handleScrapeCommand(interaction) {
   let model = interaction.options.getString('model') || 'ANY';
 
   const sessionID = getSessionID();
-  console.log(`Session ID: ${sessionID}`);
 
   if (!location) {
     await interaction.reply('Please provide a location to scrape.');
@@ -66,7 +71,9 @@ async function handleScrapeCommand(interaction) {
   model = model.toUpperCase();
   await interaction.deferReply({ ephemeral: true });
 
-  const scrapeLabel = `manual:${interaction.user?.id || 'unknown'}:${location.toLowerCase()}:${sessionID}`;
+  const scrapeLabel = `manual:${formatScrapeLogValue(location.toLowerCase(), {
+    maxLength: 32,
+  })}:${sessionID}`;
 
   try {
     await withScrapeLock(scrapeLabel, async () => {
@@ -114,7 +121,9 @@ async function handleScrapeCommand(interaction) {
         shouldMarkInactive: make === 'ANY' && model === 'ANY',
       };
 
-      console.log(`Starting web scrape for yard ID ${finalYardId} with sessionID: ${sessionID}`);
+      console.log(
+        `[scrape] Starting manual yard=${formatScrapeYardId(finalYardId)}`
+      );
       await universalWebScrape(options);
 
       const searchEmbed = new EmbedBuilder()

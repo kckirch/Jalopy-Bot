@@ -373,25 +373,27 @@ test('selenium scraper passes form values as script arguments and iterates make 
     }
   );
 
-  await withUniversalWebScrapeMocks(
-    {
-      driver,
-      insertOrUpdateVehicle: async (...args) => upserts.push(args),
-      markInactiveVehicles: async (...args) => markCalls.push(args),
-      resolvedChromedriverPath: '/tmp/test-chromedriver',
-      onSetChromeService: (service) => servicePaths.push(service.driverPath),
-    },
-    async (universalWebScrape) => {
-      await universalWebScrape({
-        inventoryUrl: 'https://example.test',
-        hasMultipleLocations: false,
-        yardId: '1020',
-        make: 'ANY',
-        model,
-        sessionID: '20260101',
-        shouldMarkInactive: true,
-      });
-    }
+  const consoleCalls = await captureConsole(() =>
+    withUniversalWebScrapeMocks(
+      {
+        driver,
+        insertOrUpdateVehicle: async (...args) => upserts.push(args),
+        markInactiveVehicles: async (...args) => markCalls.push(args),
+        resolvedChromedriverPath: '/tmp/test-chromedriver',
+        onSetChromeService: (service) => servicePaths.push(service.driverPath),
+      },
+      async (universalWebScrape) => {
+        await universalWebScrape({
+          inventoryUrl: 'https://example.test',
+          hasMultipleLocations: false,
+          yardId: '1020',
+          make: 'ANY',
+          model,
+          sessionID: '20260101',
+          shouldMarkInactive: true,
+        });
+      }
+    )
   );
 
   assert.deepEqual(servicePaths, ['/tmp/test-chromedriver']);
@@ -414,6 +416,7 @@ test('selenium scraper passes form values as script arguments and iterates make 
     ['ANY', 'TOYOTA', 'HONDA']
   );
   assert.ok(executionCalls.every(([script]) => !script.includes(model)));
+  assert.equal(joinedConsoleText(consoleCalls).includes(model), false);
 });
 
 test('selenium scraper discovers multiple yards and scopes reconciliation to numeric IDs', async () => {

@@ -5,6 +5,7 @@ const {
   resolveFormMeta,
   uniqueNonEmptyStrings,
 } = require('./httpInventoryParser');
+const { summarizeError } = require('../utils/errorSummary');
 
 function isHttpDebugEnabled() {
   const value = String(process.env.SCRAPER_HTTP_DEBUG || '')
@@ -160,9 +161,8 @@ async function requestJson(clientState, { url, payload, runState }) {
     data: new URLSearchParams(payload).toString(),
   });
   logHttpDebug('requestJson response', {
-    url,
     status: response.status,
-    payload,
+    fieldCount: Object.keys(payload).length,
   });
 
   if (response.status < 200 || response.status >= 300) {
@@ -207,16 +207,13 @@ async function fetchMakesForYard(
       data.map((item) => item && item.makeName)
     );
     logHttpDebug('makes discovered', {
-      yardId: String(yardId),
       count: makes.length,
-      sample: makes.slice(0, 5),
     });
     return makes;
   } catch (error) {
     if (runState) runState.hadSoftFailure = true;
     logHttpDebug('fetchMakesForYard failed', {
-      yardId: String(yardId),
-      error: String(error && error.message ? error.message : error),
+      error: summarizeError(error),
     });
     return [];
   }
@@ -257,18 +254,13 @@ async function fetchModelsForMake(
       })
     );
     logHttpDebug('models discovered', {
-      yardId: String(yardId),
-      makeName: String(makeName),
       count: models.length,
-      sample: models.slice(0, 8),
     });
     return models;
   } catch (error) {
     if (runState) runState.hadSoftFailure = true;
     logHttpDebug('fetchModelsForMake failed', {
-      yardId: String(yardId),
-      makeName: String(makeName),
-      error: String(error && error.message ? error.message : error),
+      error: summarizeError(error),
     });
     return [];
   }

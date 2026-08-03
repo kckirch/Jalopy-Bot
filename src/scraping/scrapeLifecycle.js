@@ -1,5 +1,6 @@
 const { summarizeError } = require('../utils/errorSummary');
 const { normalizeYardId } = require('./yardIdNormalization');
+const { logScrapeRequest } = require('./scrapeLogging');
 
 function createScrapeRun(upsertVehicle, { now = Date.now } = {}) {
   const startedAt = now();
@@ -30,13 +31,6 @@ function createScrapeRun(upsertVehicle, { now = Date.now } = {}) {
       };
     },
   };
-}
-
-function logScrapeRequest(options) {
-  console.log('🔍 Scraping for:');
-  console.log(`   🏞️ Yard ID: ${options.yardId || 'ALL'}`);
-  console.log(`   🚗 Make: ${options.make}`);
-  console.log(`   📋 Model: ${options.model}`);
 }
 
 async function reconcileScrapeRun(
