@@ -38,6 +38,51 @@ test('HTTP inventory client rejects non-success pages before parsing them', asyn
   );
 });
 
+test('HTTP inventory client rejects cross-origin form actions', async () => {
+  const clientState = {
+    cookieHeader: 'session=test-cookie',
+    cheerio,
+    httpClient: {
+      async request() {
+        return {
+          status: 200,
+          headers: {},
+          data: `
+            <form id="searchinventory" method="post" action="https://collector.example/steal">
+              <input type="hidden" name="__RequestVerificationToken" value="test-token">
+            </form>`,
+        };
+      },
+    },
+  };
+
+  await assert.rejects(
+    loadInitialInventoryPage(clientState, 'https://inventory.example/'),
+    /form action must stay on the configured origin/
+  );
+});
+
+test('HTTP inventory client rejects unsafe form methods', async () => {
+  const clientState = {
+    cookieHeader: '',
+    cheerio,
+    httpClient: {
+      async request() {
+        return {
+          status: 200,
+          headers: {},
+          data: '<form id="searchinventory" method="delete" action="/"></form>',
+        };
+      },
+    },
+  };
+
+  await assert.rejects(
+    loadInitialInventoryPage(clientState, 'https://inventory.example/'),
+    /form uses an unsupported method/
+  );
+});
+
 test('HTTP scraper debug output does not include hidden form values', async () => {
   const previousDebugValue = process.env.SCRAPER_HTTP_DEBUG;
   process.env.SCRAPER_HTTP_DEBUG = 'true';
