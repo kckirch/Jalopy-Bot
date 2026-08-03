@@ -31,6 +31,23 @@ function requireApiKey(value) {
   return value;
 }
 
+function openReadOnlyDatabase(databasePath) {
+  return new Promise((resolve, reject) => {
+    const database = new sqlite3.Database(
+      databasePath,
+      sqlite3.OPEN_READONLY,
+      (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(database);
+      }
+    );
+  });
+}
+
 function createSnapshotProvider(options, db, vehicleDbPath, snapshotPath) {
   if (options.snapshotProvider) return options.snapshotProvider;
   return createPublicInventorySnapshotProvider({
@@ -67,7 +84,7 @@ function prewarmSnapshot(snapshotProvider) {
     });
 }
 
-function startInventoryApiServer(options = {}) {
+async function startInventoryApiServer(options = {}) {
   const host = options.host || process.env.INVENTORY_API_HOST || DEFAULT_HOST;
   const port = parsePositiveInt(
     options.port || process.env.INVENTORY_API_PORT,
@@ -84,6 +101,9 @@ function startInventoryApiServer(options = {}) {
     DEFAULT_DB_CACHE_SECONDS
   );
   const vehicleDbPath = options.dbPath || VEHICLE_DB_PATH;
+  const db = await openReadOnlyDatabase(vehicleDbPath);
+  console.log('[inventory-api] using configured database');
+
   const ownsSnapshotDirectory = !options.publicSnapshotDirectory;
   const publicSnapshotDirectory =
     options.publicSnapshotDirectory ||
@@ -91,21 +111,6 @@ function startInventoryApiServer(options = {}) {
   const snapshotPath = path.join(
     publicSnapshotDirectory,
     'vehicleInventory.db'
-  );
-
-  const db = new sqlite3.Database(
-    vehicleDbPath,
-    sqlite3.OPEN_READONLY,
-    (error) => {
-      if (error) {
-        console.error(
-          '[inventory-api] failed to open configured database:',
-          summarizeError(error)
-        );
-      } else {
-        console.log('[inventory-api] using configured database');
-      }
-    }
   );
   const snapshotProvider = createSnapshotProvider(
     options,
@@ -143,8 +148,23 @@ function startInventoryApiServer(options = {}) {
   return server;
 }
 
-if (require.main === module) {
-  startInventoryApiServer();
+function runInventoryApiCli(start = startInventoryApiServer) {
+  return Promise.resolve()
+    .then(() => start())
+    .catch((error) => {
+      console.error(
+        '[inventory-api] failed to start:',
+        summarizeError(error)
+      );
+      process.exitCode = 1;
+    });
 }
 
-module.exports = { startInventoryApiServer };
+if (require.main === module) {
+  runInventoryApiCli();
+}
+
+module.exports = {
+  runInventoryApiCli,
+  startInventoryApiServer,
+};
