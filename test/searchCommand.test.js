@@ -1,163 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
+
+const { SEARCH_LOCATION_CHOICES } = require('../src/bot/locationChoices');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 const {
-  SEARCH_LOCATION_CHOICES,
-} = require('../src/bot/locationChoices');
-
-const repoRoot = path.resolve(__dirname, '..');
-const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
-const searchInteractionActionsPath = path.join(
-  repoRoot,
-  'src/bot/handlers/searchInteractionActions.js'
-);
-const searchInteractionCollectorPath = path.join(
-  repoRoot,
-  'src/bot/handlers/searchInteractionCollector.js'
-);
-const vehicleQueryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
-const savedSearchManagerPath = path.join(repoRoot, 'src/database/savedSearchManager.js');
-
-class FakeCollector {
-  constructor() {
-    this.handlers = {};
-  }
-
-  on(eventName, handler) {
-    this.handlers[eventName] = handler;
-    return this;
-  }
-
-  async emitCollect(interaction) {
-    if (this.handlers.collect) {
-      await this.handlers.collect(interaction);
-    }
-  }
-
-  async emitEnd(...args) {
-    if (this.handlers.end) {
-      await this.handlers.end(...args);
-    }
-  }
-}
-
-function makeMessage() {
-  return {
-    collector: null,
-    edits: [],
-    createMessageComponentCollector() {
-      this.collector = new FakeCollector();
-      return this.collector;
-    },
-    async edit(payload) {
-      this.edits.push(payload);
-    },
-  };
-}
-
-function makeInteraction(options, userId = 'user-1') {
-  const message = makeMessage();
-  const replies = [];
-
-  return {
-    options: {
-      getString(name) {
-        return options[name] ?? null;
-      },
-    },
-    user: {
-      id: userId,
-      tag: `${userId}#0001`,
-    },
-    async reply(payload) {
-      replies.push(payload);
-      if (payload && payload.fetchReply) {
-        return message;
-      }
-      return payload;
-    },
-    replies,
-    message,
-  };
-}
-
-function makeVehicleRow(overrides = {}) {
-  const now = new Date().toISOString();
-  return {
-    yard_name: 'BOISE',
-    row_number: 7,
-    vehicle_make: 'TOYOTA',
-    vehicle_model: 'CAMRY',
-    vehicle_year: 2005,
-    first_seen: now,
-    last_updated: now,
-    notes: '',
-    ...overrides,
-  };
-}
-
-async function withSearchCommandMocks(mocks, runTest) {
-  const previousSearchCommand = require.cache[searchCommandPath];
-  const previousSearchInteractionActions =
-    require.cache[searchInteractionActionsPath];
-  const previousSearchInteractionCollector =
-    require.cache[searchInteractionCollectorPath];
-  const previousQueryManager = require.cache[vehicleQueryManagerPath];
-  const previousSavedSearchManager = require.cache[savedSearchManagerPath];
-
-  require.cache[vehicleQueryManagerPath] = {
-    id: vehicleQueryManagerPath,
-    filename: vehicleQueryManagerPath,
-    loaded: true,
-    exports: {
-      queryVehicles: mocks.queryVehicles,
-      getModelSuggestionsForNoResults: mocks.getModelSuggestionsForNoResults || (async () => []),
-    },
-  };
-  require.cache[savedSearchManagerPath] = {
-    id: savedSearchManagerPath,
-    filename: savedSearchManagerPath,
-    loaded: true,
-    exports: {
-      getSavedSearches: mocks.getSavedSearches || (async () => []),
-      deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
-      checkExistingSearch: mocks.checkExistingSearch || (async () => false),
-      addSavedSearch: mocks.addSavedSearch || (async () => {}),
-    },
-  };
-  delete require.cache[searchInteractionActionsPath];
-  delete require.cache[searchInteractionCollectorPath];
-  delete require.cache[searchCommandPath];
-
-  try {
-    const moduleExports = require(searchCommandPath);
-    await runTest(moduleExports);
-  } finally {
-    if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
-    else delete require.cache[searchCommandPath];
-
-    if (previousSearchInteractionActions) {
-      require.cache[searchInteractionActionsPath] =
-        previousSearchInteractionActions;
-    } else {
-      delete require.cache[searchInteractionActionsPath];
-    }
-
-    if (previousSearchInteractionCollector) {
-      require.cache[searchInteractionCollectorPath] =
-        previousSearchInteractionCollector;
-    } else {
-      delete require.cache[searchInteractionCollectorPath];
-    }
-
-    if (previousQueryManager) require.cache[vehicleQueryManagerPath] = previousQueryManager;
-    else delete require.cache[vehicleQueryManagerPath];
-
-    if (previousSavedSearchManager) require.cache[savedSearchManagerPath] = previousSavedSearchManager;
-    else delete require.cache[savedSearchManagerPath];
-  }
-}
+  makeInteraction,
+  withSearchCommandMocks,
+} = require('../test-support/searchCommandHarness');
 
 test('invalid make returns ephemeral validation embed and stops query', async () => {
   let queryCalled = false;
@@ -179,9 +28,7 @@ test('invalid make returns ephemeral validation embed and stops query', async ()
         checkExistingSearch: async () => false,
         addSavedSearch: async () => {},
       },
-      async ({ handleSearchCommand }) => {
-        await handleSearchCommand(interaction);
-      }
+      async ({ handleSearchCommand }) => handleSearchCommand(interaction)
     );
   });
 
@@ -209,9 +56,7 @@ test('make aliases are normalized before querying vehicles', async () => {
         return [];
       },
     },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-    }
+    async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
   assert.deepEqual(queryCalls, [[1020, 'Chevrolet', 'ANY', 'ANY', 'ACTIVE']]);
@@ -233,9 +78,7 @@ test('location is required before the search session starts', async () => {
         return [];
       },
     },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-    }
+    async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
   assert.equal(queryCalled, false);
@@ -262,9 +105,7 @@ test('no-result search responds with no-results embed and disabled pagination', 
       checkExistingSearch: async () => false,
       addSavedSearch: async () => {},
     },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-    }
+    async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
   assert.equal(interaction.replies.length, 1);
@@ -299,335 +140,13 @@ test('no-result search with specific model includes DB-driven model suggestions'
       checkExistingSearch: async () => false,
       addSavedSearch: async () => {},
     },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-    }
+    async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
   assert.equal(interaction.replies.length, 1);
   const payload = interaction.replies[0];
   assert.match(payload.embeds[0].data.description, /Possible model names we have seen/i);
   assert.match(payload.embeds[0].data.description, /RX-7/);
-});
-
-test('save-search button flow calls checkExistingSearch and addSavedSearch', async () => {
-  const now = new Date().toISOString();
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  const addSavedSearchCalls = [];
-  const existingChecks = [];
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 7,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      checkExistingSearch: async (...args) => {
-        existingChecks.push(args);
-        return false;
-      },
-      addSavedSearch: async (...args) => {
-        addSavedSearchCalls.push(args);
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-
-      const saveButtonCustomId = interaction.replies[0].components[0].components[2].data.custom_id;
-
-      const buttonInteraction = {
-        customId: saveButtonCustomId,
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-
-      assert.equal(existingChecks.length, 1);
-      assert.equal(addSavedSearchCalls.length, 1);
-      assert.equal(addSavedSearchCalls[0][0], 'user-1');
-      assert.equal(addSavedSearchCalls[0][4], 'TOYOTA');
-      assert.equal(addSavedSearchCalls[0][5], 'CAMRY');
-      assert.equal(addSavedSearchCalls[0][6], '2005');
-      assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.equal(buttonInteraction.replyCalls[0].ephemeral, true);
-      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].embeds));
-      assert.match(buttonInteraction.replyCalls[0].embeds[0].data.title, /search saved/i);
-      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].components));
-      assert.equal(buttonInteraction.replyCalls[0].components[0].components.length, 5);
-      assert.ok(buttonInteraction.replyCalls[0].components[0].components.every((button) => button.data.custom_id.startsWith('sq:')));
-    }
-  );
-});
-
-test('save-search for ALL location uses canonical yard ID for duplicate detection and insert', async () => {
-  const now = new Date().toISOString();
-  const interaction = makeInteraction({
-    location: 'all',
-    make: 'ANY',
-    model: 'ANY',
-    year: 'ANY',
-    status: 'ACTIVE',
-  });
-
-  const addSavedSearchCalls = [];
-  const existingChecks = [];
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 1,
-          vehicle_make: 'FORD',
-          vehicle_model: 'FOCUS',
-          vehicle_year: 2008,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      checkExistingSearch: async (...args) => {
-        existingChecks.push(args);
-        return false;
-      },
-      addSavedSearch: async (...args) => {
-        addSavedSearchCalls.push(args);
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-
-      const saveButtonCustomId = interaction.replies[0].components[0].components[2].data.custom_id;
-      const buttonInteraction = {
-        customId: saveButtonCustomId,
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        async reply() {},
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-    }
-  );
-
-  const expectedCanonicalAll = '1020,1021,1022,1099,1119,999999';
-  assert.equal(existingChecks.length, 1);
-  assert.equal(existingChecks[0][1], expectedCanonicalAll);
-  assert.equal(addSavedSearchCalls.length, 1);
-  assert.equal(addSavedSearchCalls[0][2], expectedCanonicalAll);
-});
-
-test('duplicate saved search does not call addSavedSearch', async () => {
-  const now = new Date().toISOString();
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  let addCalls = 0;
-  let duplicateReply;
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 2,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      checkExistingSearch: async () => true,
-      addSavedSearch: async () => {
-        addCalls += 1;
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-
-      const saveButtonCustomId = interaction.replies[0].components[0].components[2].data.custom_id;
-      const buttonInteraction = {
-        customId: saveButtonCustomId,
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        async reply(payload) {
-          duplicateReply = payload;
-        },
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-    }
-  );
-
-  assert.equal(addCalls, 0);
-  assert.ok(Array.isArray(duplicateReply.embeds));
-  assert.match(duplicateReply.embeds[0].data.title, /already saved/i);
-  assert.ok(Array.isArray(duplicateReply.components));
-  assert.equal(duplicateReply.components[0].components.length, 5);
-});
-
-test('delete-saved quick action removes matching saved search criteria', async () => {
-  const now = new Date().toISOString();
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  const deletedSearchIds = [];
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 2,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      getSavedSearches: async () => [
-        {
-          id: 123,
-          yard_id: '1020',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-      ],
-      deleteSavedSearch: async (id) => {
-        deletedSearchIds.push(id);
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-
-      const deleteButtonCustomId = interaction.replies[0].components[1].components[0].data.custom_id;
-      const buttonInteraction = {
-        customId: deleteButtonCustomId,
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-
-      assert.deepEqual(deletedSearchIds, [123]);
-      assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.match(buttonInteraction.replyCalls[0].content, /Removed 1 matching saved search/i);
-    }
-  );
-});
-
-test('my-saved-searches quick action sends a DM summary', async () => {
-  const now = new Date().toISOString();
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  const dmMessages = [];
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [
-        {
-          yard_name: 'BOISE',
-          row_number: 2,
-          vehicle_make: 'TOYOTA',
-          vehicle_model: 'CAMRY',
-          vehicle_year: 2005,
-          first_seen: now,
-          last_updated: now,
-          notes: '',
-        },
-      ],
-      getSavedSearches: async () => [
-        {
-          id: 1,
-          yard_name: 'BOISE',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-        {
-          id: 2,
-          yard_name: 'TRUSTYPICKAPART',
-          make: 'HONDA',
-          model: 'ACCORD',
-          year_range: '2010',
-          status: 'ACTIVE',
-        },
-      ],
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-
-      const mySavedSearchesCustomId = interaction.replies[0].components[1].components[1].data.custom_id;
-      const buttonInteraction = {
-        customId: mySavedSearchesCustomId,
-        user: {
-          id: 'user-1',
-          tag: 'user-1#0001',
-          async send(payload) {
-            dmMessages.push(payload);
-          },
-        },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-
-      assert.equal(dmMessages.length, 1);
-      assert.match(dmMessages[0].content, /Your saved searches \(2\)/i);
-      assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.match(buttonInteraction.replyCalls[0].content, /Sent 2 saved search\(es\) to your DMs/i);
-    }
-  );
 });
 
 test('location dropdown reruns search with same filters in selected location', async () => {
@@ -639,42 +158,24 @@ test('location dropdown reruns search with same filters in selected location', a
     year: '2005',
     status: 'ACTIVE',
   });
-
   const queriedYardIds = [];
 
   await withSearchCommandMocks(
     {
       queryVehicles: async (yardId) => {
         queriedYardIds.push(yardId);
-        if (yardId === 1020) {
-          return [
-            {
-              yard_name: 'BOISE',
-              row_number: 2,
-              vehicle_make: 'TOYOTA',
-              vehicle_model: 'CAMRY',
-              vehicle_year: 2005,
-              first_seen: now,
-              last_updated: now,
-              notes: '',
-            },
-          ];
-        }
-        if (yardId === 1021) {
-          return [
-            {
-              yard_name: 'CALDWELL',
-              row_number: 10,
-              vehicle_make: 'TOYOTA',
-              vehicle_model: 'CAMRY',
-              vehicle_year: 2006,
-              first_seen: now,
-              last_updated: now,
-              notes: '',
-            },
-          ];
-        }
-        return [];
+        const rowsByYard = {
+          1020: [{ yard_name: 'BOISE', row_number: 2, vehicle_year: 2005 }],
+          1021: [{ yard_name: 'CALDWELL', row_number: 10, vehicle_year: 2006 }],
+        };
+        return (rowsByYard[yardId] || []).map((row) => ({
+          vehicle_make: 'TOYOTA',
+          vehicle_model: 'CAMRY',
+          first_seen: now,
+          last_updated: now,
+          notes: '',
+          ...row,
+        }));
       },
     },
     async ({ handleSearchCommand }) => {
@@ -685,14 +186,10 @@ test('location dropdown reruns search with same filters in selected location', a
         relocateMenu
           .toJSON()
           .options.map(({ label, value }) => ({ label, value })),
-        SEARCH_LOCATION_CHOICES.map(({ name, value }) => ({
-          label: name,
-          value,
-        }))
+        SEARCH_LOCATION_CHOICES.map(({ name, value }) => ({ label: name, value }))
       );
-      const relocateCustomId = interaction.replies[0].components[2].components[0].data.custom_id;
       const selectInteraction = {
-        customId: relocateCustomId,
+        customId: relocateMenu.data.custom_id,
         values: ['caldwell'],
         user: { id: 'user-1', tag: 'user-1#0001' },
         updates: [],
@@ -707,193 +204,6 @@ test('location dropdown reruns search with same filters in selected location', a
       assert.deepEqual(queriedYardIds, [1020, 1021]);
       assert.equal(selectInteraction.updates.length, 1);
       assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
-    }
-  );
-});
-
-test('search command redacts initial query errors', async () => {
-  const privateErrorDetails = 'private query /home/kc/private-inventory.db';
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  const consoleCalls = await captureConsole(async () => {
-    await withSearchCommandMocks(
-      {
-        queryVehicles: async () => {
-          throw new TypeError(privateErrorDetails);
-        },
-      },
-      async ({ handleSearchCommand }) => {
-        await handleSearchCommand(interaction);
-      }
-    );
-  });
-
-  assert.deepEqual(interaction.replies, [{
-    content: 'Error fetching data from the database.',
-    ephemeral: true,
-  }]);
-  assert.match(joinedConsoleText(consoleCalls), /Error querying vehicles: TypeError/);
-  assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
-});
-
-test('search command redacts save-check errors', async () => {
-  const privateErrorDetails = 'private saved search /home/kc/private-inventory.db';
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [makeVehicleRow()],
-      checkExistingSearch: async () => {
-        throw new RangeError(privateErrorDetails);
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-      const saveCustomId = interaction.replies[0].components[0].components[2].data.custom_id;
-      const buttonInteraction = {
-        customId: saveCustomId,
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      const consoleCalls = await captureConsole(async () => {
-        await interaction.message.collector.emitCollect(buttonInteraction);
-      });
-
-      assert.deepEqual(buttonInteraction.replyCalls, [{
-        content: 'Error checking for existing searches.',
-        ephemeral: true,
-      }]);
-      assert.match(
-        joinedConsoleText(consoleCalls),
-        /Error checking for existing search: RangeError/
-      );
-      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
-    }
-  );
-});
-
-test('search command redacts saved-search DM errors', async () => {
-  const privateErrorDetails = 'private Discord user 123456789';
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [makeVehicleRow()],
-      getSavedSearches: async () => [
-        {
-          id: 91,
-          yard_name: 'BOISE',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-      ],
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-      const savedListCustomId = interaction.replies[0].components[1].components[1].data.custom_id;
-      const buttonInteraction = {
-        customId: savedListCustomId,
-        user: {
-          id: 'user-1',
-          tag: 'user-1#0001',
-          async send() {
-            throw new URIError(privateErrorDetails);
-          },
-        },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      const consoleCalls = await captureConsole(async () => {
-        await interaction.message.collector.emitCollect(buttonInteraction);
-      });
-
-      assert.deepEqual(buttonInteraction.replyCalls, [{
-        content: 'I could not DM you. Please enable DMs or use /savedsearch.',
-        ephemeral: true,
-      }]);
-      assert.match(joinedConsoleText(consoleCalls), /Unable to DM saved searches: URIError/);
-      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
-    }
-  );
-});
-
-test('search command redacts outer collector errors', async () => {
-  const privateErrorDetails = 'private relocated query /home/kc/private-inventory.db';
-  const interaction = makeInteraction({
-    location: 'boise',
-    make: 'TOYOTA',
-    model: 'CAMRY',
-    year: '2005',
-    status: 'ACTIVE',
-  });
-  let queryCalls = 0;
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => {
-        queryCalls += 1;
-        if (queryCalls === 1) {
-          return [makeVehicleRow()];
-        }
-        throw new EvalError(privateErrorDetails);
-      },
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-      const relocateCustomId = interaction.replies[0].components[2].components[0].data.custom_id;
-      const selectInteraction = {
-        customId: relocateCustomId,
-        values: ['caldwell'],
-        user: { id: 'user-1', tag: 'user-1#0001' },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      const consoleCalls = await captureConsole(async () => {
-        await interaction.message.collector.emitCollect(selectInteraction);
-      });
-
-      assert.deepEqual(selectInteraction.replyCalls, [{
-        content: 'An error occurred while processing your request.',
-        ephemeral: true,
-      }]);
-      assert.match(
-        joinedConsoleText(consoleCalls),
-        /Error processing button interaction: EvalError/
-      );
-      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
     }
   );
 });
