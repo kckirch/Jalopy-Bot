@@ -8,6 +8,8 @@ const { spawn } = require('node:child_process');
 const sqlite3 = require('sqlite3').verbose();
 const {
   buildPublicInventorySnapshot,
+} = require('../src/api/publicInventorySnapshotBuilder');
+const {
   createPublicInventorySnapshotProvider,
 } = require('../src/api/publicInventorySnapshot');
 const {
