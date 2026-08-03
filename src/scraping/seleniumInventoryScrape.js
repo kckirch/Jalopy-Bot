@@ -9,11 +9,19 @@ function normalizeYardId(yardId) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function setElementValue(driver, elementId, value) {
+  return driver.executeScript(
+    'document.getElementById(arguments[0]).value = arguments[1];',
+    elementId,
+    value
+  );
+}
+
 async function scrapeMakeModel(driver, yardId, make, model, sessionID, upsertVehicle) {
-  await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+  await setElementValue(driver, 'car-model', model);
   await driver.executeScript(`document.getElementById('car-make').dispatchEvent(new Event('change'));`);
   await driver.sleep(1000);
-  await driver.executeScript(`document.getElementById('car-model').value = '${model}';`);
+  await setElementValue(driver, 'car-model', model);
   await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
   await driver.wait(until.elementLocated(By.css('.table-responsive table')), 10000);
@@ -43,10 +51,10 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID, hasMu
   console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
 
   if (hasMultipleLocations) {
-    await driver.executeScript(`document.getElementById('yard-id').value = '${yardId}';`);
+    await setElementValue(driver, 'yard-id', yardId);
   }
 
-  await driver.executeScript(`document.getElementById('car-make').value = '${make}';`);
+  await setElementValue(driver, 'car-make', make);
   await driver.executeScript(`document.getElementById('searchinventory').submit();`);
 
   if (make === 'ANY') {
@@ -60,7 +68,7 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID, hasMu
       const currentMake = await makeOptions[i].getAttribute('value');
       if (currentMake) {
         processedMakeCount += 1;
-        await driver.executeScript(`document.getElementById('car-make').value = '${currentMake}';`);
+        await setElementValue(driver, 'car-make', currentMake);
         await driver.executeScript(`document.getElementById('searchinventory').submit();`);
         const makeRows = await scrapeMakeModel(driver, yardId, currentMake, model, sessionID, upsertVehicle);
         totalRows += makeRows;
@@ -99,7 +107,6 @@ async function scrapeWithSelenium(options, deps = {}) {
   chromeOptions.addArguments('--disable-gpu');
   chromeOptions.addArguments('--headless');
   chromeOptions.addArguments('excludeSwitches=enable-logging');
-  chromeOptions.addArguments('--ignore-certificate-errors');
   chromeOptions.addArguments('--allow-running-insecure-content');
 
   let builder = new Builder().forBrowser('chrome').setChromeOptions(chromeOptions);
@@ -131,7 +138,7 @@ async function scrapeWithSelenium(options, deps = {}) {
         if (normalizedYardId !== null) {
           scrapedYardIds.add(normalizedYardId);
         }
-        await driver.executeScript(`document.getElementById('yard-id').value = '${options.yardId}';`);
+        await setElementValue(driver, 'yard-id', options.yardId);
         await driver.executeScript(`document.getElementById('searchinventory').submit();`);
         await scrapeYardMakeModel(
           driver,
@@ -153,7 +160,7 @@ async function scrapeWithSelenium(options, deps = {}) {
             if (normalizedYardId !== null) {
               scrapedYardIds.add(normalizedYardId);
             }
-            await driver.executeScript(`document.getElementById('yard-id').value = '${currentYardId}';`);
+            await setElementValue(driver, 'yard-id', currentYardId);
             await driver.executeScript(`document.getElementById('searchinventory').submit();`);
             await scrapeYardMakeModel(
               driver,
