@@ -232,3 +232,112 @@ test('getAllSavedSearches returns rows across users', async () => {
   const rows = await savedSearchManager.getAllSavedSearches();
   assert.equal(rows.length, 2);
 });
+
+test('setSavedSearchFrequency persists the selected frequency', async () => {
+  const insertedId = await savedSearchManager.addSavedSearch(
+    'user-frequency',
+    'frequency#1',
+    '1020',
+    'BOISE',
+    'TOYOTA',
+    'CAMRY',
+    'ANY',
+    'ACTIVE',
+    ''
+  );
+
+  await savedSearchManager.setSavedSearchFrequency(insertedId, 'paused');
+
+  const rows = await savedSearchManager.getSavedSearches('user-frequency');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].frequency, 'paused');
+});
+
+test('checkExistingSearch rejects and redacts database lookup failures', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-lookup';
+  const originalGet = db.get.bind(db);
+  db.get = function getWithFailure(_sql, _params, callback) {
+    callback(new Error(privateErrorDetails));
+    return this;
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      await assert.rejects(
+        savedSearchManager.checkExistingSearch(
+          'user-fail',
+          '1020',
+          'TOYOTA',
+          'CAMRY',
+          'ANY',
+          'ACTIVE'
+        ),
+        (error) => error.message === privateErrorDetails
+      );
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, /SQL error checking for an existing saved search: Error/);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
+  } finally {
+    db.get = originalGet;
+  }
+});
+
+test('frequency updates and deletes reject and redact database write failures', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-write';
+  const originalRun = db.run.bind(db);
+  db.run = function runWithFailure(_sql, _params, callback) {
+    callback(new Error(privateErrorDetails));
+    return this;
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      await assert.rejects(
+        savedSearchManager.setSavedSearchFrequency(123, 'paused'),
+        (error) => error.message === privateErrorDetails
+      );
+      await assert.rejects(
+        savedSearchManager.deleteSavedSearch(123),
+        (error) => error.message === privateErrorDetails
+      );
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, /Error updating saved search frequency: Error/);
+    assert.match(logOutput, /Error deleting saved search: Error/);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
+  } finally {
+    db.run = originalRun;
+  }
+});
+
+test('saved-search reads reject and redact database query failures', async () => {
+  const privateErrorDetails = 'private-user /home/kc/private-read';
+  const originalAll = db.all.bind(db);
+  db.all = function allWithFailure(_sql, _params, callback) {
+    callback(new Error(privateErrorDetails));
+    return this;
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      await assert.rejects(
+        savedSearchManager.getSavedSearches('user-fail'),
+        (error) => error.message === privateErrorDetails
+      );
+      await assert.rejects(
+        savedSearchManager.getAllSavedSearches(),
+        (error) => error.message === privateErrorDetails
+      );
+    });
+
+    const logOutput = joinedConsoleText(consoleCalls);
+    assert.match(logOutput, /Failed to retrieve saved searches: Error/);
+    assert.match(logOutput, /Failed to retrieve all saved searches: Error/);
+    assert.equal(logOutput.includes(privateErrorDetails), false);
+  } finally {
+    db.all = originalAll;
+  }
+});
