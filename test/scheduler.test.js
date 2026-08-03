@@ -6,7 +6,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
 const universalWebScrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
-const utilsPath = path.join(repoRoot, 'src/bot/utils/utils.js');
+const sessionIdPath = path.join(repoRoot, 'src/utils/sessionId.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
 const cronPath = require.resolve('node-cron', { paths: [repoRoot] });
@@ -16,7 +16,7 @@ async function withSchedulerMocks(mocks, runTest) {
   const previousCron = require.cache[cronPath];
   const previousUniversal = require.cache[universalWebScrapePath];
   const previousDailyTasks = require.cache[dailyTasksPath];
-  const previousUtils = require.cache[utilsPath];
+  const previousSessionId = require.cache[sessionIdPath];
   const previousSessionCheck = require.cache[sessionCheckPath];
 
   require.cache[cronPath] = {
@@ -37,9 +37,9 @@ async function withSchedulerMocks(mocks, runTest) {
     loaded: true,
     exports: { processDailySavedSearches: mocks.processDailySavedSearches },
   };
-  require.cache[utilsPath] = {
-    id: utilsPath,
-    filename: utilsPath,
+  require.cache[sessionIdPath] = {
+    id: sessionIdPath,
+    filename: sessionIdPath,
     loaded: true,
     exports: { getSessionID: mocks.getSessionID },
   };
@@ -72,8 +72,8 @@ async function withSchedulerMocks(mocks, runTest) {
     if (previousDailyTasks) require.cache[dailyTasksPath] = previousDailyTasks;
     else delete require.cache[dailyTasksPath];
 
-    if (previousUtils) require.cache[utilsPath] = previousUtils;
-    else delete require.cache[utilsPath];
+    if (previousSessionId) require.cache[sessionIdPath] = previousSessionId;
+    else delete require.cache[sessionIdPath];
 
     if (previousSessionCheck) require.cache[sessionCheckPath] = previousSessionCheck;
     else delete require.cache[sessionCheckPath];

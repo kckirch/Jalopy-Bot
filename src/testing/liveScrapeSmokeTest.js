@@ -170,7 +170,7 @@ async function runLiveScrapeSmokeTest({
   const {
     junkyards = require('../config/junkyards'),
     convertLocationToYardId = require('../bot/utils/locationUtils').convertLocationToYardId,
-    getSessionID = require('../bot/utils/utils').getSessionID,
+    getSessionID = require('../utils/sessionId').getSessionID,
     universalWebScrape = require('../scraping/universalWebScrape').universalWebScrape,
     databaseModule = require('../database/database'),
   } = deps;

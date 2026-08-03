@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const { universalWebScrape } = require('../scraping/universalWebScrape');
 const { processDailySavedSearches } = require('../notifications/dailyTasks');
-const { getSessionID } = require('../bot/utils/utils');
+const { getSessionID } = require('../utils/sessionId');
 const { checkSessionUpdates } = require('../notifications/sessionCheck');
 const junkyards = require('../config/junkyards');
 const { withScrapeLock } = require('../scraping/scrapeLock');

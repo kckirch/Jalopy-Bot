@@ -2,7 +2,7 @@
 
 const { universalWebScrape } = require('../../scraping/universalWebScrape');
 const { EmbedBuilder } = require('discord.js');
-const { getSessionID } = require('../utils/utils');
+const { getSessionID } = require('../../utils/sessionId');
 const { convertLocationToYardId } = require('../utils/locationUtils');
 const junkyards = require('../../config/junkyards');
 const { withScrapeLock } = require('../../scraping/scrapeLock');
