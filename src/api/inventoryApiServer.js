@@ -48,6 +48,18 @@ function openReadOnlyDatabase(databasePath) {
   });
 }
 
+function closeDatabase(database) {
+  return new Promise((resolve, reject) => {
+    database.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 function createSnapshotProvider(options, db, vehicleDbPath, snapshotPath) {
   if (options.snapshotProvider) return options.snapshotProvider;
   return createPublicInventorySnapshotProvider({
@@ -63,25 +75,26 @@ function createSnapshotProvider(options, db, vehicleDbPath, snapshotPath) {
   });
 }
 
-function prewarmSnapshot(snapshotProvider) {
-  return Promise.resolve()
-    .then(() => {
+async function prewarmSnapshot(snapshotProvider) {
+  try {
+    const snapshot = await Promise.resolve().then(() => {
       if (typeof snapshotProvider.refreshSnapshot === 'function') {
         return snapshotProvider.refreshSnapshot();
       }
       return snapshotProvider.getSnapshot();
-    })
-    .then((snapshot) => {
-      console.log(
-        `[inventory-api] public snapshot ready with ${snapshot.vehicleCount} vehicles`
-      );
-    })
-    .catch((error) => {
-      console.error(
-        '[inventory-api] failed to prewarm public vehicle snapshot:',
-        summarizeError(error)
-      );
     });
+
+    console.log(
+      `[inventory-api] public snapshot ready with ${snapshot.vehicleCount} vehicles`
+    );
+    return snapshot;
+  } catch (error) {
+    console.error(
+      '[inventory-api] failed to prewarm public vehicle snapshot:',
+      summarizeError(error)
+    );
+    throw error;
+  }
 }
 
 async function startInventoryApiServer(options = {}) {
@@ -118,6 +131,17 @@ async function startInventoryApiServer(options = {}) {
     vehicleDbPath,
     snapshotPath
   );
+
+  try {
+    await prewarmSnapshot(snapshotProvider);
+  } catch (error) {
+    await closeDatabase(db).catch(() => {});
+    if (ownsSnapshotDirectory) {
+      fs.rmSync(publicSnapshotDirectory, { recursive: true, force: true });
+    }
+    throw error;
+  }
+
   const requestHandler = createInventoryApiRequestHandler({
     allowedOrigins,
     apiKey,
@@ -129,7 +153,6 @@ async function startInventoryApiServer(options = {}) {
 
   server.listen(port, host, () => {
     console.log(`[inventory-api] listening on http://${host}:${port}`);
-    prewarmSnapshot(snapshotProvider);
   });
 
   const shutdown = () => {
