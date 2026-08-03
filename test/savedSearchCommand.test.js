@@ -5,6 +5,10 @@ const { captureConsole, joinedConsoleText } = require('../test-support/consoleCa
 
 const repoRoot = path.resolve(__dirname, '..');
 const savedSearchCommandPath = path.join(repoRoot, 'src/bot/commands/savedSearchCommand.js');
+const savedSearchSessionHandlerPath = path.join(
+  repoRoot,
+  'src/bot/handlers/savedSearchSessionHandler.js'
+);
 const savedSearchManagerPath = path.join(repoRoot, 'src/database/savedSearchManager.js');
 const vehicleQueryManagerPath = path.join(repoRoot, 'src/database/vehicleQueryManager.js');
 
@@ -38,6 +42,18 @@ class FakeCollector {
 
 function getButtonByLabel(payload, label) {
   return payload.components[0].components.find((button) => button.data.label === label);
+}
+
+function makeVehicleRow(index) {
+  return {
+    vehicle_year: 2000 + index,
+    vehicle_make: 'TOYOTA',
+    vehicle_model: 'CAMRY',
+    yard_name: 'BOISE',
+    row_number: index + 1,
+    first_seen: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+    last_updated: new Date(Date.UTC(2026, 1, index + 1)).toISOString(),
+  };
 }
 
 function makeInteraction(userId = 'user-1', location = null) {
@@ -74,6 +90,8 @@ function makeInteraction(userId = 'user-1', location = null) {
 
 async function withSavedSearchCommandMocks(mocks, runTest) {
   const previousSavedSearchCommand = require.cache[savedSearchCommandPath];
+  const previousSavedSearchSessionHandler =
+    require.cache[savedSearchSessionHandlerPath];
   const previousSavedSearchManager = require.cache[savedSearchManagerPath];
   const previousVehicleQueryManager = require.cache[vehicleQueryManagerPath];
 
@@ -98,6 +116,7 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
     },
   };
 
+  delete require.cache[savedSearchSessionHandlerPath];
   delete require.cache[savedSearchCommandPath];
 
   try {
@@ -106,6 +125,13 @@ async function withSavedSearchCommandMocks(mocks, runTest) {
   } finally {
     if (previousSavedSearchCommand) require.cache[savedSearchCommandPath] = previousSavedSearchCommand;
     else delete require.cache[savedSearchCommandPath];
+
+    if (previousSavedSearchSessionHandler) {
+      require.cache[savedSearchSessionHandlerPath] =
+        previousSavedSearchSessionHandler;
+    } else {
+      delete require.cache[savedSearchSessionHandlerPath];
+    }
 
     if (previousSavedSearchManager) require.cache[savedSearchManagerPath] = previousSavedSearchManager;
     else delete require.cache[savedSearchManagerPath];
@@ -223,6 +249,107 @@ test('run button switches to /search-style results view with pagination controls
   assert.ok(embedData.fields.some((field) => /TOYOTA CAMRY/i.test(field.name)));
   const labels = updatedPayload.components[0].components.map((button) => button.data.label);
   assert.deepEqual(labels, ['Previous', 'Next', 'Back To Saved', 'Delete', 'Pause Alerts']);
+});
+
+test('results pagination stays inside the active saved-search session', async () => {
+  const interaction = makeInteraction('user-results-pages');
+  const updates = [];
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 100,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'TOYOTA',
+          model: 'CAMRY',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+      queryVehicles: async () =>
+        Array.from({ length: 21 }, (_, index) => makeVehicleRow(index)),
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      const runCustomId = getButtonByLabel(
+        interaction.editReplyCalls[0],
+        'Run'
+      ).data.custom_id;
+
+      const emitAction = async (customId) => {
+        await interaction.__collector.emitCollect({
+          customId,
+          user: { id: 'user-results-pages' },
+          async update(payload) {
+            updates.push(payload);
+          },
+          async reply() {},
+        });
+      };
+
+      await emitAction(runCustomId);
+      await emitAction(getButtonByLabel(updates[0], 'Next').data.custom_id);
+      await emitAction(getButtonByLabel(updates[1], 'Previous').data.custom_id);
+    }
+  );
+
+  assert.deepEqual(
+    updates.map((payload) => payload.embeds[0].data.footer.text),
+    ['Page 1 of 2', 'Page 2 of 2', 'Page 1 of 2']
+  );
+});
+
+test('stale result controls and unknown actions receive bounded replies', async () => {
+  const interaction = makeInteraction('user-stale-actions');
+  const replies = [];
+
+  await withSavedSearchCommandMocks(
+    {
+      getSavedSearches: async () => [
+        {
+          id: 102,
+          yard_id: '1020',
+          yard_name: 'BOISE',
+          make: 'HONDA',
+          model: 'CIVIC',
+          year_range: 'ANY',
+          status: 'ACTIVE',
+          frequency: 'daily',
+          create_date: new Date().toISOString(),
+          update_date: new Date().toISOString(),
+        },
+      ],
+    },
+    async (handleSavedSearchCommand) => {
+      await handleSavedSearchCommand(interaction);
+      const emitAction = async (customId) => {
+        await interaction.__collector.emitCollect({
+          customId,
+          user: { id: 'user-stale-actions' },
+          async update() {},
+          async reply(payload) {
+            replies.push(payload);
+          },
+        });
+      };
+
+      await emitAction('rnext');
+      await emitAction('unknown');
+    }
+  );
+
+  assert.deepEqual(replies, [
+    {
+      content: 'No search results are currently active.',
+      ephemeral: true,
+    },
+    { content: 'Unknown action.', ephemeral: true },
+  ]);
 });
 
 test('back-to-saved button returns from results view to saved carousel view', async () => {
