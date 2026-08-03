@@ -1,25 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
 
 const {
   buildQuickActionCustomId,
   QUICK_ACTION_PREFIX,
 } = require('../src/bot/utils/interactionParameters');
-
-const repoRoot = path.resolve(__dirname, '..');
-const handlerPath = path.join(
-  repoRoot,
-  'src/bot/handlers/savedSearchQuickActionHandler.js'
-);
-const vehicleQueryManagerPath = path.join(
-  repoRoot,
-  'src/database/vehicleQueryManager.js'
-);
-const savedSearchManagerPath = path.join(
-  repoRoot,
-  'src/database/savedSearchManager.js'
-);
+const {
+  handleSavedSearchQuickActionButton,
+} = require('../src/bot/handlers/savedSearchQuickActionHandler');
 
 function buildQuickHash(action, payload) {
   return buildQuickActionCustomId(action, payload).slice(
@@ -42,47 +30,19 @@ function makeInteraction(userId = 'user-1') {
 }
 
 async function withHandlerMocks(mocks, runTest) {
-  const previousHandler = require.cache[handlerPath];
-  const previousQueryManager = require.cache[vehicleQueryManagerPath];
-  const previousSavedSearchManager = require.cache[savedSearchManagerPath];
-
-  require.cache[vehicleQueryManagerPath] = {
-    id: vehicleQueryManagerPath,
-    filename: vehicleQueryManagerPath,
-    loaded: true,
-    exports: {
-      queryVehicles: mocks.queryVehicles || (async () => []),
-    },
+  const dependencies = {
+    queryVehicles: mocks.queryVehicles || (async () => []),
+    deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
+    getSavedSearches: mocks.getSavedSearches || (async () => []),
   };
-  require.cache[savedSearchManagerPath] = {
-    id: savedSearchManagerPath,
-    filename: savedSearchManagerPath,
-    loaded: true,
-    exports: {
-      deleteSavedSearch: mocks.deleteSavedSearch || (async () => {}),
-      getSavedSearches: mocks.getSavedSearches || (async () => []),
-    },
-  };
-  delete require.cache[handlerPath];
-
-  try {
-    await runTest(require(handlerPath));
-  } finally {
-    if (previousHandler) require.cache[handlerPath] = previousHandler;
-    else delete require.cache[handlerPath];
-
-    if (previousQueryManager) {
-      require.cache[vehicleQueryManagerPath] = previousQueryManager;
-    } else {
-      delete require.cache[vehicleQueryManagerPath];
-    }
-
-    if (previousSavedSearchManager) {
-      require.cache[savedSearchManagerPath] = previousSavedSearchManager;
-    } else {
-      delete require.cache[savedSearchManagerPath];
-    }
-  }
+  await runTest({
+    handleSavedSearchQuickActionButton: (interaction, quickHash) =>
+      handleSavedSearchQuickActionButton(
+        interaction,
+        quickHash,
+        dependencies
+      ),
+  });
 }
 
 const basePayload = {
@@ -366,18 +326,13 @@ test('view clamps an out-of-range position to the final saved search', async () 
 });
 
 test('unsupported quick actions receive a bounded ephemeral reply', async () => {
+  let savedSearchReads = 0;
   await withHandlerMocks(
     {
-      getSavedSearches: async () => [
-        {
-          id: 1,
-          yard_id: '1020',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-      ],
+      getSavedSearches: async () => {
+        savedSearchReads += 1;
+        return [];
+      },
     },
     async ({ handleSavedSearchQuickActionButton }) => {
       const interaction = makeInteraction();
@@ -393,6 +348,7 @@ test('unsupported quick actions receive a bounded ephemeral reply', async () => 
         },
       ]);
       assert.equal(interaction.updates.length, 0);
+      assert.equal(savedSearchReads, 0);
     }
   );
 });
