@@ -1,11 +1,3 @@
-const {
-  deleteSavedSearch,
-  setSavedSearchFrequency,
-} = require('../../database/savedSearchManager');
-const {
-  getModelSuggestionsForNoResults,
-  queryVehicles,
-} = require('../../database/vehicleQueryManager');
 const { summarizeError } = require('../../utils/errorSummary');
 const {
   createSavedSearchSession,
@@ -15,12 +7,6 @@ const {
 } = require('../utils/vehicleSearchResults');
 
 const SAVED_SEARCH_SESSION_MS = 2 * 60 * 1000;
-const DEFAULT_DEPENDENCIES = Object.freeze({
-  deleteSavedSearch,
-  getModelSuggestionsForNoResults,
-  queryVehicles,
-  setSavedSearchFrequency,
-});
 
 async function runSavedSearch(interaction, session, index, dependencies) {
   const currentSearch = session.getSearch(index);
@@ -130,7 +116,7 @@ async function handleSessionAction(
 async function startSavedSearchSession(
   interaction,
   savedSearches,
-  dependencies = DEFAULT_DEPENDENCIES
+  dependencies
 ) {
   const session = createSavedSearchSession(savedSearches);
   await interaction.editReply(session.buildSavedViewPayload());
