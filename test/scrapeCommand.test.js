@@ -6,7 +6,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const scrapeCommandPath = path.join(repoRoot, 'src/bot/commands/scrapeCommand.js');
 const universalWebScrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
-const utilsPath = path.join(repoRoot, 'src/bot/utils/utils.js');
+const sessionIdPath = path.join(repoRoot, 'src/utils/sessionId.js');
 
 function createInteraction({ location, make, model }) {
   const values = { location, make, model };
@@ -51,7 +51,7 @@ function createInteraction({ location, make, model }) {
 
 async function withScrapeCommandMocks({ scrapeMock, sessionID }, runTest) {
   const previousScrape = require.cache[universalWebScrapePath];
-  const previousUtils = require.cache[utilsPath];
+  const previousSessionId = require.cache[sessionIdPath];
   const previousCommand = require.cache[scrapeCommandPath];
 
   require.cache[universalWebScrapePath] = {
@@ -60,9 +60,9 @@ async function withScrapeCommandMocks({ scrapeMock, sessionID }, runTest) {
     loaded: true,
     exports: { universalWebScrape: scrapeMock },
   };
-  require.cache[utilsPath] = {
-    id: utilsPath,
-    filename: utilsPath,
+  require.cache[sessionIdPath] = {
+    id: sessionIdPath,
+    filename: sessionIdPath,
     loaded: true,
     exports: { getSessionID: () => sessionID },
   };
@@ -75,8 +75,8 @@ async function withScrapeCommandMocks({ scrapeMock, sessionID }, runTest) {
     if (previousScrape) require.cache[universalWebScrapePath] = previousScrape;
     else delete require.cache[universalWebScrapePath];
 
-    if (previousUtils) require.cache[utilsPath] = previousUtils;
-    else delete require.cache[utilsPath];
+    if (previousSessionId) require.cache[sessionIdPath] = previousSessionId;
+    else delete require.cache[sessionIdPath];
 
     if (previousCommand) require.cache[scrapeCommandPath] = previousCommand;
     else delete require.cache[scrapeCommandPath];

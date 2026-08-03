@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { getSessionID } = require('../src/bot/utils/utils');
+const { getSessionID } = require('../src/utils/sessionId');
 
 test('getSessionID returns YYYYMMDD in UTC', () => {
   const before = new Date().toISOString().slice(0, 10).replace(/-/g, '');
