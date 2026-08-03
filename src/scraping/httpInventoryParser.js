@@ -20,8 +20,23 @@ function resolveFormMeta($, inventoryUrl, previousMeta = null) {
   }
 
   const method = String(form.attr('method') || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'POST') {
+    throw new Error('Inventory search form uses an unsupported method.');
+  }
+
+  const inventoryBaseUrl = new URL(inventoryUrl);
+  if (inventoryBaseUrl.protocol !== 'http:' && inventoryBaseUrl.protocol !== 'https:') {
+    throw new Error('Inventory URL must use HTTP or HTTPS.');
+  }
   const action = String(form.attr('action') || '').trim();
-  const actionUrl = new URL(action || inventoryUrl, inventoryUrl).toString();
+  const actionUrl = new URL(action || inventoryUrl, inventoryBaseUrl);
+  if (
+    actionUrl.origin !== inventoryBaseUrl.origin ||
+    actionUrl.username ||
+    actionUrl.password
+  ) {
+    throw new Error('Inventory search form action must stay on the configured origin.');
+  }
 
   const hiddenInputs = {};
   form.find('input[type="hidden"][name]').each((index, input) => {
@@ -43,7 +58,7 @@ function resolveFormMeta($, inventoryUrl, previousMeta = null) {
 
   return {
     method,
-    actionUrl,
+    actionUrl: actionUrl.toString(),
     hiddenInputs,
     fields: {
       yard: resolveFieldName('#yard-id', 'yard-id'),
