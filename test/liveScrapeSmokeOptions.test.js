@@ -33,6 +33,28 @@ test('smoke options preserve current empty-value parsing behavior', () => {
   assert.equal(parseArgs(['--db-path']).dbPath, '');
 });
 
+test('smoke options apply each option-specific normalizer', () => {
+  const parsed = parseArgs([
+    '--location', '  Boise  ',
+    '--locations', ' boise, , caldwell ',
+    '--make', '  Toyota ',
+    '--model', ' Camry  ',
+    '--engine', ' HTTP ',
+    '--db-path', ' /tmp/smoke.db ',
+    '--keep-db',
+  ]);
+
+  assert.deepEqual(parsed, {
+    location: 'Boise',
+    locations: ['boise', 'caldwell'],
+    make: 'Toyota',
+    model: 'Camry',
+    engine: 'http',
+    dbPath: '/tmp/smoke.db',
+    keepDb: true,
+  });
+});
+
 test('smoke target resolution normalizes locations and maps multiple yards', () => {
   const seenLocations = [];
   const convertLocationToYardId = (location) => {
