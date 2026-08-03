@@ -2,7 +2,6 @@ const {
   insertOrUpdateVehicle,
   markInactiveVehicles,
 } = require('../database/vehicleDbInventoryManager');
-const { summarizeError } = require('../utils/errorSummary');
 const {
   createHttpClientState,
   fetchMakesForYard,
@@ -15,7 +14,12 @@ const {
   extractResultRows,
   normalizeSearchValue,
 } = require('./httpInventoryParser');
-const { normalizeYardId } = require('./yardIdNormalization');
+const {
+  createScrapeRun,
+  logScrapeDuration,
+  logScrapeRequest,
+  reconcileScrapeRun,
+} = require('./scrapeLifecycle');
 
 async function scrapeMakeModelHttp(
   clientState,
@@ -237,22 +241,12 @@ async function scrapeWithHttp(options, dependencies = {}) {
     dependencies.insertOrUpdateVehicle || insertOrUpdateVehicle;
   const reconcileInactiveVehicles =
     dependencies.markInactiveVehicles || markInactiveVehicles;
-  let upsertCount = 0;
-  const trackingUpsertVehicle = async (...args) => {
-    await upsertVehicle(...args);
-    upsertCount += 1;
-  };
-  const startTime = Date.now();
-  const scrapedYardIds = new Set();
-  let scrapeSucceeded = false;
+  const run = createScrapeRun(upsertVehicle);
   const runState = { hadSoftFailure: false };
   const clientState = createHttpClientState(dependencies);
 
   try {
-    console.log('🔍 Scraping for:');
-    console.log(`   🏞️ Yard ID: ${options.yardId || 'ALL'}`);
-    console.log(`   🚗 Make: ${options.make}`);
-    console.log(`   📋 Model: ${options.model}`);
+    logScrapeRequest(options);
 
     const initialPage = await loadInitialInventoryPage(
       clientState,
@@ -267,15 +261,12 @@ async function scrapeWithHttp(options, dependencies = {}) {
       inventoryUrl: options.inventoryUrl,
       hasMultipleLocations: options.hasMultipleLocations === true,
       formMeta: initialPage.formMeta,
-      upsertVehicle: trackingUpsertVehicle,
+      upsertVehicle: run.upsertVehicle,
       runState,
     };
 
     for (const yardId of yardIdsToScrape) {
-      const normalizedYardId = normalizeYardId(yardId);
-      if (normalizedYardId !== null) {
-        scrapedYardIds.add(normalizedYardId);
-      }
+      run.trackYard(yardId);
       await scrapeYardMakeModelHttp(
         clientState,
         context,
@@ -286,35 +277,12 @@ async function scrapeWithHttp(options, dependencies = {}) {
       );
     }
 
-    scrapeSucceeded = true;
+    run.markSucceeded();
   } finally {
-    try {
-      if (
-        options.shouldMarkInactive === true &&
-        scrapeSucceeded &&
-        !runState.hadSoftFailure &&
-        scrapedYardIds.size > 0 &&
-        upsertCount > 0
-      ) {
-        await reconcileInactiveVehicles(options.sessionID, {
-          yardIds: [...scrapedYardIds],
-        });
-      } else {
-        console.log(
-          `Skipping inactive reconciliation. shouldMarkInactive=${options.shouldMarkInactive === true}, scrapeSucceeded=${scrapeSucceeded}, softFailure=${runState.hadSoftFailure}, scopedYards=${scrapedYardIds.size}, upserts=${upsertCount}`
-        );
-      }
-    } catch (markInactiveError) {
-      console.error(
-        'Error during inactive reconciliation:',
-        summarizeError(markInactiveError)
-      );
-    }
-
-    const duration = Date.now() - startTime;
-    const minutes = Math.floor(duration / 60000);
-    const seconds = ((duration % 60000) / 1000).toFixed(0);
-    console.log(`Scraping Duration: ${minutes} minutes and ${seconds} seconds.`);
+    await reconcileScrapeRun(run, options, reconcileInactiveVehicles, {
+      hadSoftFailure: runState.hadSoftFailure,
+    });
+    logScrapeDuration(run.startedAt);
   }
 }
 
