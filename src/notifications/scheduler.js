@@ -6,6 +6,7 @@ const { checkSessionUpdates } = require('../notifications/sessionCheck');
 const junkyards = require('../config/junkyards');
 const { withScrapeLock } = require('../scraping/scrapeLock');
 const { summarizeError } = require('../utils/errorSummary');
+const { formatScrapeLogValue } = require('../scraping/scrapeLogging');
 
 const DEFAULT_SCHEDULER_TIMEZONE = 'Etc/GMT+7'; // Mountain Standard Time (MST, UTC-7), no DST shift.
 
@@ -50,11 +51,18 @@ async function scrapeAllJunkyards(sessionID) {
       };
 
       try {
-        console.log(`Starting scraping for ${junkyardKey}`);
+        console.log(
+          `Starting configured scrape: ${formatScrapeLogValue(junkyardKey)}`
+        );
         await universalWebScrape(options);
-        console.log(`Scraping completed for ${junkyardKey}`);
+        console.log(
+          `Completed configured scrape: ${formatScrapeLogValue(junkyardKey)}`
+        );
       } catch (error) {
-        console.error(`Error scraping ${junkyardKey}:`, summarizeError(error));
+        console.error(
+          `Error scraping ${formatScrapeLogValue(junkyardKey)}:`,
+          summarizeError(error)
+        );
         failures.push({ junkyardKey, error });
       }
     }
@@ -89,13 +97,14 @@ function startScheduledTasks() {
   scheduledTasksStarted = true;
   const schedulerTimezone = resolveSchedulerTimezone();
   const scheduleOptions = { timezone: schedulerTimezone, noOverlap: true };
-  console.log(`Scheduler timezone: ${schedulerTimezone}. Daily scrape at 05:00 and notifications at 05:45.`);
+  console.log(
+    `Scheduler timezone: ${formatScrapeLogValue(schedulerTimezone)}. Daily scrape at 05:00 and notifications at 05:45.`
+  );
 
   // Scheduled scraping every day at 05:00 MST by default.
   cron.schedule('0 5 * * *', async () => {
     console.log('Scheduled scraping started.');
     const sessionID = getSessionID();
-    console.log(`Session ID: ${sessionID}`);
 
     try {
       await retryOperation(() => {

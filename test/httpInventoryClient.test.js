@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const cheerio = require('cheerio');
 const {
+  fetchModelsForMake,
   loadInitialInventoryPage,
   submitSearch,
 } = require('../src/scraping/httpInventoryClient');
@@ -131,6 +132,50 @@ test('HTTP scraper debug output does not include hidden form values', async () =
     assert.equal(output.includes('sensitive-csrf-token'), false);
     assert.equal(output.includes('TOYOTA'), false);
     assert.equal(output.includes('CAMRY'), false);
+  } finally {
+    if (previousDebugValue === undefined) {
+      delete process.env.SCRAPER_HTTP_DEBUG;
+    } else {
+      process.env.SCRAPER_HTTP_DEBUG = previousDebugValue;
+    }
+  }
+});
+
+test('HTTP scraper debug failures omit raw lookup parameters and errors', async () => {
+  const previousDebugValue = process.env.SCRAPER_HTTP_DEBUG;
+  const privateMake = 'PRIVATE-MAKE\nforged-log-line';
+  const privateDetails = '/home/private/inventory.db token=secret';
+  process.env.SCRAPER_HTTP_DEBUG = 'true';
+  const runState = { hadSoftFailure: false };
+  const clientState = {
+    cookieHeader: '',
+    httpClient: {
+      async request() {
+        throw new TypeError(privateDetails);
+      },
+    },
+  };
+
+  try {
+    const consoleCalls = await captureConsole(async () => {
+      const models = await fetchModelsForMake(
+        clientState,
+        'https://inventory.example/',
+        '1020',
+        privateMake,
+        runState,
+        { hasMultipleLocations: true }
+      );
+      assert.deepEqual(models, []);
+    });
+    const output = joinedConsoleText(consoleCalls);
+
+    assert.match(output, /fetchModelsForMake failed/);
+    assert.match(output, /TypeError/);
+    assert.equal(output.includes(privateMake), false);
+    assert.equal(output.includes(privateDetails), false);
+    assert.equal(output.includes('1020'), false);
+    assert.equal(runState.hadSoftFailure, true);
   } finally {
     if (previousDebugValue === undefined) {
       delete process.env.SCRAPER_HTTP_DEBUG;

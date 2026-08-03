@@ -1,4 +1,5 @@
 const { resolveChromedriverPath } = require('./chromedriverResolver');
+const { formatScrapeLogValue } = require('./scrapeLogging');
 
 const VALID_SCRAPER_ENGINES = new Set(['auto', 'selenium', 'http']);
 
@@ -23,7 +24,7 @@ function selectScraperEngine(env = process.env) {
 
 async function universalWebScrape(options, deps = {}) {
   const engine = deps.engine || selectScraperEngine(process.env);
-  console.log(`Using scraper engine: ${engine}`);
+  console.log(`Using scraper engine: ${formatScrapeLogValue(engine)}`);
 
   if (engine === 'http') {
     const { scrapeWithHttp } = require('./httpInventoryScrape');

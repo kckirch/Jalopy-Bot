@@ -96,7 +96,7 @@ test('reconciliation failures and lifecycle logs are bounded', async () => {
   });
   const output = joinedConsoleText(consoleCalls);
 
-  assert.match(output, /Yard ID: 1020/);
+  assert.match(output, /\[scrape\] Start yard=1020 scope=filtered/);
   assert.match(output, /Error during inactive reconciliation: TypeError/);
   assert.match(output, /Scraping Duration: 1 minutes and 5 seconds\./);
   assert.equal(output.includes(privateDetails), false);

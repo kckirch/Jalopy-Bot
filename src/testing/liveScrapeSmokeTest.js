@@ -3,6 +3,10 @@ const os = require('os');
 const path = require('path');
 const { summarizeError } = require('../utils/errorSummary');
 const { YARDS } = require('../config/yards');
+const {
+  formatScrapeLogValue,
+  formatScrapeYardId,
+} = require('../scraping/scrapeLogging');
 
 const YARD_NAME_BY_ID = Object.freeze(
   Object.fromEntries(YARDS.map((yard) => [yard.id, yard.databaseName]))
@@ -181,11 +185,11 @@ async function runLiveScrapeSmokeTest({
     fs.mkdirSync(path.dirname(dbFilePath), { recursive: true });
 
     await setupDatabase();
-    logger.log(`[smoke] Using isolated DB: ${dbFilePath}`);
+    logger.log('[smoke] Using isolated database.');
     if (Array.isArray(args.locations) && args.locations.length > 0) {
-      logger.log(`[smoke] Multi-yard mode locations: ${args.locations.join(', ')}`);
+      logger.log(`[smoke] Multi-yard mode count: ${args.locations.length}`);
     } else {
-      logger.log(`[smoke] Target location: ${args.location} (single-yard mode)`);
+      logger.log('[smoke] Single-yard mode.');
     }
 
     if (Array.isArray(args.locations) && args.locations.length > 0) {
@@ -199,7 +203,9 @@ async function runLiveScrapeSmokeTest({
           throw new Error(`Missing junkyard config for key: ${target.junkyardKey}`);
         }
 
-        logger.log(`[smoke] Running full scrape (ANY/ANY) for ${target.yardId}...`);
+        logger.log(
+          `[smoke] Running full scrape for yard ${formatScrapeYardId(target.yardId)}...`
+        );
         await universalWebScrape({
           ...junkyardConfig,
           yardId: target.yardId,
@@ -222,7 +228,14 @@ async function runLiveScrapeSmokeTest({
       }
 
       logger.log('[smoke] PASS: multi-yard live scrape smoke checks succeeded.');
-      logger.log(`[smoke] Yard row counts: ${yardCounts.map((item) => `${item.yardId}=${item.count}`).join(', ')}`);
+      logger.log(
+        `[smoke] Yard row counts: ${yardCounts
+          .map(
+            (item) =>
+              `${formatScrapeYardId(item.yardId)}=${formatScrapeLogValue(item.count)}`
+          )
+          .join(', ')}`
+      );
       return { ok: true, dbFilePath, mode: 'multi-yard', yardCounts };
     }
 
@@ -231,7 +244,9 @@ async function runLiveScrapeSmokeTest({
     if (!junkyardConfig) {
       throw new Error(`Missing junkyard config for key: ${target.junkyardKey}`);
     }
-    logger.log(`[smoke] Target location: ${args.location} (yard ${target.yardId})`);
+    logger.log(
+      `[smoke] Target yard: ${formatScrapeYardId(target.yardId)}`
+    );
 
     const fullSessionId = getSessionID();
     const partialSessionId = normalizeSessionId(fullSessionId);
@@ -256,7 +271,9 @@ async function runLiveScrapeSmokeTest({
     if (!fullCountRow || Number(fullCountRow.count) <= 0) {
       throw new Error(`Smoke check failed: full scrape returned 0 rows for yard ${target.yardId}.`);
     }
-    logger.log(`[smoke] Full scrape row count for yard ${target.yardId}: ${fullCountRow.count}`);
+    logger.log(
+      `[smoke] Full scrape row count for yard ${formatScrapeYardId(target.yardId)}: ${formatScrapeLogValue(fullCountRow.count)}`
+    );
 
     const sentinelYardId = selectSentinelYard(target.yardId);
     const sentinelSession = '19990101';
@@ -281,7 +298,7 @@ async function runLiveScrapeSmokeTest({
       shouldMarkInactive: false,
     };
 
-    logger.log(`[smoke] Running partial scrape (${partialOptions.make}/${partialOptions.model})...`);
+    logger.log('[smoke] Running filtered partial scrape...');
     await universalWebScrape(partialOptions);
 
     const sentinelRow = await getSQL(
@@ -329,11 +346,18 @@ async function runLiveScrapeSmokeTest({
       await closeDb(db);
     } catch (err) {
       closeError = err;
-      logger.error('Failed to close smoke-test DB cleanly:', err);
+      logger.error(
+        'Failed to close smoke-test DB cleanly:',
+        summarizeError(err)
+      );
     }
 
     if (args.keepDb) {
-      logger.log(`[smoke] Kept isolated DB at: ${dbFilePath}`);
+      logger.log(
+        `[smoke] Kept isolated DB at: ${formatScrapeLogValue(dbFilePath, {
+          maxLength: 160,
+        })}`
+      );
     } else if (fs.existsSync(dbFilePath)) {
       fs.rmSync(dbFilePath, { force: true });
     }

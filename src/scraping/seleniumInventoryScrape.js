@@ -9,6 +9,7 @@ const {
   logScrapeRequest,
   reconcileScrapeRun,
 } = require('./scrapeLifecycle');
+const { logScrapeYardResult } = require('./scrapeLogging');
 
 function setElementValue(driver, elementId, value) {
   return driver.executeScript(
@@ -49,8 +50,6 @@ async function scrapeMakeModel(driver, yardId, make, model, sessionID, upsertVeh
 }
 
 async function scrapeYardMakeModel(driver, yardId, make, model, sessionID, hasMultipleLocations, upsertVehicle) {
-  console.log(`Scraping yard: ${yardId}, make: ${make}, model: ${model}`);
-
   if (hasMultipleLocations) {
     await setElementValue(driver, 'yard-id', yardId);
   }
@@ -73,22 +72,20 @@ async function scrapeYardMakeModel(driver, yardId, make, model, sessionID, hasMu
         await driver.executeScript(`document.getElementById('searchinventory').submit();`);
         const makeRows = await scrapeMakeModel(driver, yardId, currentMake, model, sessionID, upsertVehicle);
         totalRows += makeRows;
-        console.log(`[scrape] Yard ${yardId} make ${currentMake} rows ${makeRows}`);
       }
     }
     if (processedMakeCount === 0) {
       // Fallback for pages that do not expose populated make options reliably.
       const makeRows = await scrapeMakeModel(driver, yardId, make, model, sessionID, upsertVehicle);
       totalRows += makeRows;
-      console.log(`[scrape] Yard ${yardId} make ${make} rows ${makeRows}`);
     }
-    console.log(`[scrape] Yard ${yardId} total rows ${totalRows}`);
+    logScrapeYardResult(yardId, totalRows);
+    return totalRows;
   } else {
     const rows = await scrapeMakeModel(driver, yardId, make, model, sessionID, upsertVehicle);
-    console.log(`[scrape] Yard ${yardId} make ${make} rows ${rows}`);
+    logScrapeYardResult(yardId, rows);
+    return rows;
   }
-
-  console.log(`✅ Finished scraping yard: ${yardId}, make: ${make}, model: ${model}`);
 }
 
 async function scrapeWithSelenium(options, deps = {}) {
