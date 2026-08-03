@@ -4,7 +4,9 @@ const { QUICK_ACTION_PREFIX } = require('../utils/interactionParameters');
 async function handleButtonClick(interaction, buttonId, messageCollector = null) {
   if (buttonId.startsWith(QUICK_ACTION_PREFIX)) {
     try {
-      const { handleSavedSearchQuickActionButton } = require('../commands/searchCommand');
+      const {
+        handleSavedSearchQuickActionButton,
+      } = require('./savedSearchQuickActionHandler');
       const quickHash = buttonId.slice(QUICK_ACTION_PREFIX.length);
       await handleSavedSearchQuickActionButton(interaction, quickHash);
     } catch (error) {

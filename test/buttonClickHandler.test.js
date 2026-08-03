@@ -5,7 +5,10 @@ const { captureConsole, joinedConsoleText } = require('../test-support/consoleCa
 
 const repoRoot = path.resolve(__dirname, '..');
 const handlerPath = path.join(repoRoot, 'src/bot/handlers/buttonClickHandler.js');
-const searchCommandPath = path.join(repoRoot, 'src/bot/commands/searchCommand.js');
+const quickActionHandlerPath = path.join(
+  repoRoot,
+  'src/bot/handlers/savedSearchQuickActionHandler.js'
+);
 
 const { handleButtonClick } = require(handlerPath);
 
@@ -42,13 +45,13 @@ test('handleButtonClick non-quit does nothing and does not throw', async () => {
   await handleButtonClick(interaction, 'some-other-button');
 });
 
-test('handleButtonClick routes saved-search quick actions to search command handler', async () => {
-  const previousSearchCommand = require.cache[searchCommandPath];
+test('handleButtonClick routes saved-search quick actions to the dedicated handler', async () => {
+  const previousQuickActionHandler = require.cache[quickActionHandlerPath];
   const routedHashes = [];
 
-  require.cache[searchCommandPath] = {
-    id: searchCommandPath,
-    filename: searchCommandPath,
+  require.cache[quickActionHandlerPath] = {
+    id: quickActionHandlerPath,
+    filename: quickActionHandlerPath,
     loaded: true,
     exports: {
       handleSavedSearchQuickActionButton: async (_interaction, quickHash) => {
@@ -66,18 +69,21 @@ test('handleButtonClick routes saved-search quick actions to search command hand
     await handleButtonClick(interaction, 'sq:abc123');
     assert.deepEqual(routedHashes, ['abc123']);
   } finally {
-    if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
-    else delete require.cache[searchCommandPath];
+    if (previousQuickActionHandler) {
+      require.cache[quickActionHandlerPath] = previousQuickActionHandler;
+    } else {
+      delete require.cache[quickActionHandlerPath];
+    }
   }
 });
 
 test('handleButtonClick redacts saved-search quick-action errors', async () => {
-  const previousSearchCommand = require.cache[searchCommandPath];
+  const previousQuickActionHandler = require.cache[quickActionHandlerPath];
   const privateErrorDetails = 'private Discord user /home/kc/private-inventory.db';
 
-  require.cache[searchCommandPath] = {
-    id: searchCommandPath,
-    filename: searchCommandPath,
+  require.cache[quickActionHandlerPath] = {
+    id: quickActionHandlerPath,
+    filename: quickActionHandlerPath,
     loaded: true,
     exports: {
       handleSavedSearchQuickActionButton: async () => {
@@ -107,7 +113,10 @@ test('handleButtonClick redacts saved-search quick-action errors', async () => {
     assert.match(joinedConsoleText(consoleCalls), /Saved-search quick action failed: TypeError/);
     assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
   } finally {
-    if (previousSearchCommand) require.cache[searchCommandPath] = previousSearchCommand;
-    else delete require.cache[searchCommandPath];
+    if (previousQuickActionHandler) {
+      require.cache[quickActionHandlerPath] = previousQuickActionHandler;
+    } else {
+      delete require.cache[quickActionHandlerPath];
+    }
   }
 });
