@@ -10,10 +10,10 @@ const {
   buildPublicInventorySnapshot,
   createPublicInventorySnapshotProvider,
 } = require('../src/api/publicInventorySnapshot');
-const { __testables } = require('../src/api/inventoryApiServer');
+const {
+  sendVehicleDbFile,
+} = require('../src/api/inventoryApiRouter');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
-
-const { sendVehicleDbFile } = __testables;
 
 function openDatabase(databasePath, mode = sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE) {
   return new Promise((resolve, reject) => {
