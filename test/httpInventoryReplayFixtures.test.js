@@ -31,76 +31,112 @@ function parsePayload(config) {
   return {};
 }
 
+function resolveFixtureRoute(config) {
+  const method = String(config.method || 'GET').toUpperCase();
+  const pathname = new URL(config.url).pathname;
+  const payload = parsePayload(config);
+  const requestRoute = `${method} ${pathname}`;
+
+  if (requestRoute === 'GET /') {
+    return { key: 'inventory:initial' };
+  }
+  if (requestRoute === 'POST /Home/GetMakes') {
+    return {
+      key: `makes:${String(payload.yardId || '')}`,
+      fallbackKey: 'makes:default',
+    };
+  }
+  if (requestRoute === 'POST /Home/GetModels') {
+    const yardId = String(payload.yardId || '');
+    const makeName = String(payload.makeName || '').toUpperCase();
+    return {
+      key: `models:${yardId}:${makeName}`,
+      fallbackKey: 'models:default',
+    };
+  }
+  if (requestRoute === 'POST /') {
+    const yardId = String(payload.YardId || '1020');
+    const make = String(payload.VehicleMake || '').toUpperCase();
+    const model = String(payload.VehicleModel || '').toUpperCase();
+    return {
+      key: make ? `inventory:${yardId}:${make}:${model}` : 'inventory:initial',
+      fallbackKey: 'inventory:initial',
+    };
+  }
+
+  throw new Error(`Unexpected request in fixture replay: ${requestRoute}`);
+}
+
 function createFixtureReplayHttpClient() {
-  const fixtures = {
-    boiseInitial: readFixtureText('boise_initial.html'),
-    boiseToyotaCamry: readFixtureText('boise_toyota_camry.html'),
-    boiseToyotaCorolla: readFixtureText('boise_toyota_corolla.html'),
-    boiseHondaCivic: readFixtureText('boise_honda_civic.html'),
-    caldwellToyotaCamry: readFixtureText('caldwell_toyota_camry.html'),
-    makes1020: readFixtureJson('get_makes_1020.json'),
-    makes1021: readFixtureJson('get_makes_1021.json'),
-    models1020Toyota: readFixtureJson('get_models_1020_toyota.json'),
-    models1020Honda: readFixtureJson('get_models_1020_honda.json'),
-    models1021Toyota: readFixtureJson('get_models_1021_toyota.json'),
-  };
+  const fixturesByRoute = new Map([
+    ['inventory:initial', readFixtureText('boise_initial.html')],
+    [
+      'inventory:1020:TOYOTA:CAMRY',
+      readFixtureText('boise_toyota_camry.html'),
+    ],
+    [
+      'inventory:1020:TOYOTA:COROLLA',
+      readFixtureText('boise_toyota_corolla.html'),
+    ],
+    [
+      'inventory:1020:HONDA:CIVIC',
+      readFixtureText('boise_honda_civic.html'),
+    ],
+    [
+      'inventory:1021:TOYOTA:CAMRY',
+      readFixtureText('caldwell_toyota_camry.html'),
+    ],
+    ['makes:1020', readFixtureJson('get_makes_1020.json')],
+    ['makes:1021', readFixtureJson('get_makes_1021.json')],
+    ['makes:default', []],
+    ['models:1020:TOYOTA', readFixtureJson('get_models_1020_toyota.json')],
+    ['models:1020:HONDA', readFixtureJson('get_models_1020_honda.json')],
+    ['models:1021:TOYOTA', readFixtureJson('get_models_1021_toyota.json')],
+    ['models:default', []],
+  ]);
 
   return {
     async request(config) {
-      const method = String(config.method || 'GET').toUpperCase();
-      const pathname = new URL(config.url).pathname;
-      const payload = parsePayload(config);
-
-      if (method === 'GET' && pathname === '/') {
-        return { status: 200, headers: {}, data: fixtures.boiseInitial };
-      }
-
-      if (method === 'POST' && pathname === '/Home/GetMakes') {
-        if (String(payload.yardId) === '1020') return { status: 200, headers: {}, data: fixtures.makes1020 };
-        if (String(payload.yardId) === '1021') return { status: 200, headers: {}, data: fixtures.makes1021 };
-        return { status: 200, headers: {}, data: [] };
-      }
-
-      if (method === 'POST' && pathname === '/Home/GetModels') {
-        const yardId = String(payload.yardId || '');
-        const makeName = String(payload.makeName || '').toUpperCase();
-        if (yardId === '1020' && makeName === 'TOYOTA') {
-          return { status: 200, headers: {}, data: fixtures.models1020Toyota };
-        }
-        if (yardId === '1020' && makeName === 'HONDA') {
-          return { status: 200, headers: {}, data: fixtures.models1020Honda };
-        }
-        if (yardId === '1021' && makeName === 'TOYOTA') {
-          return { status: 200, headers: {}, data: fixtures.models1021Toyota };
-        }
-        return { status: 200, headers: {}, data: [] };
-      }
-
-      if (method === 'POST' && pathname === '/') {
-        const yardId = String(payload.YardId || '1020');
-        const make = String(payload.VehicleMake || '').toUpperCase();
-        const model = String(payload.VehicleModel || '').toUpperCase();
-
-        if (!make) return { status: 200, headers: {}, data: fixtures.boiseInitial };
-        if (yardId === '1020' && make === 'TOYOTA' && model === 'CAMRY') {
-          return { status: 200, headers: {}, data: fixtures.boiseToyotaCamry };
-        }
-        if (yardId === '1020' && make === 'TOYOTA' && model === 'COROLLA') {
-          return { status: 200, headers: {}, data: fixtures.boiseToyotaCorolla };
-        }
-        if (yardId === '1020' && make === 'HONDA' && model === 'CIVIC') {
-          return { status: 200, headers: {}, data: fixtures.boiseHondaCivic };
-        }
-        if (yardId === '1021' && make === 'TOYOTA' && model === 'CAMRY') {
-          return { status: 200, headers: {}, data: fixtures.caldwellToyotaCamry };
-        }
-        return { status: 200, headers: {}, data: fixtures.boiseInitial };
-      }
-
-      throw new Error(`Unexpected request in fixture replay: ${method} ${pathname}`);
+      const { key, fallbackKey } = resolveFixtureRoute(config);
+      const fixtureKey = fixturesByRoute.has(key) ? key : fallbackKey;
+      return { status: 200, headers: {}, data: fixturesByRoute.get(fixtureKey) };
     },
   };
 }
+
+test('fixture replay client preserves family fallbacks and rejects unknown routes', async () => {
+  const httpClient = createFixtureReplayHttpClient();
+  const makesResponse = await httpClient.request({
+    method: 'POST',
+    url: 'https://inventory.example/Home/GetMakes',
+    params: { yardId: '9999' },
+  });
+  const modelsResponse = await httpClient.request({
+    method: 'POST',
+    url: 'https://inventory.example/Home/GetModels',
+    data: new URLSearchParams({ yardId: '9999', makeName: 'UNKNOWN' }).toString(),
+  });
+  const inventoryResponse = await httpClient.request({
+    method: 'POST',
+    url: 'https://inventory.example/',
+    data: new URLSearchParams({
+      YardId: '9999',
+      VehicleMake: 'UNKNOWN',
+      VehicleModel: 'UNKNOWN',
+    }).toString(),
+  });
+
+  assert.deepEqual(makesResponse.data, []);
+  assert.deepEqual(modelsResponse.data, []);
+  assert.equal(inventoryResponse.data, readFixtureText('boise_initial.html'));
+  await assert.rejects(
+    httpClient.request({
+      method: 'DELETE',
+      url: 'https://inventory.example/unexpected',
+    }),
+    /Unexpected request in fixture replay: DELETE \/unexpected/
+  );
+});
 
 test('fixture replay parser preserves duplicate CAMRY rows from real HTML', () => {
   const html = readFixtureText('boise_toyota_camry.html');
