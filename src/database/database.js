@@ -2,21 +2,26 @@ const sqlite3 = require('sqlite3').verbose();
 const { VEHICLE_DB_PATH } = require('./dbPath');
 const { summarizeError } = require('../utils/errorSummary');
 
-const db = new sqlite3.Database(
-  VEHICLE_DB_PATH,
-  sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
-  (error) => {
-    if (error) {
-      console.error(
-        'Error when connecting to the database:',
-        summarizeError(error)
-      );
-      return;
-    }
+let db;
+const databaseReady = new Promise((resolve, reject) => {
+  db = new sqlite3.Database(
+    VEHICLE_DB_PATH,
+    sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE,
+    (error) => {
+      if (error) {
+        console.error(
+          'Error when connecting to the database:',
+          summarizeError(error)
+        );
+        reject(error);
+        return;
+      }
 
-    console.log('Database connection established.');
-  }
-);
+      console.log('Database connection established.');
+      resolve();
+    }
+  );
+});
 
 const CREATE_VEHICLES_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS vehicles (
@@ -105,6 +110,7 @@ async function ensureSavedSearchColumns() {
 
 async function setupDatabase() {
   try {
+    await databaseReady;
     await runSQL(CREATE_VEHICLES_TABLE_SQL);
     console.log('Vehicles table setup complete.');
 
