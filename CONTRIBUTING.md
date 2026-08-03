@@ -53,6 +53,11 @@ npm run check:dead-code:production
 npm audit
 ```
 
+The lint gate also prevents structural regressions: cyclomatic complexity is
+capped at 15, production functions/files at 80/300 nonblank lines, and test
+functions/files at 100/500 nonblank lines. Split code by responsibility instead
+of disabling these rules.
+
 Coverage currently must remain at or above 82% for lines, 68% for branches,
 and 90% for functions. Live scrape checks are opt-in and should use an
 isolated database:
