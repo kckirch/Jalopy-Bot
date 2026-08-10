@@ -13,6 +13,7 @@ function createNotificationClient(dmSends, channelSends) {
       cache: {
         get: (id) => ({
           id,
+          messages: { fetch: async () => [] },
           send: async (payload) => {
             channelSends.push({ id, payload });
           },

@@ -78,6 +78,24 @@ test('saved_searches table includes username and yard_name columns', async () =>
   assert.ok(columnNames.includes('yard_name'));
 });
 
+test('scheduled_job_runs stores one durable result per job and inventory session', async () => {
+  const columns = await all(db, "PRAGMA table_info('scheduled_job_runs');");
+  const columnNames = columns.map((column) => column.name);
+
+  assert.deepEqual(columnNames, [
+    'job_name',
+    'session_id',
+    'status',
+    'started_at',
+    'completed_at',
+    'summary',
+  ]);
+  assert.deepEqual(
+    columns.filter((column) => column.pk > 0).map((column) => column.name),
+    ['job_name', 'session_id']
+  );
+});
+
 test('setupDatabase is idempotent when the schema is already current', async () => {
   await setupDatabase();
 

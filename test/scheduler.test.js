@@ -4,152 +4,99 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
-const universalWebScrapePath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
+const universalPath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
-const sessionIdPath = path.join(repoRoot, 'src/utils/sessionId.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
+const jobManagerPath = path.join(repoRoot, 'src/database/scheduledJobManager.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
 const cronPath = require.resolve('node-cron', { paths: [repoRoot] });
 
-async function withSchedulerMocks(mocks, runTest) {
-  const previousScheduler = require.cache[schedulerPath];
-  const previousCron = require.cache[cronPath];
-  const previousUniversal = require.cache[universalWebScrapePath];
-  const previousDailyTasks = require.cache[dailyTasksPath];
-  const previousSessionId = require.cache[sessionIdPath];
-  const previousSessionCheck = require.cache[sessionCheckPath];
+function replaceModule(modulePath, exports) {
+  require.cache[modulePath] = {
+    id: modulePath,
+    filename: modulePath,
+    loaded: true,
+    exports,
+  };
+}
 
-  require.cache[cronPath] = {
-    id: cronPath,
-    filename: cronPath,
-    loaded: true,
-    exports: { schedule: mocks.schedule },
-  };
-  require.cache[universalWebScrapePath] = {
-    id: universalWebScrapePath,
-    filename: universalWebScrapePath,
-    loaded: true,
-    exports: { universalWebScrape: mocks.universalWebScrape },
-  };
-  require.cache[dailyTasksPath] = {
-    id: dailyTasksPath,
-    filename: dailyTasksPath,
-    loaded: true,
-    exports: { processDailySavedSearches: mocks.processDailySavedSearches },
-  };
-  require.cache[sessionIdPath] = {
-    id: sessionIdPath,
-    filename: sessionIdPath,
-    loaded: true,
-    exports: { getSessionID: mocks.getSessionID },
-  };
-  require.cache[sessionCheckPath] = {
-    id: sessionCheckPath,
-    filename: sessionCheckPath,
-    loaded: true,
-    exports: { checkSessionUpdates: mocks.checkSessionUpdates },
-  };
+async function withSchedulerMocks(mocks, runTest) {
+  const modulePaths = [
+    schedulerPath,
+    cronPath,
+    universalPath,
+    dailyTasksPath,
+    sessionCheckPath,
+    jobManagerPath,
+  ];
+  const previous = new Map(
+    modulePaths.map((modulePath) => [modulePath, require.cache[modulePath]])
+  );
+
+  replaceModule(cronPath, { schedule: mocks.schedule });
+  replaceModule(universalPath, { universalWebScrape: mocks.universalWebScrape });
+  replaceModule(dailyTasksPath, {
+    processDailySavedSearches: mocks.processDailySavedSearches,
+  });
+  replaceModule(sessionCheckPath, { checkSessionUpdates: mocks.checkSessionUpdates });
+  replaceModule(jobManagerPath, {
+    claimScheduledJobRun: mocks.claimScheduledJobRun,
+    failScheduledJobRun: mocks.failScheduledJobRun,
+    finishScheduledJobRun: mocks.finishScheduledJobRun,
+    getScheduledJobRun: mocks.getScheduledJobRun,
+    isTerminalScheduledJobStatus: mocks.isTerminalScheduledJobStatus,
+  });
   delete require.cache[schedulerPath];
 
-  const scrapeLockModule = require(scrapeLockPath);
-  scrapeLockModule.__testables.resetScrapeLockForTests();
-
+  const scrapeLock = require(scrapeLockPath).__testables;
+  scrapeLock.resetScrapeLockForTests();
   try {
-    const moduleExports = require(schedulerPath);
-    await runTest(moduleExports);
+    await runTest(require(schedulerPath));
   } finally {
-    scrapeLockModule.__testables.resetScrapeLockForTests();
-
-    if (previousScheduler) require.cache[schedulerPath] = previousScheduler;
-    else delete require.cache[schedulerPath];
-
-    if (previousCron) require.cache[cronPath] = previousCron;
-    else delete require.cache[cronPath];
-
-    if (previousUniversal) require.cache[universalWebScrapePath] = previousUniversal;
-    else delete require.cache[universalWebScrapePath];
-
-    if (previousDailyTasks) require.cache[dailyTasksPath] = previousDailyTasks;
-    else delete require.cache[dailyTasksPath];
-
-    if (previousSessionId) require.cache[sessionIdPath] = previousSessionId;
-    else delete require.cache[sessionIdPath];
-
-    if (previousSessionCheck) require.cache[sessionCheckPath] = previousSessionCheck;
-    else delete require.cache[sessionCheckPath];
+    scrapeLock.resetScrapeLockForTests();
+    for (const [modulePath, cached] of previous) {
+      if (cached) require.cache[modulePath] = cached;
+      else delete require.cache[modulePath];
+    }
   }
 }
 
 function buildBaseMocks(overrides = {}) {
+  const runs = new Map();
+  const key = (jobName, sessionID) => `${jobName}:${sessionID}`;
   return {
+    runs,
     schedule: () => ({}),
     universalWebScrape: async () => {},
-    processDailySavedSearches: async () => {},
-    getSessionID: () => '20260101',
+    processDailySavedSearches: async () => ({ savedSearchFailures: 0 }),
     checkSessionUpdates: async () => true,
+    getScheduledJobRun: async (jobName, sessionID) =>
+      runs.get(key(jobName, sessionID)) || null,
+    claimScheduledJobRun: async (jobName, sessionID) => {
+      const runKey = key(jobName, sessionID);
+      const existing = runs.get(runKey);
+      if (existing && ['running', 'completed', 'completed_with_errors'].includes(existing.status)) {
+        return false;
+      }
+      runs.set(runKey, { status: 'running', summary: null });
+      return true;
+    },
+    finishScheduledJobRun: async (jobName, sessionID, status, summary) => {
+      runs.set(key(jobName, sessionID), { status, summary });
+    },
+    failScheduledJobRun: async (jobName, sessionID) => {
+      runs.set(key(jobName, sessionID), { status: 'failed', summary: null });
+    },
+    isTerminalScheduledJobStatus: (status) =>
+      status === 'completed' || status === 'completed_with_errors',
     ...overrides,
   };
 }
 
-test('startScheduledTasks registers the expected two cron schedules', async () => {
-  const schedules = [];
-  const previousTimezone = process.env.SCHEDULER_TIMEZONE;
-  delete process.env.SCHEDULER_TIMEZONE;
-  const mocks = buildBaseMocks({
-    schedule: (expression, callback, options) => {
-      schedules.push({ expression, callback, options });
-      return {};
-    },
-  });
+const BEFORE_DUE = new Date('2026-01-01T10:00:00.000Z');
+const AFTER_NOTIFICATION_DUE = new Date('2026-01-01T13:00:00.000Z');
 
-  try {
-    await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-      startScheduledTasks();
-    });
-  } finally {
-    if (typeof previousTimezone === 'string') {
-      process.env.SCHEDULER_TIMEZONE = previousTimezone;
-    } else {
-      delete process.env.SCHEDULER_TIMEZONE;
-    }
-  }
-
-  assert.equal(schedules.length, 2);
-  assert.equal(schedules[0].expression, '0 5 * * *');
-  assert.equal(schedules[1].expression, '45 5 * * *');
-  assert.deepEqual(schedules[0].options, { timezone: 'Etc/GMT+7', noOverlap: true });
-  assert.deepEqual(schedules[1].options, { timezone: 'Etc/GMT+7', noOverlap: true });
-});
-
-test('startScheduledTasks uses SCHEDULER_TIMEZONE override when provided', async () => {
-  const schedules = [];
-  const previousTimezone = process.env.SCHEDULER_TIMEZONE;
-  process.env.SCHEDULER_TIMEZONE = 'America/Denver';
-  const mocks = buildBaseMocks({
-    schedule: (expression, callback, options) => {
-      schedules.push({ expression, callback, options });
-      return {};
-    },
-  });
-
-  try {
-    await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-      startScheduledTasks();
-    });
-  } finally {
-    if (typeof previousTimezone === 'string') {
-      process.env.SCHEDULER_TIMEZONE = previousTimezone;
-    } else {
-      delete process.env.SCHEDULER_TIMEZONE;
-    }
-  }
-
-  assert.equal(schedules.length, 2);
-  assert.equal(schedules[0].options.timezone, 'America/Denver');
-  assert.equal(schedules[1].options.timezone, 'America/Denver');
-});
-
-test('startScheduledTasks is idempotent and does not register duplicate cron jobs', async () => {
+test('startScheduledTasks atomically registers scrape, notification, and recovery jobs', async () => {
   const schedules = [];
   const mocks = buildBaseMocks({
     schedule: (expression, callback, options) => {
@@ -159,207 +106,219 @@ test('startScheduledTasks is idempotent and does not register duplicate cron job
   });
 
   await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-    startScheduledTasks();
-    startScheduledTasks();
+    await startScheduledTasks({ now: () => BEFORE_DUE });
   });
 
-  assert.equal(schedules.length, 2);
+  assert.deepEqual(schedules.map((item) => item.expression), [
+    '0 5 * * *',
+    '45 5 * * *',
+    '30 * * * *',
+  ]);
+  assert.ok(schedules.every((item) =>
+    item.options.timezone === 'Etc/GMT+7' && item.options.noOverlap === true
+  ));
 });
 
-test('scrapeAllJunkyards calls universalWebScrape for each configured junkyard', async () => {
-  const scrapeCalls = [];
+test('registration failure disposes partial tasks and permits a clean retry', async () => {
+  let scheduleCalls = 0;
+  let destroyed = 0;
   const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
-      scrapeCalls.push(options);
+    schedule: () => {
+      scheduleCalls += 1;
+      if (scheduleCalls === 2) throw new Error('registration failed');
+      return { destroy: () => { destroyed += 1; } };
     },
   });
 
-  await withSchedulerMocks(mocks, async ({ scrapeAllJunkyards }) => {
-    await scrapeAllJunkyards('20260101');
-  });
-
-  assert.equal(scrapeCalls.length, 2);
-  assert.ok(scrapeCalls.every((call) => call.sessionID === '20260101'));
-  assert.ok(scrapeCalls.every((call) => call.make === 'ANY'));
-  assert.ok(scrapeCalls.every((call) => call.model === 'ANY'));
-});
-
-test('scrapeAllJunkyards rejects when any junkyard scrape fails', async () => {
-  const scrapeCalls = [];
-  const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
-      scrapeCalls.push(options);
-      if (options.hasMultipleLocations === false) {
-        throw new Error('simulated scrape failure');
-      }
-    },
-  });
-
-  await withSchedulerMocks(mocks, async ({ scrapeAllJunkyards }) => {
+  await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
     await assert.rejects(
-      () => scrapeAllJunkyards('20260101'),
-      /Scrape failed for 1 junkyard/
+      startScheduledTasks({ now: () => BEFORE_DUE }),
+      /registration failed/
+    );
+    await startScheduledTasks({ now: () => BEFORE_DUE });
+  });
+
+  assert.equal(destroyed, 1);
+  assert.equal(scheduleCalls, 5);
+});
+
+test('startScheduledTasks remains idempotent after successful registration', async () => {
+  let scheduleCalls = 0;
+  const mocks = buildBaseMocks({
+    schedule: () => {
+      scheduleCalls += 1;
+      return {};
+    },
+  });
+
+  await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
+    await startScheduledTasks({ now: () => BEFORE_DUE });
+    assert.deepEqual(await startScheduledTasks({ now: () => BEFORE_DUE }), {
+      started: false,
+    });
+  });
+  assert.equal(scheduleCalls, 3);
+});
+
+test('scheduler context uses the configured timezone for session boundaries', async () => {
+  const mocks = buildBaseMocks();
+  await withSchedulerMocks(mocks, async ({ __testables }) => {
+    assert.deepEqual(
+      __testables.getSchedulerContext(
+        new Date('2026-08-11T05:30:00.000Z'),
+        'America/Denver'
+      ),
+      { sessionID: '20260810', minuteOfDay: 23 * 60 + 30 }
     );
   });
-
-  assert.equal(scrapeCalls.length, 2);
 });
 
-test('scrapeAllJunkyards rejects when another scrape lock is already held', async () => {
+test('scrapeAllJunkyards runs every configured source and reports aggregate failure', async () => {
   const scrapeCalls = [];
   const mocks = buildBaseMocks({
     universalWebScrape: async (options) => {
       scrapeCalls.push(options);
+      if (options.hasMultipleLocations === false) throw new Error('source failed');
     },
   });
-
-  const { withScrapeLock, __testables } = require(scrapeLockPath);
-  __testables.resetScrapeLockForTests();
 
   await withSchedulerMocks(mocks, async ({ scrapeAllJunkyards }) => {
-    await withScrapeLock('manual:in-progress', async () => {
-      await assert.rejects(
-        () => scrapeAllJunkyards('20260101'),
-        (error) => error && error.code === 'SCRAPE_IN_PROGRESS'
-      );
-    });
-  });
-
-  assert.equal(scrapeCalls.length, 0);
-});
-
-test('runMissedMorningJobs completes every scrape before sending notifications', async () => {
-  const events = [];
-  const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
-      events.push(`scrape:${options.sessionID}`);
-    },
-    processDailySavedSearches: async () => {
-      events.push('notifications');
-    },
-  });
-
-  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
-    await runMissedMorningJobs({
-      sessionID: '20260101',
-      retries: 0,
-      retryDelayMs: 0,
-    });
-  });
-
-  assert.deepEqual(events, [
-    'scrape:20260101',
-    'scrape:20260101',
-    'notifications',
-  ]);
-});
-
-test('runMissedMorningJobs retries a failed scrape before sending notifications', async () => {
-  let scrapeCalls = 0;
-  let shouldFail = true;
-  let notificationCalls = 0;
-  const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
-      scrapeCalls += 1;
-      if (options.hasMultipleLocations === false && shouldFail) {
-        shouldFail = false;
-        throw new Error('simulated transient failure');
-      }
-    },
-    processDailySavedSearches: async () => {
-      notificationCalls += 1;
-    },
-  });
-
-  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
-    await runMissedMorningJobs({
-      sessionID: '20260101',
-      retries: 1,
-      retryDelayMs: 0,
-    });
-  });
-
-  assert.equal(scrapeCalls, 4);
-  assert.equal(notificationCalls, 1);
-});
-
-test('runMissedMorningJobs rejects and skips notifications after scrape failure', async () => {
-  let notificationCalls = 0;
-  const mocks = buildBaseMocks({
-    universalWebScrape: async () => {
-      throw new Error('simulated permanent failure');
-    },
-    processDailySavedSearches: async () => {
-      notificationCalls += 1;
-    },
-  });
-
-  await withSchedulerMocks(mocks, async ({ runMissedMorningJobs }) => {
     await assert.rejects(
-      () => runMissedMorningJobs({
-        sessionID: '20260101',
+      scrapeAllJunkyards('20260101'),
+      /Scrape failed for 1 configured junkyard/
+    );
+  });
+  assert.equal(scrapeCalls.length, 2);
+  assert.ok(scrapeCalls.every((call) => call.sessionID === '20260101'));
+});
+
+test('ensureCurrentInventorySession scrapes only when readiness is incomplete', async () => {
+  let readinessChecks = 0;
+  let scrapeCalls = 0;
+  const mocks = buildBaseMocks({
+    checkSessionUpdates: async () => {
+      readinessChecks += 1;
+      return readinessChecks > 1;
+    },
+    universalWebScrape: async () => { scrapeCalls += 1; },
+  });
+
+  await withSchedulerMocks(mocks, async ({ ensureCurrentInventorySession }) => {
+    assert.deepEqual(
+      await ensureCurrentInventorySession('20260101', {
         retries: 0,
         retryDelayMs: 0,
       }),
-      /Max retries reached/
+      { sessionID: '20260101', scraped: true }
     );
   });
-
-  assert.equal(notificationCalls, 0);
+  assert.equal(scrapeCalls, 2);
+  assert.equal(readinessChecks, 2);
 });
 
-test('scrape cron callback performs every configured scrape', async () => {
-  const schedules = [];
-  const scrapeCalls = [];
-
+test('recovery waits for each due time and catches up notifications after 05:45', async () => {
+  let readinessChecks = 0;
+  let notificationCalls = 0;
   const mocks = buildBaseMocks({
-    schedule: (expression, callback, options) => {
-      schedules.push({ expression, callback, options });
-      return {};
-    },
-    universalWebScrape: async (options) => {
-      scrapeCalls.push(options);
+    checkSessionUpdates: async () => { readinessChecks += 1; return true; },
+    processDailySavedSearches: async () => {
+      notificationCalls += 1;
+      return { savedSearchFailures: 0, newVehicleCount: 3 };
     },
   });
 
-  await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-    startScheduledTasks();
-    await schedules[0].callback();
+  await withSchedulerMocks(mocks, async ({ recoverDueScheduledJobs }) => {
+    assert.equal((await recoverDueScheduledJobs({
+      now: new Date('2026-01-01T11:59:00.000Z'),
+      timezone: 'Etc/GMT+7',
+    })).status, 'not-due');
+    assert.equal((await recoverDueScheduledJobs({
+      now: new Date('2026-01-01T12:30:00.000Z'),
+      timezone: 'Etc/GMT+7',
+    })).status, 'inventory-ready');
+    assert.equal((await recoverDueScheduledJobs({
+      now: AFTER_NOTIFICATION_DUE,
+      timezone: 'Etc/GMT+7',
+    })).status, 'completed');
   });
-
-  assert.equal(scrapeCalls.length, 2);
+  assert.equal(readinessChecks, 2);
+  assert.equal(notificationCalls, 1);
 });
 
-test('saved-search cron callback runs processing only when session check passes', async () => {
-  const schedules = [];
-  let processCalls = 0;
-  let sessionShouldPass = true;
-  const checkedSessions = [];
-
+test('completed notification ledger prevents duplicate channel and DM runs', async () => {
+  let notificationCalls = 0;
   const mocks = buildBaseMocks({
-    schedule: (expression, callback, options) => {
-      schedules.push({ expression, callback, options });
-      return {};
+    processDailySavedSearches: async () => {
+      notificationCalls += 1;
+      return { savedSearchFailures: 0 };
     },
-    checkSessionUpdates: async ({ sessionID }) => {
-      checkedSessions.push(sessionID);
-      return sessionShouldPass;
+  });
+
+  await withSchedulerMocks(mocks, async ({ runDailyNotificationJob }) => {
+    assert.equal((await runDailyNotificationJob('20260101')).status, 'completed');
+    assert.equal(
+      (await runDailyNotificationJob('20260101')).status,
+      'already-completed'
+    );
+  });
+  assert.equal(notificationCalls, 1);
+});
+
+test('notification failure is recorded and retried on the next recovery', async () => {
+  let calls = 0;
+  const mocks = buildBaseMocks({
+    processDailySavedSearches: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('Discord unavailable');
+      return { savedSearchFailures: 0 };
+    },
+  });
+
+  await withSchedulerMocks(mocks, async ({ runDailyNotificationJob }) => {
+    await assert.rejects(
+      runDailyNotificationJob('20260101'),
+      /Discord unavailable/
+    );
+    assert.equal(mocks.runs.get('daily-notifications:20260101').status, 'failed');
+    assert.equal((await runDailyNotificationJob('20260101')).status, 'completed');
+  });
+  assert.equal(calls, 2);
+});
+
+test('saved-search delivery failures are recorded as a completed warning state', async () => {
+  const mocks = buildBaseMocks({
+    processDailySavedSearches: async () => ({ savedSearchFailures: 2 }),
+  });
+
+  await withSchedulerMocks(mocks, async ({ runDailyNotificationJob }) => {
+    assert.equal(
+      (await runDailyNotificationJob('20260101')).status,
+      'completed_with_errors'
+    );
+  });
+  assert.equal(
+    mocks.runs.get('daily-notifications:20260101').status,
+    'completed_with_errors'
+  );
+});
+
+test('startup and hourly recovery execute missed notifications without duplicating them', async () => {
+  const schedules = [];
+  let notificationCalls = 0;
+  const mocks = buildBaseMocks({
+    schedule: (expression, callback) => {
+      schedules.push({ expression, callback });
+      return {};
     },
     processDailySavedSearches: async () => {
-      processCalls += 1;
+      notificationCalls += 1;
+      return { savedSearchFailures: 0 };
     },
   });
 
   await withSchedulerMocks(mocks, async ({ startScheduledTasks }) => {
-    startScheduledTasks();
-
-    await schedules[1].callback();
-    assert.equal(processCalls, 1);
-
-    sessionShouldPass = false;
-    await schedules[1].callback();
-    assert.equal(processCalls, 1);
+    await startScheduledTasks({ now: () => AFTER_NOTIFICATION_DUE });
+    await schedules.find((item) => item.expression === '30 * * * *').callback();
   });
-
-  assert.deepEqual(checkedSessions, ['20260101', '20260101']);
+  assert.equal(notificationCalls, 1);
 });

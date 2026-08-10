@@ -63,6 +63,20 @@ const CREATE_SAVED_SEARCHES_TABLE_SQL = `
   );
 `;
 
+const CREATE_SCHEDULED_JOB_RUNS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS scheduled_job_runs (
+    job_name TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (
+      status IN ('running', 'completed', 'completed_with_errors', 'failed')
+    ),
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    summary TEXT,
+    PRIMARY KEY (job_name, session_id)
+  );
+`;
+
 const REQUIRED_SAVED_SEARCH_COLUMNS = [
   { name: 'username', definition: 'TEXT' },
   { name: 'yard_name', definition: 'TEXT' },
@@ -116,6 +130,9 @@ async function setupDatabase() {
 
     await runSQL(CREATE_SAVED_SEARCHES_TABLE_SQL);
     console.log('Saved searches table setup complete.');
+
+    await runSQL(CREATE_SCHEDULED_JOB_RUNS_TABLE_SQL);
+    console.log('Scheduled job runs table setup complete.');
 
     await ensureSavedSearchColumns();
   } catch (error) {

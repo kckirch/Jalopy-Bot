@@ -22,14 +22,17 @@ test('http scraper does not log inactive reconciliation error details', async ()
   });
 
   const consoleCalls = await captureConsole(async () => {
-    await scrapeWithHttp(createScrapeConfig({ make: 'TOYOTA', model: 'CAMRY' }), {
-      cheerio,
-      httpClient,
-      insertOrUpdateVehicle: async () => {},
-      markInactiveVehicles: async () => {
-        throw new TypeError(privateErrorDetails);
-      },
-    });
+    await assert.rejects(
+      scrapeWithHttp(createScrapeConfig({ make: 'TOYOTA', model: 'CAMRY' }), {
+        cheerio,
+        httpClient,
+        insertOrUpdateVehicle: async () => {},
+        markInactiveVehicles: async () => {
+          throw new TypeError(privateErrorDetails);
+        },
+      }),
+      (error) => error.message === privateErrorDetails
+    );
   });
 
   assert.match(joinedConsoleText(consoleCalls), /Error during inactive reconciliation: TypeError/);
@@ -79,7 +82,7 @@ test('http scraper falls back to make options from HTML when GetMakes endpoint f
   assert.equal(upserts[0][2], 'CAMRY');
 });
 
-test('http scraper continues across makes when one make model lookup fails and skips inactive reconciliation', async () => {
+test('http scraper rejects inactive reconciliation after a soft lookup failure', async () => {
   const upserts = [];
   const markCalls = [];
   const rowsBySearch = new Map([
@@ -109,12 +112,15 @@ test('http scraper continues across makes when one make model lookup fails and s
     },
   });
 
-  await scrapeWithHttp(createScrapeConfig(), {
-    cheerio,
-    httpClient,
-    insertOrUpdateVehicle: async (...args) => upserts.push(args),
-    markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
-  });
+  await assert.rejects(
+    scrapeWithHttp(createScrapeConfig(), {
+      cheerio,
+      httpClient,
+      insertOrUpdateVehicle: async (...args) => upserts.push(args),
+      markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
+    }),
+    /complete yard coverage/
+  );
 
   assert.deepEqual(
     upserts.map((args) => ({ make: args[1], model: args[2], year: args[3], row: args[4] })),

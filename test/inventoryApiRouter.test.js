@@ -198,3 +198,47 @@ test('If-Modified-Since uses the whole-second precision of Last-Modified', async
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   }
 });
+
+test('snapshot streaming closes its file handle when the client aborts', async () => {
+  const aborted = new Error('client aborted');
+  const stream = {};
+  let closeCalls = 0;
+  let streamOptions;
+  const response = createResponse();
+  response.destroy = (error) => {
+    response.destroyedWith = error;
+  };
+
+  await sendVehicleDbFile(
+    { method: 'GET', headers: {} },
+    response,
+    {},
+    3600,
+    { async getSnapshot() { return { path: '/unused/snapshot.db' }; } },
+    {
+      async openFile() {
+        return {
+          async stat() {
+            return { size: 42, mtimeMs: Date.now() };
+          },
+          createReadStream(options) {
+            streamOptions = options;
+            return stream;
+          },
+          async close() {
+            closeCalls += 1;
+          },
+        };
+      },
+      async pipeline(source, destination) {
+        assert.equal(source, stream);
+        assert.equal(destination, response);
+        throw aborted;
+      },
+    }
+  );
+
+  assert.deepEqual(streamOptions, { autoClose: false });
+  assert.equal(closeCalls, 1);
+  assert.equal(response.destroyedWith, aborted);
+});

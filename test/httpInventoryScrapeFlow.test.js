@@ -63,7 +63,7 @@ test('http scraper follows dynamic makes/models flow for ANY/ANY and reconciles 
   ]);
 });
 
-test('http scraper skips inactive reconciliation when zero rows were upserted', async () => {
+test('http scraper rejects unsafe reconciliation when zero rows were upserted', async () => {
   const markCalls = [];
   const httpClient = createRouteHttpClient({
     'GET /': inventoryPage({ yardOptions: ['1020'], makeOptions: ['TOYOTA'] }),
@@ -72,12 +72,15 @@ test('http scraper skips inactive reconciliation when zero rows were upserted', 
     'POST /': inventoryPage({ yardOptions: ['1020'], rows: [] }),
   });
 
-  await scrapeWithHttp(createScrapeConfig(), {
-    cheerio,
-    httpClient,
-    insertOrUpdateVehicle: async () => {},
-    markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
-  });
+  await assert.rejects(
+    scrapeWithHttp(createScrapeConfig(), {
+      cheerio,
+      httpClient,
+      insertOrUpdateVehicle: async () => {},
+      markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
+    }),
+    /complete yard coverage/
+  );
 
   assert.equal(markCalls.length, 0);
 });

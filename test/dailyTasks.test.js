@@ -14,6 +14,18 @@ function tick() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function createDailyChannels(channelSends = []) {
+  const createChannel = (id) => ({
+    id,
+    messages: { fetch: async () => [] },
+    send: async (payload) => channelSends.push({ id, payload }),
+  });
+  return {
+    cache: { get: createChannel },
+    fetch: async (id) => createChannel(id),
+  };
+}
+
 async function withDailyTasksMocks(mocks, runTest) {
   const previousNewVehiclesChannelId = process.env.NEW_VEHICLES_CHANNEL_ID;
   const previousDailyTasks = require.cache[dailyTasksPath];
@@ -140,8 +152,8 @@ test('notifyNewVehicles creates a new embed after every 25 vehicle fields', asyn
         isReady: () => true,
         channels: {
           cache: {
-            get: (id) => ({
-              id,
+            get: () => ({
+              messages: { fetch: async () => [] },
               send: async (payload) => channelSends.push(payload),
             }),
           },
@@ -161,27 +173,24 @@ test('notifyNewVehicles creates a new embed after every 25 vehicle fields', asyn
   assert.equal(embeds[1].toJSON().fields.length, 1);
 });
 
-test('notifyNewVehicles skips delivery when its channel is not configured', async () => {
+test('notifyNewVehicles rejects when its channel is not configured', async () => {
   let queryCalled = false;
-  const consoleCalls = await captureConsole(async () => {
-    await withDailyTasksMocks(
-      {
-        newVehiclesChannelId: '',
-        client: { isReady: () => true },
-        getAllSavedSearches: async () => [],
-        queryVehicles: async () => {
-          queryCalled = true;
-          return [];
-        },
+  await withDailyTasksMocks(
+    {
+      newVehiclesChannelId: '',
+      client: { isReady: () => true },
+      getAllSavedSearches: async () => [],
+      queryVehicles: async () => {
+        queryCalled = true;
+        return [];
       },
-      async ({ notifyNewVehicles }) => {
-        await notifyNewVehicles();
-      }
-    );
-  });
+    },
+    async ({ notifyNewVehicles }) => {
+      await assert.rejects(notifyNewVehicles(), /NEW_VEHICLES_CHANNEL_ID/);
+    }
+  );
 
   assert.equal(queryCalled, false);
-  assert.match(joinedConsoleText(consoleCalls), /NEW_VEHICLES_CHANNEL_ID/);
 });
 
 test('processDailySavedSearches awaits DM delivery before resolving', async () => {
@@ -207,9 +216,7 @@ test('processDailySavedSearches awaits DM delivery before resolving', async () =
       }),
     },
     channels: {
-      cache: {
-        get: () => null,
-      },
+      ...createDailyChannels(),
     },
   };
 
@@ -277,14 +284,7 @@ test('processDailySavedSearches does not send DMs when no active matches exist',
       }),
     },
     channels: {
-      cache: {
-        get: (id) => ({
-          id,
-          send: async (payload) => {
-            channelSends.push({ id, payload });
-          },
-        }),
-      },
+      ...createDailyChannels(channelSends),
     },
   };
 
@@ -316,7 +316,11 @@ test('processDailySavedSearches does not send DMs when no active matches exist',
   );
 
   assert.equal(dmSends.length, 0);
-  assert.equal(channelSends.length, 0);
+  assert.equal(channelSends.length, 1);
+  assert.equal(
+    channelSends[0].payload.embeds[0].toJSON().title,
+    'Daily Inventory Update'
+  );
 });
 
 test('processDailySavedSearches is safe when Discord client is not ready', async () => {
@@ -375,7 +379,7 @@ test('processDailySavedSearches is safe when Discord client is not ready', async
       ],
     },
     async ({ processDailySavedSearches }) => {
-      await processDailySavedSearches();
+      await assert.rejects(processDailySavedSearches(), /Discord client is not ready/);
       await tick();
       await tick();
     }
@@ -400,9 +404,7 @@ test('processDailySavedSearches skips saved searches with paused frequency', asy
       }),
     },
     channels: {
-      cache: {
-        get: () => null,
-      },
+      ...createDailyChannels(),
     },
   };
 
@@ -445,7 +447,10 @@ test('processDailySavedSearches does not log upstream error details', async () =
   const consoleCalls = await captureConsole(async () => {
     await withDailyTasksMocks(
       {
-        client: { isReady: () => true },
+        client: {
+          isReady: () => true,
+          channels: createDailyChannels(),
+        },
         getAllSavedSearches: async () => [{
           user_id: 'private-user',
           yard_id: '1020',

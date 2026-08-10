@@ -2,6 +2,8 @@ const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
 const { YARDS } = require('../config/yards');
 
+const MIN_RECONCILIATION_COVERAGE_RATIO = 0.5;
+
 const YARD_NAMES = Object.freeze(
   Object.fromEntries(YARDS.map((yard) => [yard.id, yard.databaseName]))
 );
@@ -70,18 +72,77 @@ function normalizeYardIds(yardIds) {
     return [];
   }
 
-  return yardIds
-    .map((id) => parseInt(id, 10))
-    .filter((id) => !Number.isNaN(id));
+  return [...new Set(
+    yardIds
+      .map((id) => parseInt(id, 10))
+      .filter((id) => !Number.isNaN(id))
+  )];
 }
 
-function markInactiveVehicles(sessionID, options = {}) {
+function getReconciliationCoverage(sessionID, scopedYardIds) {
+  const placeholders = scopedYardIds.map(() => '?').join(', ');
+  const sql = `
+    SELECT
+      yard_id,
+      SUM(CASE WHEN session_id = ? THEN 1 ELSE 0 END) AS current_count,
+      SUM(
+        CASE
+          WHEN vehicle_status != 'INACTIVE' OR session_id = ? THEN 1
+          ELSE 0
+        END
+      ) AS comparable_count
+    FROM vehicles
+    WHERE yard_id IN (${placeholders})
+    GROUP BY yard_id;
+  `;
+
+  return new Promise((resolve, reject) => {
+    db.all(
+      sql,
+      [sessionID, sessionID, ...scopedYardIds],
+      (error, rows) => {
+        if (error) {
+          console.error(
+            'Error validating inactive reconciliation coverage:',
+            summarizeError(error)
+          );
+          reject(error);
+          return;
+        }
+        resolve(rows || []);
+      }
+    );
+  });
+}
+
+async function validateReconciliationCoverage(sessionID, scopedYardIds) {
+  const rows = await getReconciliationCoverage(sessionID, scopedYardIds);
+  const coverageByYard = new Map(rows.map((row) => [row.yard_id, row]));
+  const hasUnsafeYard = scopedYardIds.some((yardId) => {
+    const coverage = coverageByYard.get(yardId);
+    if (!coverage || coverage.current_count < 1) return true;
+    return (
+      coverage.current_count / coverage.comparable_count <
+      MIN_RECONCILIATION_COVERAGE_RATIO
+    );
+  });
+
+  if (hasUnsafeYard) {
+    throw new Error(
+      'Inactive reconciliation blocked because current yard coverage dropped below the safety threshold.'
+    );
+  }
+}
+
+async function markInactiveVehicles(sessionID, options = {}) {
   const scopedYardIds = normalizeYardIds(options.yardIds);
 
   if (scopedYardIds.length === 0) {
     console.warn('markInactiveVehicles skipped: no scoped yard IDs provided.');
-    return Promise.resolve();
+    return;
   }
+
+  await validateReconciliationCoverage(sessionID, scopedYardIds);
 
   const placeholders = scopedYardIds.map(() => '?').join(', ');
   const sql = `

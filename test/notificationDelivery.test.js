@@ -9,9 +9,9 @@ const {
   joinedConsoleText,
 } = require('../test-support/consoleCapture');
 
-test('user delivery skips fetch when the Discord client is not ready', async () => {
+test('user delivery rejects before fetch when the Discord client is not ready', async () => {
   let fetchCalled = false;
-  const consoleCalls = await captureConsole(() =>
+  await assert.rejects(
     sendUserNotification(
       {
         isReady: () => false,
@@ -23,26 +23,52 @@ test('user delivery skips fetch when the Discord client is not ready', async () 
       },
       'user-1',
       [{}]
-    )
+    ),
+    /Discord client is not ready/
   );
 
   assert.equal(fetchCalled, false);
-  assert.match(joinedConsoleText(consoleCalls), /Discord client is not ready/);
 });
 
-test('channel delivery reports a missing configured channel', async () => {
-  const consoleCalls = await captureConsole(() =>
+test('channel delivery rejects when a configured channel cannot be found', async () => {
+  await assert.rejects(
     sendChannelNotification(
       {
         isReady: () => true,
-        channels: { cache: { get: () => null } },
+        channels: {
+          cache: { get: () => null },
+          fetch: async () => null,
+        },
       },
       '111111111111111111',
       [{}]
-    )
+    ),
+    /Notification channel not found/
+  );
+});
+
+test('channel delivery fetches a channel that is not cached', async () => {
+  const sends = [];
+  let fetchedId;
+  const channel = { send: async (payload) => sends.push(payload) };
+
+  await sendChannelNotification(
+    {
+      isReady: () => true,
+      channels: {
+        cache: { get: () => null },
+        fetch: async (id) => {
+          fetchedId = id;
+          return channel;
+        },
+      },
+    },
+    '111111111111111111',
+    [{}]
   );
 
-  assert.match(joinedConsoleText(consoleCalls), /Notification channel not found/);
+  assert.equal(fetchedId, '111111111111111111');
+  assert.equal(sends.length, 1);
 });
 
 test('delivery splits messages after ten embeds', async () => {
@@ -95,6 +121,42 @@ test('delivery starts a new message before exceeding payload size', async () => 
   );
 });
 
+test('daily channel delivery skips embed parts already present in recent messages', async () => {
+  const sends = [];
+  const footerPrefix = 'Daily inventory 20260810';
+  const embeds = [
+    { footer: { text: `${footerPrefix} • part 1 of 2` } },
+    { footer: { text: `${footerPrefix} • part 2 of 2` } },
+  ];
+  const channel = {
+    messages: {
+      fetch: async () => [
+        { embeds: [{ footer: { text: `${footerPrefix} • part 1 of 2` } }] },
+      ],
+    },
+    async send(payload) {
+      sends.push(payload);
+    },
+  };
+
+  const result = await sendChannelNotification(
+    {
+      isReady: () => true,
+      channels: { cache: { get: () => channel } },
+    },
+    '111111111111111111',
+    embeds,
+    { dedupeFooterPrefix: footerPrefix }
+  );
+
+  assert.deepEqual(result, {
+    embedsSent: 1,
+    messagesSent: 1,
+    skippedEmbeds: 1,
+  });
+  assert.deepEqual(sends[0].embeds, [embeds[1]]);
+});
+
 test('user lookup failures are redacted and remain observable', async () => {
   const privateDetails = '/home/private/users.db user=123';
   const error = new TypeError(privateDetails);
@@ -118,7 +180,7 @@ test('user lookup failures are redacted and remain observable', async () => {
   );
   const output = joinedConsoleText(consoleCalls);
 
-  assert.match(output, /Failed to fetch notification recipient: TypeError/);
+  assert.match(output, /Failed to deliver user notification: TypeError/);
   assert.equal(output.includes(privateDetails), false);
 });
 
