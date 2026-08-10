@@ -121,12 +121,16 @@ function startScheduledTasks() {
   cron.schedule('45 5 * * *', async () => {
     console.log('Checking sessions and processing saved searches.');
     try {
-      const sessionUpdated = await checkSessionUpdates();
+      const sessionUpdated = await checkSessionUpdates({
+        sessionID: getSessionID(),
+      });
       if (sessionUpdated) {
         await processDailySavedSearches();
         console.log('Daily saved searches processed successfully.');
       } else {
-        console.log('Session not updated recently; skipping processing of saved searches.');
+        console.log(
+          'Current inventory session is incomplete; skipping processing of saved searches.'
+        );
       }
     } catch (error) {
       console.error('Error during processing daily saved searches:', summarizeError(error));

@@ -30,72 +30,114 @@ async function withSessionCheck(mockDb, runTest) {
   }
 }
 
-test('checkSessionUpdates returns true when last update is recent', async () => {
-  const now = Date.parse('2026-08-02T06:20:00Z');
+test('checkSessionUpdates accepts a completed current inventory session', async () => {
+  let capturedSql;
+  let capturedParams;
   const mockDb = {
-    get(_sql, callback) {
-      callback(null, { lastUpdate: '2026-08-02 06:10:00' });
+    get(sql, params, callback) {
+      capturedSql = sql;
+      capturedParams = params;
+      callback(null, { coveredYardCount: 3 });
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
-    const result = await checkSessionUpdates({ now: () => now });
+    const result = await checkSessionUpdates({
+      sessionID: '20260810',
+      expectedYardIds: [1020, 1021, 1119],
+    });
+
+    assert.equal(result, true);
+    assert.match(capturedSql, /session_id = \?/);
+    assert.match(capturedSql, /COUNT\(DISTINCT yard_id\)/);
+    assert.deepEqual(capturedParams, ['20260810', 1020, 1021, 1119]);
+  });
+});
+
+test('checkSessionUpdates does not expire a completed session based on its age', async () => {
+  const mockDb = {
+    get(_sql, _params, callback) {
+      callback(null, { coveredYardCount: 2 });
+    },
+  };
+
+  await withSessionCheck(mockDb, async (checkSessionUpdates) => {
+    const result = await checkSessionUpdates({
+      sessionID: '20260810',
+      expectedYardIds: [1020, 1021],
+    });
+
     assert.equal(result, true);
   });
 });
 
-test('checkSessionUpdates returns false when last update is stale', async () => {
-  const now = Date.parse('2026-08-02T06:20:00Z');
+test('checkSessionUpdates rejects a partial current inventory session', async () => {
   const mockDb = {
-    get(_sql, callback) {
-      callback(null, { lastUpdate: '2026-08-02 05:49:59' });
-    },
-  };
-
-  await withSessionCheck(mockDb, async (checkSessionUpdates) => {
-    const result = await checkSessionUpdates({ now: () => now });
-    assert.equal(result, false);
-  });
-});
-
-test('checkSessionUpdates returns false when no inventory timestamp exists', async () => {
-  const mockDb = {
-    get(_sql, callback) {
-      callback(null, { lastUpdate: null });
+    get(_sql, _params, callback) {
+      callback(null, { coveredYardCount: 2 });
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
     const result = await checkSessionUpdates({
-      now: () => Date.parse('2026-08-02T06:20:00Z'),
+      sessionID: '20260810',
+      expectedYardIds: [1020, 1021, 1119],
     });
+
     assert.equal(result, false);
   });
 });
 
-test('checkSessionUpdates returns false for timestamps in the future', async () => {
+test('checkSessionUpdates returns false when no current session rows exist', async () => {
   const mockDb = {
-    get(_sql, callback) {
-      callback(null, { lastUpdate: '2026-08-02 06:20:01' });
+    get(_sql, _params, callback) {
+      callback(null, { coveredYardCount: 0 });
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
     const result = await checkSessionUpdates({
-      now: () => Date.parse('2026-08-02T06:20:00Z'),
+      sessionID: '20260810',
+      expectedYardIds: [1020],
     });
+
     assert.equal(result, false);
+  });
+});
+
+test('checkSessionUpdates returns false without configured yard coverage', async () => {
+  let queried = false;
+  const mockDb = {
+    get() {
+      queried = true;
+    },
+  };
+
+  await withSessionCheck(mockDb, async (checkSessionUpdates) => {
+    const result = await checkSessionUpdates({
+      sessionID: '20260810',
+      expectedYardIds: [],
+    });
+
+    assert.equal(result, false);
+    assert.equal(queried, false);
   });
 });
 
 test('checkSessionUpdates rejects when db.get errors', async () => {
   const mockDb = {
-    get(_sql, callback) {
+    get(_sql, _params, callback) {
       callback(new Error('db-failure'));
     },
   };
 
   await withSessionCheck(mockDb, async (checkSessionUpdates) => {
-    await assert.rejects(checkSessionUpdates(), /db-failure/);
+    await assert.rejects(
+      checkSessionUpdates({
+        sessionID: '20260810',
+        expectedYardIds: [1020],
+      }),
+      /db-failure/
+    );
   });
 });

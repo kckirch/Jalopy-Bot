@@ -334,13 +334,17 @@ test('saved-search cron callback runs processing only when session check passes'
   const schedules = [];
   let processCalls = 0;
   let sessionShouldPass = true;
+  const checkedSessions = [];
 
   const mocks = buildBaseMocks({
     schedule: (expression, callback, options) => {
       schedules.push({ expression, callback, options });
       return {};
     },
-    checkSessionUpdates: async () => sessionShouldPass,
+    checkSessionUpdates: async ({ sessionID }) => {
+      checkedSessions.push(sessionID);
+      return sessionShouldPass;
+    },
     processDailySavedSearches: async () => {
       processCalls += 1;
     },
@@ -356,4 +360,6 @@ test('saved-search cron callback runs processing only when session check passes'
     await schedules[1].callback();
     assert.equal(processCalls, 1);
   });
+
+  assert.deepEqual(checkedSessions, ['20260101', '20260101']);
 });
