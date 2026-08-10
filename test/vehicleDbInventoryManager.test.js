@@ -255,6 +255,7 @@ test('markInactiveVehicles marks only non-current session rows as INACTIVE withi
       first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
     ) VALUES
     (1020, 'BOISE', 'FORD', 'F-150', 2010, 7, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260101'),
+    (1020, 'BOISE', 'FORD', 'ESCAPE', 2011, 9, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260102'),
     (1021, 'CALDWELL', 'TOYOTA', 'TACOMA', 2012, 8, datetime('now'), datetime('now'), 'NEW', datetime('now'), datetime('now'), '', '20260102');`
   );
 
@@ -300,6 +301,15 @@ test('markInactiveVehicles skips updates when called without scoped yard IDs', a
 test('markInactiveVehicles rejects without logging SQLite error details', async () => {
   const privateErrorDetails = 'private-user /home/kc/private-file';
 
+  await run(
+    db,
+    `INSERT INTO vehicles (
+      yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+      first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
+    ) VALUES
+    (1020, 'BOISE', 'TOYOTA', 'CAMRY', 2005, 11, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260102');`
+  );
+
   const consoleCalls = await captureConsole(async () => {
     await withDbMethodOverrides(
       {
@@ -319,6 +329,30 @@ test('markInactiveVehicles rejects without logging SQLite error details', async 
 
   assert.match(joinedConsoleText(consoleCalls), /Error marking vehicles as INACTIVE: Error/);
   assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
+});
+
+test('markInactiveVehicles blocks a sharp per-yard coverage drop without changing statuses', async () => {
+  await run(
+    db,
+    `INSERT INTO vehicles (
+      yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+      first_seen, last_seen, vehicle_status, date_added, last_updated, notes, session_id
+    ) VALUES
+    (1020, 'BOISE', 'CURRENT', 'ONE', 2001, 1, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260102'),
+    (1020, 'BOISE', 'STALE', 'ONE', 2001, 2, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260101'),
+    (1020, 'BOISE', 'STALE', 'TWO', 2001, 3, datetime('now'), datetime('now'), 'ACTIVE', datetime('now'), datetime('now'), '', '20260101');`
+  );
+
+  await assert.rejects(
+    markInactiveVehicles('20260102', { yardIds: [1020] }),
+    /coverage dropped below the safety threshold/
+  );
+
+  const stale = await get(
+    db,
+    "SELECT COUNT(*) AS count FROM vehicles WHERE vehicle_make = 'STALE' AND vehicle_status = 'ACTIVE';"
+  );
+  assert.equal(stale.count, 2);
 });
 
 test('insertOrUpdateVehicle rejects without logging lookup or write error details', async () => {

@@ -1,5 +1,6 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { pipeline } = require('node:stream/promises');
 const { summarizeError } = require('../utils/errorSummary');
 const { buildVehicleQuery } = require('./inventoryApiQuery');
 
@@ -84,13 +85,16 @@ async function sendVehicleDbFile(
   response,
   corsHeaders,
   dbCacheSeconds,
-  snapshotProvider
+  snapshotProvider,
+  dependencies = {}
 ) {
+  const openFile = dependencies.openFile || fs.promises.open;
+  const streamPipeline = dependencies.pipeline || pipeline;
   let fileHandle;
 
   try {
     const snapshot = await snapshotProvider.getSnapshot();
-    fileHandle = await fs.promises.open(snapshot.path, 'r');
+    fileHandle = await openFile(snapshot.path, 'r');
     const stat = await fileHandle.stat();
     const etag = buildDbEtag(stat);
     const lastModified = new Date(stat.mtimeMs).toUTCString();
@@ -102,8 +106,6 @@ async function sendVehicleDbFile(
     };
 
     if (isNotModified(request, etag, stat.mtimeMs)) {
-      await fileHandle.close();
-      fileHandle = null;
       response.writeHead(304, sharedHeaders);
       response.end();
       return;
@@ -117,37 +119,17 @@ async function sendVehicleDbFile(
     });
 
     if (request.method === 'HEAD') {
-      await fileHandle.close();
-      fileHandle = null;
       response.end();
       return;
     }
 
-    const stream = fileHandle.createReadStream();
-    fileHandle = null;
-    stream.on('error', (streamError) => {
-      console.error(
-        '[inventory-api] failed to stream public vehicle snapshot:',
-        summarizeError(streamError)
-      );
-      if (!response.headersSent) {
-        writeJson(
-          response,
-          500,
-          { error: 'Failed to stream database file' },
-          corsHeaders
-        );
-      } else {
-        response.destroy(streamError);
-      }
-    });
-    stream.pipe(response);
+    const stream = fileHandle.createReadStream({ autoClose: false });
+    await streamPipeline(stream, response);
   } catch (error) {
-    if (fileHandle) {
-      await fileHandle.close().catch(() => {});
-    }
     console.error(
-      '[inventory-api] failed to build public vehicle snapshot:',
+      response.headersSent
+        ? '[inventory-api] failed to stream public vehicle snapshot:'
+        : '[inventory-api] failed to build public vehicle snapshot:',
       summarizeError(error)
     );
     if (!response.headersSent) {
@@ -159,6 +141,15 @@ async function sendVehicleDbFile(
       );
     } else {
       response.destroy(error);
+    }
+  } finally {
+    if (fileHandle) {
+      await fileHandle.close().catch((closeError) => {
+        console.error(
+          '[inventory-api] failed to close public snapshot file:',
+          summarizeError(closeError)
+        );
+      });
     }
   }
 }

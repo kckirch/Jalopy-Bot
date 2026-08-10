@@ -76,7 +76,7 @@ for public API consumers.
 
     Keep the production database outside the Git checkout and set `VEHICLE_DB_PATH` to its absolute path. See [`.env.example`](.env.example) for every supported option.
 
-    `SCHEDULER_TIMEZONE` defaults to `Etc/GMT+7` (fixed MST). Daily jobs run at `05:00` (scrape) and `05:45` (saved-search notifications) in that timezone.
+    `SCHEDULER_TIMEZONE` defaults to `Etc/GMT+7` (fixed MST). Daily jobs run at `05:00` (scrape) and `05:45` (saved-search notifications) in that timezone. Startup and hourly `:30` recovery checks catch up missed work. A durable `scheduled_job_runs` ledger prevents a completed session from being delivered twice, while deterministic Discord embed footers make a partially delivered daily channel post safe to retry. Successful zero-result days publish a heartbeat to the configured channel.
 
 5. Register slash commands (run on deploys or when command definitions change):
     ```bash
@@ -207,10 +207,6 @@ API downloads are generated from a separate snapshot containing only the
     npm run register:commands
     ```
 6. Start the bot:
-    ```bash
-    npm start
-    ```
-
 ### Testing
 
 To run the tests, use:

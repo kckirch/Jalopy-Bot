@@ -163,7 +163,7 @@ test('universalWebScrape scopes inactive reconciliation and skips when disabled'
   assert.deepEqual(markCalls[0].options, { yardIds: [1021] });
 });
 
-test('universalWebScrape skips inactive reconciliation when scrape produced zero upserts', async () => {
+test('universalWebScrape rejects inactive reconciliation when scrape produced zero upserts', async () => {
   const markCalls = [];
 
   await withSeleniumScrape(
@@ -175,15 +175,16 @@ test('universalWebScrape skips inactive reconciliation when scrape produced zero
       },
     },
     async (universalWebScrape) => {
-      await universalWebScrape({
-        inventoryUrl: 'https://example.test',
-        hasMultipleLocations: false,
-        yardId: '1021',
-        make: 'ANY',
-        model: 'ANY',
-        sessionID: '20260101',
-        shouldMarkInactive: true,
-      });
+      await assert.rejects(
+        universalWebScrape({
+          inventoryUrl: 'https://example.test',
+          hasMultipleLocations: false,
+          yardId: '1021', make: 'ANY', model: 'ANY',
+          sessionID: '20260101',
+          shouldMarkInactive: true,
+        }),
+        /complete yard coverage/
+      );
     }
   );
 
@@ -243,8 +244,7 @@ test('universalWebScrape skips inactive reconciliation when selenium scrape fail
           () => universalWebScrape({
             inventoryUrl: 'https://example.test',
             hasMultipleLocations: false,
-            yardId: '1020',
-            make: 'TOYOTA',
+            yardId: '1020', make: 'TOYOTA',
             model: 'CAMRY',
             sessionID: '20260101',
             shouldMarkInactive: true,
@@ -392,15 +392,18 @@ test('selenium scraper redacts inactive reconciliation failures', async () => {
         },
       },
       async (universalWebScrape) => {
-        await universalWebScrape({
-          inventoryUrl: 'https://example.test',
-          hasMultipleLocations: false,
-          yardId: '1020',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          sessionID: '20260101',
-          shouldMarkInactive: true,
-        });
+        await assert.rejects(
+          universalWebScrape({
+            inventoryUrl: 'https://example.test',
+            hasMultipleLocations: false,
+            yardId: '1020',
+            make: 'TOYOTA',
+            model: 'CAMRY',
+            sessionID: '20260101',
+            shouldMarkInactive: true,
+          }),
+          (error) => error.message === privateErrorDetails
+        );
       }
     );
   });

@@ -1,6 +1,8 @@
+const crypto = require('node:crypto');
 const { EmbedBuilder } = require('discord.js');
 
 const MAX_EMBED_FIELDS = 25;
+const DAILY_NOTIFICATION_TITLE = 'New Vehicles Added Today';
 
 function buildSavedSearchTitle(search) {
   return `Daily Search Results for ${search.make} ${search.model} (${search.year_range}) at ${search.yard_name} with ${search.status} status`;
@@ -52,7 +54,65 @@ function buildVehicleEmbeds(vehicles, title) {
   return embeds;
 }
 
+function getDailyNotificationFooterPrefix(sessionID) {
+  return `Daily inventory ${sessionID}`;
+}
+
+function applyDailyFooters(embeds, sessionID) {
+  const footerPrefix = getDailyNotificationFooterPrefix(sessionID);
+  return embeds.map((embed, index) => {
+    const fields = embed.toJSON().fields || [];
+    const contentId = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(fields))
+      .digest('hex')
+      .slice(0, 12);
+    return embed.setFooter({
+      text: `${footerPrefix} • part ${index + 1} of ${embeds.length} • ${contentId}`,
+    });
+  });
+}
+
+function getDailyVehicleSortKey(vehicle) {
+  return [
+    vehicle.id,
+    vehicle.yard_id,
+    vehicle.yard_name,
+    vehicle.row_number,
+    vehicle.vehicle_make,
+    vehicle.vehicle_model,
+    vehicle.vehicle_year,
+  ].map((value) => String(value ?? '')).join('|');
+}
+
+function buildDailyVehicleEmbeds(vehicles, sessionID) {
+  if (vehicles.length > 0) {
+    const sortedVehicles = [...vehicles].sort((left, right) =>
+      getDailyVehicleSortKey(left).localeCompare(getDailyVehicleSortKey(right))
+    );
+    return applyDailyFooters(
+      buildVehicleEmbeds(sortedVehicles, DAILY_NOTIFICATION_TITLE),
+      sessionID
+    );
+  }
+
+  return [
+    new EmbedBuilder()
+      .setTitle('Daily Inventory Update')
+      .setDescription(
+        'The inventory scrape completed successfully. No new vehicles were added today.'
+      )
+      .setColor(0x0099ff)
+      .setTimestamp()
+      .setFooter({
+        text: `${getDailyNotificationFooterPrefix(sessionID)} • part 1 of 1`,
+      }),
+  ];
+}
+
 module.exports = {
+  buildDailyVehicleEmbeds,
   buildSavedSearchTitle,
   buildVehicleEmbeds,
+  getDailyNotificationFooterPrefix,
 };
