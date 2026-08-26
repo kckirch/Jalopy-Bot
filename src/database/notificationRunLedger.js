@@ -1,11 +1,12 @@
 const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
 
+const JOB_NAME = 'daily-notifications';
 const TERMINAL_STATUSES = new Set(['completed', 'completed_with_errors']);
 
-function validateJobKey(jobName, sessionID) {
-  if (!/^[a-z0-9-]+$/.test(jobName) || !/^\d{8}$/.test(sessionID)) {
-    throw new TypeError('Scheduled job name or session ID is invalid.');
+function validateSessionId(sessionID) {
+  if (!/^\d{8}$/.test(sessionID)) {
+    throw new TypeError('Notification session ID is invalid.');
   }
 }
 
@@ -13,7 +14,7 @@ function run(sql, params) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function onRun(error) {
       if (error) {
-        console.error('Scheduled job database write failed:', summarizeError(error));
+        console.error('Notification ledger write failed:', summarizeError(error));
         reject(error);
         return;
       }
@@ -22,16 +23,16 @@ function run(sql, params) {
   });
 }
 
-function get(jobName, sessionID) {
+function get(sessionID) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT job_name, session_id, status, started_at, completed_at, summary
+      `SELECT session_id, status, started_at, completed_at, summary
        FROM scheduled_job_runs
        WHERE job_name = ? AND session_id = ?;`,
-      [jobName, sessionID],
+      [JOB_NAME, sessionID],
       (error, row) => {
         if (error) {
-          console.error('Scheduled job database read failed:', summarizeError(error));
+          console.error('Notification ledger read failed:', summarizeError(error));
           reject(error);
           return;
         }
@@ -50,14 +51,14 @@ function parseSummary(summary) {
   }
 }
 
-async function getScheduledJobRun(jobName, sessionID) {
-  validateJobKey(jobName, sessionID);
-  const row = await get(jobName, sessionID);
+async function getNotificationRun(sessionID) {
+  validateSessionId(sessionID);
+  const row = await get(sessionID);
   return row ? { ...row, summary: parseSummary(row.summary) } : null;
 }
 
-async function claimScheduledJobRun(jobName, sessionID) {
-  validateJobKey(jobName, sessionID);
+async function claimNotificationRun(sessionID) {
+  validateSessionId(sessionID);
   const result = await run(
     `INSERT INTO scheduled_job_runs (job_name, session_id, status)
      VALUES (?, ?, 'running')
@@ -71,41 +72,41 @@ async function claimScheduledJobRun(jobName, sessionID) {
           scheduled_job_runs.status = 'running'
           AND scheduled_job_runs.started_at <= datetime('now', '-30 minutes')
         );`,
-    [jobName, sessionID]
+    [JOB_NAME, sessionID]
   );
   return result.changes === 1;
 }
 
-async function finishScheduledJobRun(jobName, sessionID, status, summary) {
-  validateJobKey(jobName, sessionID);
+async function finishNotificationRun(sessionID, status, summary) {
+  validateSessionId(sessionID);
   if (!TERMINAL_STATUSES.has(status)) {
-    throw new TypeError('Scheduled job terminal status is invalid.');
+    throw new TypeError('Notification terminal status is invalid.');
   }
   const result = await run(
     `UPDATE scheduled_job_runs
      SET status = ?, completed_at = CURRENT_TIMESTAMP, summary = ?
      WHERE job_name = ? AND session_id = ? AND status = 'running';`,
-    [status, JSON.stringify(summary || {}), jobName, sessionID]
+    [status, JSON.stringify(summary || {}), JOB_NAME, sessionID]
   );
   if (result.changes !== 1) {
-    throw new Error('Scheduled job could not be completed from its current state.');
+    throw new Error('Notification run could not be completed from its current state.');
   }
 }
 
-async function failScheduledJobRun(jobName, sessionID) {
-  validateJobKey(jobName, sessionID);
+async function failNotificationRun(sessionID) {
+  validateSessionId(sessionID);
   await run(
     `UPDATE scheduled_job_runs
      SET status = 'failed', completed_at = CURRENT_TIMESTAMP, summary = NULL
      WHERE job_name = ? AND session_id = ? AND status = 'running';`,
-    [jobName, sessionID]
+    [JOB_NAME, sessionID]
   );
 }
 
 module.exports = {
-  claimScheduledJobRun,
-  failScheduledJobRun,
-  finishScheduledJobRun,
-  getScheduledJobRun,
-  isTerminalScheduledJobStatus: (status) => TERMINAL_STATUSES.has(status),
+  claimNotificationRun,
+  failNotificationRun,
+  finishNotificationRun,
+  getNotificationRun,
+  isTerminalNotificationStatus: (status) => TERMINAL_STATUSES.has(status),
 };

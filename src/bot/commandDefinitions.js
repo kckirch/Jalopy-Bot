@@ -79,20 +79,12 @@ function buildCommandDefinitions() {
     buildSearchCommand(),
     buildSavedSearchCommand(),
     new SlashCommandBuilder()
-      .setName('dailysavedsearch')
-      .setDescription('Manually Force a daily saved searches to send to users')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    new SlashCommandBuilder()
       .setName('runtestscheduler')
       .setDescription('Run missed morning job: scrape yards, then send saved-search and new-car alerts')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
     new SlashCommandBuilder()
       .setName('commands')
       .setDescription('Showcase all user commands with examples'),
-    new SlashCommandBuilder()
-      .setName('manualnotifynewvehicles')
-      .setDescription('Manually notify users of new vehicles')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   ].map((command) => command.toJSON());
 }
 

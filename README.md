@@ -127,9 +127,7 @@ checkout as described above.
 The following maintenance commands require elevated Discord permissions:
 
 - **`/scrape`**: Run an inventory scrape for a location and optional make/model.
-- **`/dailysavedsearch`**: Manually process saved-search notifications.
 - **`/runtestscheduler`**: Recover the missed morning scrape and alert workflow.
-- **`/manualnotifynewvehicles`**: Manually send new-vehicle notifications.
 
 ### Database Structure
 

@@ -1,8 +1,6 @@
 const { handleAutocompleteInteraction } = require('./autocompleteHandler');
 const { handleButtonClick } = require('./buttonClickHandler');
 const { handleCommandsCommand } = require('../commands/commandsCommand');
-const { handleDailySavedSearchCommand } = require('../commands/dailySavedSearchCommand');
-const { handleManualNotifyNewVehiclesCommand } = require('../commands/manualNotifyNewVehiclesCommand');
 const { handleRunTestSchedulerCommand } = require('../commands/runTestSchedulerCommand');
 const { handleSavedSearchCommand } = require('../commands/savedSearchCommand');
 const { handleScrapeCommand } = require('../commands/scrapeCommand');
@@ -11,8 +9,6 @@ const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
 const DEFAULT_COMMAND_HANDLERS = Object.freeze({
   commands: handleCommandsCommand,
-  dailysavedsearch: handleDailySavedSearchCommand,
-  manualnotifynewvehicles: handleManualNotifyNewVehiclesCommand,
   runtestscheduler: handleRunTestSchedulerCommand,
   savedsearch: handleSavedSearchCommand,
   scrape: handleScrapeCommand,

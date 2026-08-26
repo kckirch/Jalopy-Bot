@@ -7,7 +7,7 @@ const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
 const httpScrapePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
-const jobManagerPath = path.join(repoRoot, 'src/database/scheduledJobManager.js');
+const ledgerPath = path.join(repoRoot, 'src/database/notificationRunLedger.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
 const cronPath = require.resolve('node-cron', { paths: [repoRoot] });
 
@@ -27,7 +27,7 @@ async function withSchedulerMocks(mocks, runTest) {
     httpScrapePath,
     dailyTasksPath,
     sessionCheckPath,
-    jobManagerPath,
+    ledgerPath,
   ];
   const previous = new Map(
     modulePaths.map((modulePath) => [modulePath, require.cache[modulePath]])
@@ -39,12 +39,12 @@ async function withSchedulerMocks(mocks, runTest) {
     processDailySavedSearches: mocks.processDailySavedSearches,
   });
   replaceModule(sessionCheckPath, { checkSessionUpdates: mocks.checkSessionUpdates });
-  replaceModule(jobManagerPath, {
-    claimScheduledJobRun: mocks.claimScheduledJobRun,
-    failScheduledJobRun: mocks.failScheduledJobRun,
-    finishScheduledJobRun: mocks.finishScheduledJobRun,
-    getScheduledJobRun: mocks.getScheduledJobRun,
-    isTerminalScheduledJobStatus: mocks.isTerminalScheduledJobStatus,
+  replaceModule(ledgerPath, {
+    claimNotificationRun: mocks.claimNotificationRun,
+    failNotificationRun: mocks.failNotificationRun,
+    finishNotificationRun: mocks.finishNotificationRun,
+    getNotificationRun: mocks.getNotificationRun,
+    isTerminalNotificationStatus: mocks.isTerminalNotificationStatus,
   });
   delete require.cache[schedulerPath];
 
@@ -63,31 +63,28 @@ async function withSchedulerMocks(mocks, runTest) {
 
 function buildBaseMocks(overrides = {}) {
   const runs = new Map();
-  const key = (jobName, sessionID) => `${jobName}:${sessionID}`;
   return {
     runs,
     schedule: () => ({}),
     scrapeWithHttp: async () => {},
     processDailySavedSearches: async () => ({ savedSearchFailures: 0 }),
     checkSessionUpdates: async () => true,
-    getScheduledJobRun: async (jobName, sessionID) =>
-      runs.get(key(jobName, sessionID)) || null,
-    claimScheduledJobRun: async (jobName, sessionID) => {
-      const runKey = key(jobName, sessionID);
-      const existing = runs.get(runKey);
+    getNotificationRun: async (sessionID) => runs.get(sessionID) || null,
+    claimNotificationRun: async (sessionID) => {
+      const existing = runs.get(sessionID);
       if (existing && ['running', 'completed', 'completed_with_errors'].includes(existing.status)) {
         return false;
       }
-      runs.set(runKey, { status: 'running', summary: null });
+      runs.set(sessionID, { status: 'running', summary: null });
       return true;
     },
-    finishScheduledJobRun: async (jobName, sessionID, status, summary) => {
-      runs.set(key(jobName, sessionID), { status, summary });
+    finishNotificationRun: async (sessionID, status, summary) => {
+      runs.set(sessionID, { status, summary });
     },
-    failScheduledJobRun: async (jobName, sessionID) => {
-      runs.set(key(jobName, sessionID), { status: 'failed', summary: null });
+    failNotificationRun: async (sessionID) => {
+      runs.set(sessionID, { status: 'failed', summary: null });
     },
-    isTerminalScheduledJobStatus: (status) =>
+    isTerminalNotificationStatus: (status) =>
       status === 'completed' || status === 'completed_with_errors',
     ...overrides,
   };
@@ -279,7 +276,7 @@ test('notification failure is recorded and retried on the next recovery', async 
       runDailyNotificationJob('20260101'),
       /Discord unavailable/
     );
-    assert.equal(mocks.runs.get('daily-notifications:20260101').status, 'failed');
+    assert.equal(mocks.runs.get('20260101').status, 'failed');
     assert.equal((await runDailyNotificationJob('20260101')).status, 'completed');
   });
   assert.equal(calls, 2);
@@ -297,7 +294,7 @@ test('saved-search delivery failures are recorded as a completed warning state',
     );
   });
   assert.equal(
-    mocks.runs.get('daily-notifications:20260101').status,
+    mocks.runs.get('20260101').status,
     'completed_with_errors'
   );
 });
