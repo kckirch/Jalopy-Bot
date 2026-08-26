@@ -60,11 +60,12 @@ body:
   - type: dropdown
     id: scraper
     attributes:
-      label: Scraper engine
+      label: Affected subsystem
       options:
-        - http
-        - selenium
-        - auto
+        - HTTP scraper
+        - Discord bot
+        - Inventory API
+        - Scheduler
         - Not applicable
     validations:
       required: true

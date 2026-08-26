@@ -17,7 +17,7 @@ Nampa, Garden City, and Twin Falls, plus Trusty Pick A Part.
 - **Six-Yard Search**: Search one yard, the Treasure Valley group, or every supported yard.
 - **First-Seen Tracking**: Distinguish newly discovered, active, and inactive inventory.
 - **Flexible Filters**: Search by make, model aliases, year lists or ranges, and status.
-- **Two Scraper Engines**: Use the HTTP parser by default or Selenium as a fallback.
+- **Direct HTTP Scraping**: Collect inventory without a browser or driver.
 - **Privacy-Preserving API**: Serve a vehicles-only SQLite snapshot to the public website.
 
 ## Why JalopyBot?
@@ -30,11 +30,11 @@ for public API consumers.
 ## Project layout
 
 - `src/bot`: Discord startup, commands, handlers, and permissions.
-- `src/scraping`: HTTP and Selenium inventory collectors.
+- `src/scraping`: HTTP inventory collector and parsing helpers.
 - `src/database`: Runtime schema, queries, and saved-search persistence.
 - `src/notifications`: Scheduled scrapes and Discord alert processing.
 - `src/api`: Read-only JSON and vehicles-only SQLite endpoints.
-- `src/testing`: Opt-in live smoke and model-alias diagnostic tools.
+- `src/testing`: Opt-in live smoke tools.
 - `test`: Isolated unit, integration, and recorded-fixture tests.
 
 ## Installation
@@ -50,14 +50,7 @@ for public API consumers.
     npm ci
     ```
 
-3. Configure scraper engine mode with `SCRAPER_ENGINE`:
-    - `http` (recommended): Uses HTTP + HTML parsing, no chromedriver required.
-    - `selenium`: Uses Selenium with `CHROMEDRIVER_PATH`, a system driver, or Selenium Manager.
-    - `auto` (default): Uses Selenium when an external chromedriver executable is available, otherwise HTTP.
-
-    Chromedriver is not bundled. If you use Selenium, keep the browser driver outside this repository and set `CHROMEDRIVER_PATH` when automatic resolution is unavailable.
-
-4. Create the ignored runtime environment file from the checked-in example:
+3. Create the ignored runtime environment file from the checked-in example:
     ```bash
     cp .env.example src/.env
     ```
@@ -69,7 +62,6 @@ for public API consumers.
     CLIENT_ID=your_client_id
     NEW_VEHICLES_CHANNEL_ID=your_new_vehicles_channel_id
     VEHICLE_DB_PATH=/absolute/path/to/vehicleInventory.db
-    SCRAPER_ENGINE=http
     SCHEDULER_TIMEZONE=Etc/GMT+7
     SCRAPE_LOG_MODE=summary
     ```
@@ -78,12 +70,12 @@ for public API consumers.
 
     `SCHEDULER_TIMEZONE` defaults to `Etc/GMT+7` (fixed MST). Daily jobs run at `05:00` (scrape) and `05:45` (saved-search notifications) in that timezone. Startup and hourly `:30` recovery checks catch up missed work. A durable `scheduled_job_runs` ledger prevents a completed session from being delivered twice, while deterministic Discord embed footers make a partially delivered daily channel post safe to retry. Successful zero-result days publish a heartbeat to the configured channel.
 
-5. Register slash commands (run on deploys or when command definitions change):
+4. Register slash commands (run on deploys or when command definitions change):
     ```bash
     npm run register:commands
     ```
 
-6. Start the bot:
+5. Start the bot:
     ```bash
     npm start
     ```
@@ -197,11 +189,7 @@ API downloads are generated from a separate snapshot containing only the
     ```bash
     npm ci
     ```
-4. Set `SCRAPER_ENGINE` in your env:
-   - `SCRAPER_ENGINE=http` for chromedriver-free scraping.
-   - `SCRAPER_ENGINE=selenium` to use an external driver or Selenium Manager.
-   - `SCRAPER_ENGINE=auto` to choose Selenium only when an external chromedriver executable is available.
-   Set `SCRAPE_LOG_MODE=summary` for concise yard/make logs, or `SCRAPE_LOG_MODE=full` for per-vehicle insert/update logs.
+4. Set `SCRAPE_LOG_MODE=summary` for concise yard/make logs, or `SCRAPE_LOG_MODE=full` for per-vehicle insert/update logs.
 5. Register slash commands when needed:
     ```bash
     npm run register:commands
@@ -241,7 +229,7 @@ npm test -- test/httpInventoryReplayFixtures.test.js
 
 Run the live scrape smoke test against an isolated temporary DB:
 ```bash
-npm run smoke:live -- --engine http
+npm run smoke:live -- --location boise
 ```
 
 Pull requests run the full suite on Node.js 20, 22, and 24, plus coverage,

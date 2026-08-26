@@ -4,7 +4,7 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
-const universalPath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
+const httpScrapePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
 const jobManagerPath = path.join(repoRoot, 'src/database/scheduledJobManager.js');
@@ -24,7 +24,7 @@ async function withSchedulerMocks(mocks, runTest) {
   const modulePaths = [
     schedulerPath,
     cronPath,
-    universalPath,
+    httpScrapePath,
     dailyTasksPath,
     sessionCheckPath,
     jobManagerPath,
@@ -34,7 +34,7 @@ async function withSchedulerMocks(mocks, runTest) {
   );
 
   replaceModule(cronPath, { schedule: mocks.schedule });
-  replaceModule(universalPath, { universalWebScrape: mocks.universalWebScrape });
+  replaceModule(httpScrapePath, { scrapeWithHttp: mocks.scrapeWithHttp });
   replaceModule(dailyTasksPath, {
     processDailySavedSearches: mocks.processDailySavedSearches,
   });
@@ -67,7 +67,7 @@ function buildBaseMocks(overrides = {}) {
   return {
     runs,
     schedule: () => ({}),
-    universalWebScrape: async () => {},
+    scrapeWithHttp: async () => {},
     processDailySavedSearches: async () => ({ savedSearchFailures: 0 }),
     checkSessionUpdates: async () => true,
     getScheduledJobRun: async (jobName, sessionID) =>
@@ -176,7 +176,7 @@ test('scheduler context uses the configured timezone for session boundaries', as
 test('scrapeAllJunkyards runs every configured source and reports aggregate failure', async () => {
   const scrapeCalls = [];
   const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
+    scrapeWithHttp: async (options) => {
       scrapeCalls.push(options);
       if (options.hasMultipleLocations === false) throw new Error('source failed');
     },
@@ -200,7 +200,7 @@ test('ensureCurrentInventorySession scrapes only when readiness is incomplete', 
       readinessChecks += 1;
       return readinessChecks > 1;
     },
-    universalWebScrape: async () => { scrapeCalls += 1; },
+    scrapeWithHttp: async () => { scrapeCalls += 1; },
   });
 
   await withSchedulerMocks(mocks, async ({ ensureCurrentInventorySession }) => {

@@ -11,7 +11,7 @@ const {
 } = require('../database/scheduledJobManager');
 const { formatScrapeLogValue } = require('../scraping/scrapeLogging');
 const { withScrapeLock } = require('../scraping/scrapeLock');
-const { universalWebScrape } = require('../scraping/universalWebScrape');
+const { scrapeWithHttp } = require('../scraping/httpInventoryScrape');
 const { summarizeError } = require('../utils/errorSummary');
 const { getSchedulerContext } = require('./schedulerTime');
 
@@ -66,7 +66,7 @@ async function scrapeAllJunkyards(sessionID) {
         console.log(
           `Starting configured scrape: ${formatScrapeLogValue(junkyardKey)}`
         );
-        await universalWebScrape(options);
+        await scrapeWithHttp(options);
         console.log(
           `Completed configured scrape: ${formatScrapeLogValue(junkyardKey)}`
         );
