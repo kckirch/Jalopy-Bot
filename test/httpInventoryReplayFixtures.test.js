@@ -21,21 +21,18 @@ function readFixtureJson(name) {
   return JSON.parse(readFixtureText(name));
 }
 
-function parsePayload(config) {
-  if (typeof config.data === 'string') {
-    return Object.fromEntries(new URLSearchParams(config.data).entries());
+function parsePayload(url, options) {
+  if (String(options.method || 'GET').toUpperCase() === 'GET') {
+    return Object.fromEntries(url.searchParams.entries());
   }
-  if (config.params && typeof config.params === 'object') {
-    return config.params;
-  }
-  return {};
+  return Object.fromEntries(new URLSearchParams(options.body || '').entries());
 }
 
-function resolveFixtureRoute(config) {
-  const method = String(config.method || 'GET').toUpperCase();
-  const pathname = new URL(config.url).pathname;
-  const payload = parsePayload(config);
-  const requestRoute = `${method} ${pathname}`;
+function resolveFixtureRoute(input, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const url = new URL(input);
+  const payload = parsePayload(url, options);
+  const requestRoute = `${method} ${url.pathname}`;
 
   if (requestRoute === 'GET /') {
     return { key: 'inventory:initial' };
@@ -67,7 +64,7 @@ function resolveFixtureRoute(config) {
   throw new Error(`Unexpected request in fixture replay: ${requestRoute}`);
 }
 
-function createFixtureReplayHttpClient() {
+function createFixtureReplayFetch() {
   const fixturesByRoute = new Map([
     ['inventory:initial', readFixtureText('boise_initial.html')],
     [
@@ -95,44 +92,42 @@ function createFixtureReplayHttpClient() {
     ['models:default', []],
   ]);
 
-  return {
-    async request(config) {
-      const { key, fallbackKey } = resolveFixtureRoute(config);
-      const fixtureKey = fixturesByRoute.has(key) ? key : fallbackKey;
-      return { status: 200, headers: {}, data: fixturesByRoute.get(fixtureKey) };
-    },
+  return async (input, options = {}) => {
+    const { key, fallbackKey } = resolveFixtureRoute(input, options);
+    const fixtureKey = fixturesByRoute.has(key) ? key : fallbackKey;
+    const fixture = fixturesByRoute.get(fixtureKey);
+    return new Response(
+      typeof fixture === 'string' ? fixture : JSON.stringify(fixture),
+      { status: 200 }
+    );
   };
 }
 
 test('fixture replay client preserves family fallbacks and rejects unknown routes', async () => {
-  const httpClient = createFixtureReplayHttpClient();
-  const makesResponse = await httpClient.request({
+  const fetch = createFixtureReplayFetch();
+  const makesResponse = await fetch('https://inventory.example/Home/GetMakes', {
     method: 'POST',
-    url: 'https://inventory.example/Home/GetMakes',
-    params: { yardId: '9999' },
+    body: new URLSearchParams({ yardId: '9999' }).toString(),
   });
-  const modelsResponse = await httpClient.request({
+  const modelsResponse = await fetch('https://inventory.example/Home/GetModels', {
     method: 'POST',
-    url: 'https://inventory.example/Home/GetModels',
-    data: new URLSearchParams({ yardId: '9999', makeName: 'UNKNOWN' }).toString(),
+    body: new URLSearchParams({ yardId: '9999', makeName: 'UNKNOWN' }).toString(),
   });
-  const inventoryResponse = await httpClient.request({
+  const inventoryResponse = await fetch('https://inventory.example/', {
     method: 'POST',
-    url: 'https://inventory.example/',
-    data: new URLSearchParams({
+    body: new URLSearchParams({
       YardId: '9999',
       VehicleMake: 'UNKNOWN',
       VehicleModel: 'UNKNOWN',
     }).toString(),
   });
 
-  assert.deepEqual(makesResponse.data, []);
-  assert.deepEqual(modelsResponse.data, []);
-  assert.equal(inventoryResponse.data, readFixtureText('boise_initial.html'));
+  assert.deepEqual(await makesResponse.json(), []);
+  assert.deepEqual(await modelsResponse.json(), []);
+  assert.equal(await inventoryResponse.text(), readFixtureText('boise_initial.html'));
   await assert.rejects(
-    httpClient.request({
+    fetch('https://inventory.example/unexpected', {
       method: 'DELETE',
-      url: 'https://inventory.example/unexpected',
     }),
     /Unexpected request in fixture replay: DELETE \/unexpected/
   );
@@ -170,7 +165,7 @@ test('fixture replay ANY/ANY scrape follows dynamic endpoints and upserts expect
     },
     {
       cheerio,
-      httpClient: createFixtureReplayHttpClient(),
+      fetch: createFixtureReplayFetch(),
       insertOrUpdateVehicle: async (...args) => {
         upserts.push(args);
       },
@@ -213,7 +208,7 @@ test('fixture replay multi-yard scrape uses dropdown yard options and scopes rec
     },
     {
       cheerio,
-      httpClient: createFixtureReplayHttpClient(),
+      fetch: createFixtureReplayFetch(),
       insertOrUpdateVehicle: async (...args) => {
         upserts.push(args);
       },

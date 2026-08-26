@@ -11,29 +11,11 @@ const {
   uniqueNonEmptyStrings,
 } = require('../src/scraping/httpInventoryParser');
 
-test('HTTP scraper preserves the axios load failure as the error cause', async () => {
-  const loadError = new Error('simulated axios load failure');
-
-  await assert.rejects(
-    scrapeWithHttp({}, {
-      loadAxios() {
-        throw loadError;
-      },
-    }),
-    (error) => {
-      assert.match(error.message, /requires axios/i);
-      assert.equal(error.cause, loadError);
-      return true;
-    }
-  );
-});
-
 test('HTTP scraper preserves the cheerio load failure as the error cause', async () => {
   const loadError = new Error('simulated cheerio load failure');
 
   await assert.rejects(
     scrapeWithHttp({}, {
-      axios: {},
       loadCheerio() {
         throw loadError;
       },

@@ -4,7 +4,7 @@ const cheerio = require('cheerio');
 
 const { scrapeWithHttp } = require('../src/scraping/httpInventoryScrape');
 const {
-  createRouteHttpClient,
+  createRouteFetch,
   createScrapeConfig,
   inventoryPage,
   ok,
@@ -22,7 +22,7 @@ test('http scraper follows dynamic makes/models flow for ANY/ANY and reconciles 
     ['TOYOTA', [{ model: 'CAMRY' }, { model: 'COROLLA' }]],
     ['HONDA', [{ model: 'CIVIC' }]],
   ]);
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({
       yardOptions: ['1020'],
       makeOptions: ['TOYOTA', 'HONDA'],
@@ -41,7 +41,7 @@ test('http scraper follows dynamic makes/models flow for ANY/ANY and reconciles 
 
   await scrapeWithHttp(createScrapeConfig(), {
     cheerio,
-    httpClient,
+    fetch,
     insertOrUpdateVehicle: async (...args) => upserts.push(args),
     markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
   });
@@ -65,7 +65,7 @@ test('http scraper follows dynamic makes/models flow for ANY/ANY and reconciles 
 
 test('http scraper rejects unsafe reconciliation when zero rows were upserted', async () => {
   const markCalls = [];
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({ yardOptions: ['1020'], makeOptions: ['TOYOTA'] }),
     'POST /Home/GetMakes': ok([{ makeName: 'TOYOTA' }]),
     'POST /Home/GetModels': ok([{ model: 'CAMRY' }]),
@@ -75,7 +75,7 @@ test('http scraper rejects unsafe reconciliation when zero rows were upserted', 
   await assert.rejects(
     scrapeWithHttp(createScrapeConfig(), {
       cheerio,
-      httpClient,
+      fetch,
       insertOrUpdateVehicle: async () => {},
       markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
     }),
@@ -88,7 +88,7 @@ test('http scraper rejects unsafe reconciliation when zero rows were upserted', 
 test('http scraper in multi-yard mode iterates discovered yard options', async () => {
   const upserts = [];
   const markCalls = [];
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({
       yardOptions: ['1020', '1020junk', '1021'],
       makeOptions: ['TOYOTA'],
@@ -108,7 +108,7 @@ test('http scraper in multi-yard mode iterates discovered yard options', async (
     createScrapeConfig({ yardId: null, make: 'TOYOTA', model: 'CAMRY' }),
     {
       cheerio,
-      httpClient,
+      fetch,
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
       markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
     }
@@ -122,7 +122,7 @@ test('http scraper single-location mode uses form make options and trusty model 
   const upserts = [];
   const markCalls = [];
   let getMakesCalled = false;
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({
       yardOptions: ['999999'],
       makeOptions: ['TOYOTA'],
@@ -161,7 +161,7 @@ test('http scraper single-location mode uses form make options and trusty model 
     }),
     {
       cheerio,
-      httpClient,
+      fetch,
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
       markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
     }
@@ -188,7 +188,7 @@ test('http scraper processes duplicate source rows without crashing and still re
     { year: 2003, make: 'TOYOTA', model: 'CAMRY', rowNumber: 50 },
     { year: 2003, make: 'TOYOTA', model: 'CAMRY', rowNumber: 50 },
   ];
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({ yardOptions: ['1020'], makeOptions: ['TOYOTA'] }),
     'POST /Home/GetMakes': ok([{ makeName: 'TOYOTA' }]),
     'POST /Home/GetModels': ok([{ model: 'CAMRY' }]),
@@ -202,7 +202,7 @@ test('http scraper processes duplicate source rows without crashing and still re
 
   await scrapeWithHttp(createScrapeConfig(), {
     cheerio,
-    httpClient,
+    fetch,
     insertOrUpdateVehicle: async (...args) => upserts.push(args),
     markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
   });

@@ -3,7 +3,7 @@ const { summarizeError } = require('../../utils/errorSummary');
 const {
   vehicleMakes,
   reverseMakeAliases,
-} = require('../utils/locationUtils');
+} = require('../../config/vehicleMakes');
 const {
   attachSearchInteractionCollector,
 } = require('../handlers/searchInteractionCollector');

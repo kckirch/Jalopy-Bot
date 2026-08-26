@@ -1,4 +1,7 @@
-const { vehicleMakes, reverseMakeAliases } = require('../utils/locationUtils');
+const {
+  vehicleMakes,
+  reverseMakeAliases,
+} = require('../../config/vehicleMakes');
 const { getModelSuggestions } = require('../../database/vehicleQueryManager');
 const { summarizeError } = require('../../utils/errorSummary');
 

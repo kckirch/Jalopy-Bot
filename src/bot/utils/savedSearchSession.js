@@ -303,24 +303,4 @@ class SavedSearchSession {
   }
 }
 
-function createSavedSearchSession(initialSavedSearches) {
-  const session = new SavedSearchSession(initialSavedSearches);
-  return Object.freeze({
-    activateResults: session.activateResults.bind(session),
-    buildActiveViewPayload: session.buildActiveViewPayload.bind(session),
-    buildResultsViewPayload: session.buildResultsViewPayload.bind(session),
-    buildSavedViewPayload: session.buildSavedViewPayload.bind(session),
-    getNextFrequency: session.getNextFrequency.bind(session),
-    getSearch: session.getSearch.bind(session),
-    hasResults: session.hasResults.bind(session),
-    isEmpty: session.isEmpty.bind(session),
-    moveResultsPage: session.moveResultsPage.bind(session),
-    moveSaved: session.moveSaved.bind(session),
-    remove: session.remove.bind(session),
-    resolveIndex: session.resolveIndex.bind(session),
-    showSaved: session.showSaved.bind(session),
-    updateFrequency: session.updateFrequency.bind(session),
-  });
-}
-
-module.exports = { createSavedSearchSession };
+module.exports = { SavedSearchSession };

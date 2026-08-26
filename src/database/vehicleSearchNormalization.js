@@ -1,17 +1,7 @@
-const MAKE_ALIASES = {
-  chevrolet: ['chevrolet', 'chevy', 'chev'],
-  mercedes: [
-    'mercedes',
-    'mercedes-benz',
-    'mercedes benz',
-    'benz',
-    'mercedesbenz',
-  ],
-  volkswagen: ['volkswagen', 'vw'],
-  'land rover': ['land rover', 'landrover'],
-  mini: ['mini', 'mini cooper'],
-  bmw: ['bmw', 'bimmer'],
-};
+const {
+  makeAliases,
+  reverseMakeAliases,
+} = require('../config/vehicleMakes');
 
 const MODEL_ALIASES = {
   1500: ['C1500', 'K1500', 'Silverado', 'Sierra'],
@@ -172,8 +162,12 @@ function getMakeVariations(make) {
     return [];
   }
 
-  const aliases = MAKE_ALIASES[make.toLowerCase()] || [make];
-  return aliases.map((alias) => `%${alias.replace(/\s+/g, '%')}%`);
+  const normalized = make.trim().toUpperCase();
+  const canonical = reverseMakeAliases[normalized] || normalized;
+  const aliases = makeAliases[canonical] || [canonical];
+  return aliases.map((alias) =>
+    `%${alias.toLowerCase().replace(/\s+/g, '%')}%`
+  );
 }
 
 function getModelVariations(model) {
