@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const { REST, Routes } = require('discord.js');
 
@@ -46,7 +47,7 @@ async function registerCommandsFromEnvironment({
   environmentPath = path.resolve(__dirname, '../.env'),
   rest,
 } = {}) {
-  require('dotenv').config({ path: environmentPath, quiet: true });
+  if (fs.existsSync(environmentPath)) process.loadEnvFile(environmentPath);
   console.log('Registering slash commands...');
   const commandDefinitions = await registerCommands({ environment, rest });
   console.log('Slash commands were registered successfully!');

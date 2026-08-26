@@ -1,121 +1,91 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const { YARDS } = require('../config/yards');
 const { summarizeError } = require('../utils/errorSummary');
-const { executeSmokeChecks } = require('./liveScrapeSmokeChecks');
-const {
-  getUsageText,
-  normalizeSessionId,
-  parseArgs,
-  resolveScrapeTarget,
-  resolveScrapeTargets,
-  selectSentinelYard,
-} = require('./liveScrapeSmokeOptions');
-const {
-  activateSmokeEnvironment,
-  cleanupSmokeDatabase,
-  closeDatabase,
-  resolveSmokeDatabasePath,
-  restoreSmokeEnvironment,
-} = require('./liveScrapeSmokeRuntime');
 
-async function runLiveScrapeSmokeTest({
-  argv = process.argv.slice(2),
-  logger = console,
-  deps = {},
-} = {}) {
-  const args = parseArgs(argv);
-  if (args.help) {
-    logger.log(getUsageText());
-    return { ok: true, skipped: true };
+const USAGE = 'Usage: npm run smoke:live -- [--location boise]';
+
+function parseLocation(argv) {
+  if (argv.includes('--help') || argv.includes('-h')) return null;
+  if (argv.length === 0) return 'boise';
+  if (argv.length !== 2 || argv[0] !== '--location' || !argv[1]) {
+    throw new Error(USAGE);
   }
-
-  const dbFilePath = resolveSmokeDatabasePath(args);
-  const environmentSnapshot = activateSmokeEnvironment(args, dbFilePath);
-  const {
-    junkyards = require('../config/junkyards'),
-    convertLocationToYardId = require('../bot/utils/locationUtils')
-      .convertLocationToYardId,
-    getSessionID = require('../utils/sessionId').getSessionID,
-    universalWebScrape = require('../scraping/universalWebScrape')
-      .universalWebScrape,
-    databaseModule = require('../database/database'),
-  } = deps;
-  const { setupDatabase, db } = databaseModule;
-
-  let smokeResult;
-  let smokeError = null;
-  let closeError = null;
-
-  try {
-    smokeResult = await executeSmokeChecks({
-      args,
-      dbFilePath,
-      logger,
-      db,
-      setupDatabase,
-      junkyards,
-      convertLocationToYardId,
-      getSessionID,
-      universalWebScrape,
-    });
-  } catch (error) {
-    smokeError = error;
-  } finally {
-    try {
-      await closeDatabase(db);
-    } catch (error) {
-      closeError = error;
-      logger.error(
-        'Failed to close smoke-test DB cleanly:',
-        summarizeError(error)
-      );
-    }
-
-    cleanupSmokeDatabase({ dbFilePath, keepDb: args.keepDb }, logger);
-    restoreSmokeEnvironment(environmentSnapshot);
-  }
-
-  if (smokeError) throw smokeError;
-  if (closeError) throw closeError;
-  return smokeResult;
+  return argv[1].trim().toLowerCase();
 }
 
-async function runLiveScrapeSmokeCli(run = runLiveScrapeSmokeTest) {
+function resolveYard(location) {
+  const yard = YARDS.find(({ slug }) => slug === location);
+  if (!yard) throw new Error(`Unknown smoke-test location: ${location}`);
+  return yard;
+}
+
+function getVehicleCount(db, yardId) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      'SELECT COUNT(*) AS count FROM vehicles WHERE yard_id = ?;',
+      [yardId],
+      (error, row) => error ? reject(error) : resolve(Number(row?.count || 0))
+    );
+  });
+}
+
+function closeDatabase(db) {
+  return new Promise((resolve, reject) => {
+    db.close((error) => error ? reject(error) : resolve());
+  });
+}
+
+async function runLiveScrapeSmokeTest(argv = process.argv.slice(2)) {
+  const location = parseLocation(argv);
+  if (!location) {
+    console.log(USAGE);
+    return;
+  }
+
+  const yard = resolveYard(location);
+  const temporaryDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'jalopy-live-smoke-')
+  );
+  const originalDatabasePath = process.env.VEHICLE_DB_PATH;
+  process.env.VEHICLE_DB_PATH = path.join(temporaryDirectory, 'inventory.db');
+
+  let db;
   try {
-    await run();
-  } catch (error) {
-    const message = String((error && error.message) || error || '');
-    if (message.includes('chromedriver') && message.includes('ENOENT')) {
-      console.error('[smoke] Chromedriver not found.');
-      console.error(
-        '[smoke] Install chromedriver and ensure it is in PATH, or set CHROMEDRIVER_PATH.'
-      );
-      console.error(
-        '[smoke] Example (Homebrew): brew install --cask chromedriver'
-      );
-    } else if (
-      message.includes('requires axios') ||
-      message.includes('requires cheerio')
-    ) {
-      console.error('[smoke] Missing HTTP scraper dependencies.');
-      console.error('[smoke] Run: npm install');
-    }
-    console.error('[smoke] FAIL:', summarizeError(error));
-    process.exitCode = 1;
+    const junkyards = require('../config/junkyards');
+    const database = require('../database/database');
+    const { scrapeWithHttp } = require('../scraping/httpInventoryScrape');
+    const { getSessionID } = require('../utils/sessionId');
+    db = database.db;
+
+    await database.setupDatabase();
+    await scrapeWithHttp({
+      ...junkyards[yard.junkyardKey],
+      yardId: yard.id,
+      make: 'ANY',
+      model: 'ANY',
+      sessionID: getSessionID(),
+      shouldMarkInactive: true,
+    });
+
+    const count = await getVehicleCount(db, yard.id);
+    if (count === 0) throw new Error('Live scrape returned no vehicles.');
+    console.log(`[smoke] PASS: ${yard.displayName} returned ${count} vehicles.`);
+  } finally {
+    if (db) await closeDatabase(db);
+    if (originalDatabasePath === undefined) delete process.env.VEHICLE_DB_PATH;
+    else process.env.VEHICLE_DB_PATH = originalDatabasePath;
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 }
 
 if (require.main === module) {
-  runLiveScrapeSmokeCli();
+  runLiveScrapeSmokeTest().catch((error) => {
+    console.error('[smoke] FAIL:', summarizeError(error));
+    process.exitCode = 1;
+  });
 }
 
-module.exports = {
-  parseArgs,
-  resolveScrapeTarget,
-  resolveScrapeTargets,
-  runLiveScrapeSmokeTest,
-  runLiveScrapeSmokeCli,
-  __testables: {
-    normalizeSessionId,
-    selectSentinelYard,
-    getUsageText,
-  },
-};
+module.exports = { parseLocation, resolveYard, runLiveScrapeSmokeTest };

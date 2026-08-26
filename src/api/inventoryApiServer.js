@@ -3,9 +3,9 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const sqlite3 = require('sqlite3').verbose();
-const dotenv = require('dotenv');
 
-dotenv.config({ path: path.resolve(__dirname, '../.env'), quiet: true });
+const environmentPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(environmentPath)) process.loadEnvFile(environmentPath);
 
 const { VEHICLE_DB_PATH } = require('../database/dbPath');
 const { summarizeError } = require('../utils/errorSummary');

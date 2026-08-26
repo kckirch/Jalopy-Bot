@@ -76,59 +76,6 @@ test('search command redacts save-check errors', async () => {
   );
 });
 
-test('search command redacts saved-search DM errors', async () => {
-  const privateErrorDetails = 'private Discord user 123456789';
-  const interaction = makeSearchInteraction();
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [makeVehicleRow()],
-      getSavedSearches: async () => [
-        {
-          id: 91,
-          yard_name: 'BOISE',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-      ],
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-      const customId = interaction.replies[0].components[1].components[1].data.custom_id;
-      const buttonInteraction = {
-        customId,
-        user: {
-          id: 'user-1',
-          tag: 'user-1#0001',
-          async send() {
-            throw new URIError(privateErrorDetails);
-          },
-        },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      const consoleCalls = await captureConsole(async () => {
-        await interaction.message.collector.emitCollect(buttonInteraction);
-      });
-
-      assert.deepEqual(buttonInteraction.replyCalls, [
-        {
-          content: 'I could not DM you. Please enable DMs or use /savedsearch.',
-          ephemeral: true,
-        },
-      ]);
-      assert.match(joinedConsoleText(consoleCalls), /Unable to DM saved searches: URIError/);
-      assert.equal(joinedConsoleText(consoleCalls).includes(privateErrorDetails), false);
-    }
-  );
-});
-
 test('search command redacts outer collector errors', async () => {
   const privateErrorDetails = 'private relocated query /home/kc/private-inventory.db';
   const interaction = makeSearchInteraction();

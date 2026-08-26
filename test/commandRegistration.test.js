@@ -43,18 +43,14 @@ test('command definitions preserve the complete registered command set', () => {
       'scrape',
       'search',
       'savedsearch',
-      'dailysavedsearch',
       'runtestscheduler',
       'commands',
-      'manualnotifynewvehicles',
     ]
   );
 
   const elevatedCommands = new Set([
     'scrape',
-    'dailysavedsearch',
     'runtestscheduler',
-    'manualnotifynewvehicles',
   ]);
   for (const command of commands) {
     const expectedPermissions = elevatedCommands.has(command.name)

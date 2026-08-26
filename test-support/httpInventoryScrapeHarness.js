@@ -56,38 +56,39 @@ function buildInventoryHtml({
   `;
 }
 
-function parsePayload(config) {
-  if (typeof config.data === 'string') {
-    return Object.fromEntries(new URLSearchParams(config.data).entries());
+function parsePayload(url, options) {
+  if (String(options.method || 'GET').toUpperCase() === 'GET') {
+    return Object.fromEntries(url.searchParams.entries());
   }
-  if (config.params && typeof config.params === 'object') {
-    return config.params;
-  }
-  return {};
+  return Object.fromEntries(new URLSearchParams(options.body || '').entries());
 }
 
 function ok(data) {
-  return { status: 200, headers: {}, data };
+  return new Response(
+    typeof data === 'string' ? data : JSON.stringify(data),
+    { status: 200 }
+  );
 }
 
 function inventoryPage(options) {
   return ok(buildInventoryHtml(options));
 }
 
-function createRouteHttpClient(routes) {
-  return {
-    async request(config) {
-      const method = String(config.method || 'GET').toUpperCase();
-      const pathname = new URL(config.url).pathname;
-      const key = `${method} ${pathname}`;
-      const route = routes[key];
-      if (!route) {
-        throw new Error(`Unexpected request: ${key}`);
-      }
+function createRouteFetch(routes) {
+  return async (input, options = {}) => {
+    const url = new URL(input);
+    const method = String(options.method || 'GET').toUpperCase();
+    const key = `${method} ${url.pathname}`;
+    const route = routes[key];
+    if (!route) throw new Error(`Unexpected request: ${key}`);
 
-      const request = { config, method, pathname, payload: parsePayload(config) };
-      return typeof route === 'function' ? route(request) : route;
-    },
+    const request = {
+      method,
+      pathname: url.pathname,
+      payload: parsePayload(url, options),
+    };
+    const response = typeof route === 'function' ? route(request) : route;
+    return response.clone();
   };
 }
 
@@ -105,7 +106,7 @@ function createScrapeConfig(overrides = {}) {
 }
 
 module.exports = {
-  createRouteHttpClient,
+  createRouteFetch,
   createScrapeConfig,
   inventoryPage,
   ok,

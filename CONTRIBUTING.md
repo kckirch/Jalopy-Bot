@@ -63,7 +63,7 @@ and 90% for functions. Live scrape checks are opt-in and should use an
 isolated database:
 
 ```bash
-npm run smoke:live -- --engine http
+npm run smoke:live -- --location boise
 ```
 
 ## Pull requests

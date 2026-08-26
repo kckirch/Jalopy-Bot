@@ -2,7 +2,6 @@ const crypto = require('node:crypto');
 
 const DEFAULT_MAX_ENTRIES = 5000;
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
-const QUICK_ACTION_PREFIX = 'sq:';
 
 function createInteractionParameterStore({
   maxEntries = DEFAULT_MAX_ENTRIES,
@@ -78,62 +77,8 @@ function resolveInteractionParameters(hash) {
   return interactionParameterStore.resolve(hash);
 }
 
-function encodeParamValue(value) {
-  return encodeURIComponent(String(value ?? ''));
-}
-
-function decodeParamValue(value) {
-  try {
-    return decodeURIComponent(String(value ?? ''));
-  } catch (error) {
-    return String(value ?? '');
-  }
-}
-
-function serializeActionPayload(payload) {
-  return Object.entries(payload)
-    .map(([key, value]) => `${key}:${encodeParamValue(value)}`)
-    .join('|');
-}
-
-function deserializeActionPayload(serializedPayload) {
-  return String(serializedPayload || '')
-    .split('|')
-    .reduce((accumulator, pair) => {
-      const separatorIndex = pair.indexOf(':');
-      if (separatorIndex === -1) {
-        return accumulator;
-      }
-
-      const key = pair.slice(0, separatorIndex);
-      const value = pair.slice(separatorIndex + 1);
-      accumulator[key] = decodeParamValue(value);
-      return accumulator;
-    }, {});
-}
-
-function buildQuickActionCustomId(action, payload) {
-  const serialized = serializeActionPayload({
-    ...payload,
-    sa: action,
-  });
-  const hash = storeInteractionParameters(serialized);
-  return `${QUICK_ACTION_PREFIX}${hash}`;
-}
-
-function resolveQuickActionPayload(hash) {
-  const serializedPayload = resolveInteractionParameters(hash);
-  if (!serializedPayload) {
-    return undefined;
-  }
-  return deserializeActionPayload(serializedPayload);
-}
-
 module.exports = {
-  QUICK_ACTION_PREFIX,
-  buildQuickActionCustomId,
   createInteractionParameterStore,
   resolveInteractionParameters,
-  resolveQuickActionPayload,
   storeInteractionParameters,
 };

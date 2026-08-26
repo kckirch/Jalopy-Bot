@@ -1,0 +1,76 @@
+const vehicleMakes = [
+  'ACURA',
+  'ALFA ROMEO',
+  'AMC',
+  'AUDI',
+  'BMW',
+  'BUICK',
+  'CADILLAC',
+  'CHEVROLET',
+  'CHRYSLER',
+  'DATSUN',
+  'DODGE',
+  'EAGLE',
+  'FIAT',
+  'FORD',
+  'GEO',
+  'GMC',
+  'HONDA',
+  'HUMMER',
+  'HYUNDAI',
+  'INFINITI',
+  'ISUZU',
+  'JAGUAR',
+  'JEEP',
+  'KIA',
+  'LAND ROVER',
+  'LEXUS',
+  'LINCOLN',
+  'MAZDA',
+  'MERCEDES-BENZ',
+  'MERCURY',
+  'MG',
+  'MINI',
+  'MITSUBISHI',
+  'NASH',
+  'NISSAN',
+  'OLDSMOBILE',
+  'PACKARD',
+  'PLYMOUTH',
+  'PONTIAC',
+  'PORSCHE',
+  'RAM',
+  'SAAB',
+  'SATURN',
+  'SCION',
+  'SMART',
+  'SUBARU',
+  'SUZUKI',
+  'TOYOTA',
+  'TRIUMPH',
+  'VOLKSWAGEN',
+  'VOLVO',
+];
+
+const makeAliases = {
+  CHEVROLET: ['CHEVROLET', 'CHEVY', 'CHEV'],
+  'MERCEDES-BENZ': [
+    'MERCEDES-BENZ',
+    'MERCEDES',
+    'MERCEDES BENZ',
+    'BENZ',
+    'MERCEDESBENZ',
+  ],
+  VOLKSWAGEN: ['VOLKSWAGEN', 'VW'],
+  'LAND ROVER': ['LAND ROVER', 'LANDROVER'],
+  MINI: ['MINI', 'MINI COOPER'],
+  BMW: ['BMW', 'BIMMER'],
+};
+
+const reverseMakeAliases = Object.fromEntries(
+  Object.entries(makeAliases).flatMap(([canonical, aliases]) =>
+    aliases.map((alias) => [alias, canonical])
+  )
+);
+
+module.exports = { makeAliases, reverseMakeAliases, vehicleMakes };

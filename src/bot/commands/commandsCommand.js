@@ -13,7 +13,7 @@ async function handleCommandsCommand(interaction) {
       },
       {
         name: '2) Use Result Buttons',
-        value: '`Previous` / `Next` page\n`Save Search` to track matches\n`Delete Saved` to remove current filter\n`My Saved Searches` for DM summary\nLocation dropdown reruns same filters in another yard',
+        value: '`Previous` / `Next` page\n`Save Search` to track matches\n`Delete Saved` to remove current filter\nLocation dropdown reruns same filters in another yard',
       },
       {
         name: '3) Manage Saved Searches',

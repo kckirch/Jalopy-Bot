@@ -43,16 +43,10 @@ test('save-search button flow calls checkExistingSearch and addSavedSearch', asy
       assert.equal(addSavedSearchCalls[0][5], 'CAMRY');
       assert.equal(addSavedSearchCalls[0][6], '2005');
       assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.equal(buttonInteraction.replyCalls[0].ephemeral, true);
-      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].embeds));
-      assert.match(buttonInteraction.replyCalls[0].embeds[0].data.title, /search saved/i);
-      assert.ok(Array.isArray(buttonInteraction.replyCalls[0].components));
-      assert.equal(buttonInteraction.replyCalls[0].components[0].components.length, 5);
-      assert.ok(
-        buttonInteraction.replyCalls[0].components[0].components.every((button) =>
-          button.data.custom_id.startsWith('sq:')
-        )
-      );
+      assert.deepEqual(buttonInteraction.replyCalls[0], {
+        content: 'Search saved. Use `/savedsearch` to run or manage it.',
+        ephemeral: true,
+      });
     }
   );
 });
@@ -130,13 +124,13 @@ test('duplicate saved search does not call addSavedSearch', async () => {
   );
 
   assert.equal(addCalls, 0);
-  assert.ok(Array.isArray(duplicateReply.embeds));
-  assert.match(duplicateReply.embeds[0].data.title, /already saved/i);
-  assert.ok(Array.isArray(duplicateReply.components));
-  assert.equal(duplicateReply.components[0].components.length, 5);
+  assert.deepEqual(duplicateReply, {
+    content: 'This search is already saved. Use `/savedsearch` to manage it.',
+    ephemeral: true,
+  });
 });
 
-test('delete-saved quick action removes matching saved search criteria', async () => {
+test('delete-saved result action removes matching saved search criteria', async () => {
   const interaction = makeSearchInteraction();
   const deletedSearchIds = [];
 
@@ -173,64 +167,6 @@ test('delete-saved quick action removes matching saved search criteria', async (
       assert.deepEqual(deletedSearchIds, [123]);
       assert.equal(buttonInteraction.replyCalls.length, 1);
       assert.match(buttonInteraction.replyCalls[0].content, /Removed 1 matching saved search/i);
-    }
-  );
-});
-
-test('my-saved-searches quick action sends a DM summary', async () => {
-  const interaction = makeSearchInteraction();
-  const dmMessages = [];
-
-  await withSearchCommandMocks(
-    {
-      queryVehicles: async () => [makeVehicleRow({ row_number: 2 })],
-      getSavedSearches: async () => [
-        {
-          id: 1,
-          yard_name: 'BOISE',
-          make: 'TOYOTA',
-          model: 'CAMRY',
-          year_range: '2005',
-          status: 'ACTIVE',
-        },
-        {
-          id: 2,
-          yard_name: 'TRUSTYPICKAPART',
-          make: 'HONDA',
-          model: 'ACCORD',
-          year_range: '2010',
-          status: 'ACTIVE',
-        },
-      ],
-    },
-    async ({ handleSearchCommand }) => {
-      await handleSearchCommand(interaction);
-      const customId = interaction.replies[0].components[1].components[1].data.custom_id;
-      const buttonInteraction = {
-        customId,
-        user: {
-          id: 'user-1',
-          tag: 'user-1#0001',
-          async send(payload) {
-            dmMessages.push(payload);
-          },
-        },
-        replyCalls: [],
-        async reply(payload) {
-          this.replyCalls.push(payload);
-        },
-        async update() {},
-      };
-
-      await interaction.message.collector.emitCollect(buttonInteraction);
-
-      assert.equal(dmMessages.length, 1);
-      assert.match(dmMessages[0].content, /Your saved searches \(2\)/i);
-      assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.match(
-        buttonInteraction.replyCalls[0].content,
-        /Sent 2 saved search\(es\) to your DMs/i
-      );
     }
   );
 });

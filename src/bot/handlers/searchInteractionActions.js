@@ -15,7 +15,6 @@ const {
 const {
   handleDeleteAction,
   handleSaveAction,
-  handleSavedListAction,
 } = require('./searchSavedActions');
 const {
   createSearchState: createSearchStateWithDependencies,
@@ -59,9 +58,6 @@ async function handleSearchAction(
       return true;
     case 'unsave':
       await handleDeleteAction(interaction, session, dependencies);
-      return true;
-    case 'savedlist':
-      await handleSavedListAction(interaction, dependencies);
       return true;
     case 'relocate':
       await handleRelocateAction(

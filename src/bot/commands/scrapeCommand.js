@@ -6,7 +6,7 @@ const {
   formatScrapeYardId,
 } = require('../../scraping/scrapeLogging');
 const { withScrapeLock } = require('../../scraping/scrapeLock');
-const { universalWebScrape } = require('../../scraping/universalWebScrape');
+const { scrapeWithHttp } = require('../../scraping/httpInventoryScrape');
 const { getSessionID } = require('../../utils/sessionId');
 const { ensureElevatedCommandAccess } = require('../utils/commandPermissions');
 
@@ -120,7 +120,7 @@ function createBusyScrapeMessage(error) {
 async function handleScrapeCommand(
   interaction,
   {
-    scrape = universalWebScrape,
+    scrape = scrapeWithHttp,
     getSession = getSessionID,
     runWithLock = withScrapeLock,
   } = {}

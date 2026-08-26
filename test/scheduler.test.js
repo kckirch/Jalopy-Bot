@@ -4,10 +4,10 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const schedulerPath = path.join(repoRoot, 'src/notifications/scheduler.js');
-const universalPath = path.join(repoRoot, 'src/scraping/universalWebScrape.js');
+const httpScrapePath = path.join(repoRoot, 'src/scraping/httpInventoryScrape.js');
 const dailyTasksPath = path.join(repoRoot, 'src/notifications/dailyTasks.js');
 const sessionCheckPath = path.join(repoRoot, 'src/notifications/sessionCheck.js');
-const jobManagerPath = path.join(repoRoot, 'src/database/scheduledJobManager.js');
+const ledgerPath = path.join(repoRoot, 'src/database/notificationRunLedger.js');
 const scrapeLockPath = path.join(repoRoot, 'src/scraping/scrapeLock.js');
 const cronPath = require.resolve('node-cron', { paths: [repoRoot] });
 
@@ -24,27 +24,27 @@ async function withSchedulerMocks(mocks, runTest) {
   const modulePaths = [
     schedulerPath,
     cronPath,
-    universalPath,
+    httpScrapePath,
     dailyTasksPath,
     sessionCheckPath,
-    jobManagerPath,
+    ledgerPath,
   ];
   const previous = new Map(
     modulePaths.map((modulePath) => [modulePath, require.cache[modulePath]])
   );
 
   replaceModule(cronPath, { schedule: mocks.schedule });
-  replaceModule(universalPath, { universalWebScrape: mocks.universalWebScrape });
+  replaceModule(httpScrapePath, { scrapeWithHttp: mocks.scrapeWithHttp });
   replaceModule(dailyTasksPath, {
     processDailySavedSearches: mocks.processDailySavedSearches,
   });
   replaceModule(sessionCheckPath, { checkSessionUpdates: mocks.checkSessionUpdates });
-  replaceModule(jobManagerPath, {
-    claimScheduledJobRun: mocks.claimScheduledJobRun,
-    failScheduledJobRun: mocks.failScheduledJobRun,
-    finishScheduledJobRun: mocks.finishScheduledJobRun,
-    getScheduledJobRun: mocks.getScheduledJobRun,
-    isTerminalScheduledJobStatus: mocks.isTerminalScheduledJobStatus,
+  replaceModule(ledgerPath, {
+    claimNotificationRun: mocks.claimNotificationRun,
+    failNotificationRun: mocks.failNotificationRun,
+    finishNotificationRun: mocks.finishNotificationRun,
+    getNotificationRun: mocks.getNotificationRun,
+    isTerminalNotificationStatus: mocks.isTerminalNotificationStatus,
   });
   delete require.cache[schedulerPath];
 
@@ -63,31 +63,28 @@ async function withSchedulerMocks(mocks, runTest) {
 
 function buildBaseMocks(overrides = {}) {
   const runs = new Map();
-  const key = (jobName, sessionID) => `${jobName}:${sessionID}`;
   return {
     runs,
     schedule: () => ({}),
-    universalWebScrape: async () => {},
+    scrapeWithHttp: async () => {},
     processDailySavedSearches: async () => ({ savedSearchFailures: 0 }),
     checkSessionUpdates: async () => true,
-    getScheduledJobRun: async (jobName, sessionID) =>
-      runs.get(key(jobName, sessionID)) || null,
-    claimScheduledJobRun: async (jobName, sessionID) => {
-      const runKey = key(jobName, sessionID);
-      const existing = runs.get(runKey);
+    getNotificationRun: async (sessionID) => runs.get(sessionID) || null,
+    claimNotificationRun: async (sessionID) => {
+      const existing = runs.get(sessionID);
       if (existing && ['running', 'completed', 'completed_with_errors'].includes(existing.status)) {
         return false;
       }
-      runs.set(runKey, { status: 'running', summary: null });
+      runs.set(sessionID, { status: 'running', summary: null });
       return true;
     },
-    finishScheduledJobRun: async (jobName, sessionID, status, summary) => {
-      runs.set(key(jobName, sessionID), { status, summary });
+    finishNotificationRun: async (sessionID, status, summary) => {
+      runs.set(sessionID, { status, summary });
     },
-    failScheduledJobRun: async (jobName, sessionID) => {
-      runs.set(key(jobName, sessionID), { status: 'failed', summary: null });
+    failNotificationRun: async (sessionID) => {
+      runs.set(sessionID, { status: 'failed', summary: null });
     },
-    isTerminalScheduledJobStatus: (status) =>
+    isTerminalNotificationStatus: (status) =>
       status === 'completed' || status === 'completed_with_errors',
     ...overrides,
   };
@@ -176,7 +173,7 @@ test('scheduler context uses the configured timezone for session boundaries', as
 test('scrapeAllJunkyards runs every configured source and reports aggregate failure', async () => {
   const scrapeCalls = [];
   const mocks = buildBaseMocks({
-    universalWebScrape: async (options) => {
+    scrapeWithHttp: async (options) => {
       scrapeCalls.push(options);
       if (options.hasMultipleLocations === false) throw new Error('source failed');
     },
@@ -200,7 +197,7 @@ test('ensureCurrentInventorySession scrapes only when readiness is incomplete', 
       readinessChecks += 1;
       return readinessChecks > 1;
     },
-    universalWebScrape: async () => { scrapeCalls += 1; },
+    scrapeWithHttp: async () => { scrapeCalls += 1; },
   });
 
   await withSchedulerMocks(mocks, async ({ ensureCurrentInventorySession }) => {
@@ -279,7 +276,7 @@ test('notification failure is recorded and retried on the next recovery', async 
       runDailyNotificationJob('20260101'),
       /Discord unavailable/
     );
-    assert.equal(mocks.runs.get('daily-notifications:20260101').status, 'failed');
+    assert.equal(mocks.runs.get('20260101').status, 'failed');
     assert.equal((await runDailyNotificationJob('20260101')).status, 'completed');
   });
   assert.equal(calls, 2);
@@ -297,7 +294,7 @@ test('saved-search delivery failures are recorded as a completed warning state',
     );
   });
   assert.equal(
-    mocks.runs.get('daily-notifications:20260101').status,
+    mocks.runs.get('20260101').status,
     'completed_with_errors'
   );
 });

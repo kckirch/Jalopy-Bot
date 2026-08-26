@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { YARDS } = require('../src/config/yards');
 const {
-  createSavedSearchSession,
+  SavedSearchSession,
 } = require('../src/bot/utils/savedSearchSession');
 
 function createSavedSearch(overrides = {}) {
@@ -43,36 +43,20 @@ function getButtonLabels(payload) {
   );
 }
 
-test('saved-search session keeps a frozen, stable public interface', () => {
+test('saved-search session owns a copy of the initial search list', () => {
   const initialSearches = [
     createSavedSearch(),
     createSavedSearch({ id: 2, make: 'HONDA', model: 'ACCORD' }),
   ];
-  const session = createSavedSearchSession(initialSearches);
+  const session = new SavedSearchSession(initialSearches);
   initialSearches.pop();
 
-  assert.equal(Object.isFrozen(session), true);
-  assert.deepEqual(Object.keys(session), [
-    'activateResults',
-    'buildActiveViewPayload',
-    'buildResultsViewPayload',
-    'buildSavedViewPayload',
-    'getNextFrequency',
-    'getSearch',
-    'hasResults',
-    'isEmpty',
-    'moveResultsPage',
-    'moveSaved',
-    'remove',
-    'resolveIndex',
-    'showSaved',
-    'updateFrequency',
-  ]);
+  assert.equal(session instanceof SavedSearchSession, true);
   assert.equal(session.getSearch(1).id, 2);
 });
 
 test('saved-search navigation resolves and clamps indexes consistently', () => {
-  const session = createSavedSearchSession([
+  const session = new SavedSearchSession([
     createSavedSearch(),
     createSavedSearch({ id: 2, make: 'HONDA', model: 'ACCORD' }),
   ]);
@@ -92,7 +76,7 @@ test('saved-search navigation resolves and clamps indexes consistently', () => {
 });
 
 test('results paging clamps at both ends and active view follows session mode', () => {
-  const session = createSavedSearchSession([createSavedSearch()]);
+  const session = new SavedSearchSession([createSavedSearch()]);
   const vehicles = Array.from({ length: 21 }, (_, index) =>
     createVehicle(index)
   );
@@ -135,7 +119,7 @@ test('removing searches preserves unrelated results and clears matching results'
     make: 'HONDA',
     model: 'ACCORD',
   });
-  const session = createSavedSearchSession([firstSearch, secondSearch]);
+  const session = new SavedSearchSession([firstSearch, secondSearch]);
   session.activateResults(1, [createVehicle(0)], []);
 
   assert.equal(session.remove(0), firstSearch);
@@ -149,7 +133,7 @@ test('removing searches preserves unrelated results and clears matching results'
 });
 
 test('frequency updates drive the next action and saved-search view', () => {
-  const session = createSavedSearchSession([createSavedSearch()]);
+  const session = new SavedSearchSession([createSavedSearch()]);
 
   assert.equal(session.getNextFrequency(0), 'paused');
   session.updateFrequency(0, 'paused', '2026-02-03T00:00:00.000Z');
@@ -183,7 +167,7 @@ test('result views infer canonical aggregate, single, and fallback locations', (
   ];
 
   for (const [yardId, expectedLocation] of cases) {
-    const session = createSavedSearchSession([
+    const session = new SavedSearchSession([
       createSavedSearch({ yard_id: yardId }),
     ]);
     session.activateResults(0, [], ['CAMRY']);

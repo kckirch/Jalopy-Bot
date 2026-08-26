@@ -18,19 +18,15 @@ const INVENTORY_FORM_HTML = `
     <select name="VehicleModel"></select>
   </form>`;
 
+function response(body, status = 200) {
+  return new Response(body, { status });
+}
+
 test('HTTP inventory client rejects non-success pages before parsing them', async () => {
   const clientState = {
     cookieHeader: '',
     cheerio,
-    httpClient: {
-      async request() {
-        return {
-          status: 429,
-          headers: {},
-          data: INVENTORY_FORM_HTML,
-        };
-      },
-    },
+    fetch: async () => response(INVENTORY_FORM_HTML, 429),
   };
 
   await assert.rejects(
@@ -43,18 +39,10 @@ test('HTTP inventory client rejects cross-origin form actions', async () => {
   const clientState = {
     cookieHeader: 'session=test-cookie',
     cheerio,
-    httpClient: {
-      async request() {
-        return {
-          status: 200,
-          headers: {},
-          data: `
-            <form id="searchinventory" method="post" action="https://collector.example/steal">
-              <input type="hidden" name="__RequestVerificationToken" value="test-token">
-            </form>`,
-        };
-      },
-    },
+    fetch: async () => response(`
+      <form id="searchinventory" method="post" action="https://collector.example/steal">
+        <input type="hidden" name="__RequestVerificationToken" value="test-token">
+      </form>`),
   };
 
   await assert.rejects(
@@ -67,15 +55,9 @@ test('HTTP inventory client rejects unsafe form methods', async () => {
   const clientState = {
     cookieHeader: '',
     cheerio,
-    httpClient: {
-      async request() {
-        return {
-          status: 200,
-          headers: {},
-          data: '<form id="searchinventory" method="delete" action="/"></form>',
-        };
-      },
-    },
+    fetch: async () => response(
+      '<form id="searchinventory" method="delete" action="/"></form>'
+    ),
   };
 
   await assert.rejects(
@@ -90,15 +72,7 @@ test('HTTP scraper debug output does not include hidden form values', async () =
   const clientState = {
     cookieHeader: '',
     cheerio,
-    httpClient: {
-      async request() {
-        return {
-          status: 200,
-          headers: {},
-          data: INVENTORY_FORM_HTML,
-        };
-      },
-    },
+    fetch: async () => response(INVENTORY_FORM_HTML),
   };
 
   try {
@@ -149,11 +123,7 @@ test('HTTP scraper debug failures omit raw lookup parameters and errors', async 
   const runState = { hadSoftFailure: false };
   const clientState = {
     cookieHeader: '',
-    httpClient: {
-      async request() {
-        throw new TypeError(privateDetails);
-      },
-    },
+    fetch: async () => { throw new TypeError(privateDetails); },
   };
 
   try {

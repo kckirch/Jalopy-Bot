@@ -1,6 +1,6 @@
 const { summarizeError } = require('../../utils/errorSummary');
 const {
-  createSavedSearchSession,
+  SavedSearchSession,
 } = require('../utils/savedSearchSession');
 const {
   sortVehiclesForSearchView,
@@ -118,7 +118,7 @@ async function startSavedSearchSession(
   savedSearches,
   dependencies
 ) {
-  const session = createSavedSearchSession(savedSearches);
+  const session = new SavedSearchSession(savedSearches);
   await interaction.editReply(session.buildSavedViewPayload());
 
   const replyMessage = await interaction.fetchReply();

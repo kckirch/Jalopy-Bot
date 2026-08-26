@@ -2,9 +2,7 @@ const { PermissionFlagsBits } = require('discord.js');
 
 const ELEVATED_COMMANDS = new Set([
   'scrape',
-  'dailysavedsearch',
   'runtestscheduler',
-  'manualnotifynewvehicles',
 ]);
 
 function requiresElevatedCommandAccess(commandName) {

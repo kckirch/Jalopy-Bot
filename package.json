@@ -14,8 +14,7 @@
     "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node scripts/run-tests.js --coverage",
-    "smoke:live": "node src/testing/liveScrapeSmokeTest.js",
-    "scan:model-aliases": "node src/testing/modelAliasScan.js"
+    "smoke:live": "node src/testing/liveScrapeSmokeTest.js"
   },
   "repository": {
     "type": "git",
@@ -41,12 +40,9 @@
     "node": "^20.19.0 || ^22.13.0 || >=24.0.0 <25"
   },
   "dependencies": {
-    "axios": "^1.19.0",
     "cheerio": "^1.1.2",
     "discord.js": "^14.27.0",
-    "dotenv": "^17.4.2",
     "node-cron": "^4.6.0",
-    "selenium-webdriver": "^4.16.0",
     "sqlite3": "^6.0.1"
   },
   "devDependencies": {

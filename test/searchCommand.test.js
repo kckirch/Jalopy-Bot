@@ -59,7 +59,7 @@ test('make aliases are normalized before querying vehicles', async () => {
     async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
-  assert.deepEqual(queryCalls, [[1020, 'Chevrolet', 'ANY', 'ANY', 'ACTIVE']]);
+  assert.deepEqual(queryCalls, [[1020, 'CHEVROLET', 'ANY', 'ANY', 'ACTIVE']]);
 });
 
 test('location is required before the search session starts', async () => {

@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 const { scrapeWithHttp } = require('../src/scraping/httpInventoryScrape');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
 const {
-  createRouteHttpClient,
+  createRouteFetch,
   createScrapeConfig,
   inventoryPage,
   ok,
@@ -13,7 +13,7 @@ const {
 
 test('http scraper does not log inactive reconciliation error details', async () => {
   const privateErrorDetails = 'private-user /home/kc/private-file';
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({ yardOptions: ['1020'] }),
     'POST /': inventoryPage({
       yardOptions: ['1020'],
@@ -25,7 +25,7 @@ test('http scraper does not log inactive reconciliation error details', async ()
     await assert.rejects(
       scrapeWithHttp(createScrapeConfig({ make: 'TOYOTA', model: 'CAMRY' }), {
         cheerio,
-        httpClient,
+        fetch,
         insertOrUpdateVehicle: async () => {},
         markInactiveVehicles: async () => {
           throw new TypeError(privateErrorDetails);
@@ -42,7 +42,7 @@ test('http scraper does not log inactive reconciliation error details', async ()
 test('http scraper falls back to make options from HTML when GetMakes endpoint fails', async () => {
   const upserts = [];
   let getMakesAttempts = 0;
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({
       yardOptions: ['1020'],
       makeOptions: ['TOYOTA'],
@@ -71,7 +71,7 @@ test('http scraper falls back to make options from HTML when GetMakes endpoint f
 
   await scrapeWithHttp(createScrapeConfig({ shouldMarkInactive: false }), {
     cheerio,
-    httpClient,
+    fetch,
     insertOrUpdateVehicle: async (...args) => upserts.push(args),
     markInactiveVehicles: async () => {},
   });
@@ -89,7 +89,7 @@ test('http scraper rejects inactive reconciliation after a soft lookup failure',
     ['TOYOTA|', [{ year: 2008, make: 'TOYOTA', model: 'CAMRY', rowNumber: 31 }]],
     ['HONDA|CIVIC', [{ year: 2009, make: 'HONDA', model: 'CIVIC', rowNumber: 32 }]],
   ]);
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({
       yardOptions: ['1020'],
       makeOptions: ['TOYOTA', 'HONDA'],
@@ -115,7 +115,7 @@ test('http scraper rejects inactive reconciliation after a soft lookup failure',
   await assert.rejects(
     scrapeWithHttp(createScrapeConfig(), {
       cheerio,
-      httpClient,
+      fetch,
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
       markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
     }),
@@ -151,7 +151,7 @@ test('http scraper skips inactive reconciliation when scrape fails after partial
       },
     ],
   ]);
-  const httpClient = createRouteHttpClient({
+  const fetch = createRouteFetch({
     'GET /': inventoryPage({ yardOptions: ['1020'], makeOptions: ['TOYOTA'] }),
     'POST /Home/GetModels': ok([{ model: 'CAMRY' }, { model: 'COROLLA' }]),
     'POST /': ({ payload }) => {
@@ -165,7 +165,7 @@ test('http scraper skips inactive reconciliation when scrape fails after partial
   await assert.rejects(
     scrapeWithHttp(createScrapeConfig({ make: 'TOYOTA' }), {
       cheerio,
-      httpClient,
+      fetch,
       insertOrUpdateVehicle: async (...args) => upserts.push(args),
       markInactiveVehicles: async (sessionID, options) => markCalls.push({ sessionID, options }),
     }),

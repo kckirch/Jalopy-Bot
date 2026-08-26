@@ -1,5 +1,8 @@
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
+const fs = require('node:fs');
+const path = require('node:path');
+
+const environmentPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(environmentPath)) process.loadEnvFile(environmentPath);
 const { Events } = require('discord.js');
 const { summarizeError } = require('../utils/errorSummary');
 

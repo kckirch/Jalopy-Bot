@@ -3,20 +3,19 @@ const junkyards = require('../config/junkyards');
 const { checkSessionUpdates } = require('./sessionCheck');
 const { processDailySavedSearches } = require('./dailyTasks');
 const {
-  claimScheduledJobRun,
-  failScheduledJobRun,
-  finishScheduledJobRun,
-  getScheduledJobRun,
-  isTerminalScheduledJobStatus,
-} = require('../database/scheduledJobManager');
+  claimNotificationRun,
+  failNotificationRun,
+  finishNotificationRun,
+  getNotificationRun,
+  isTerminalNotificationStatus,
+} = require('../database/notificationRunLedger');
 const { formatScrapeLogValue } = require('../scraping/scrapeLogging');
 const { withScrapeLock } = require('../scraping/scrapeLock');
-const { universalWebScrape } = require('../scraping/universalWebScrape');
+const { scrapeWithHttp } = require('../scraping/httpInventoryScrape');
 const { summarizeError } = require('../utils/errorSummary');
 const { getSchedulerContext } = require('./schedulerTime');
 
 const DEFAULT_SCHEDULER_TIMEZONE = 'Etc/GMT+7';
-const DAILY_NOTIFICATION_JOB = 'daily-notifications';
 const SCRAPE_DUE_MINUTE = 5 * 60;
 const NOTIFICATION_DUE_MINUTE = 5 * 60 + 45;
 
@@ -66,7 +65,7 @@ async function scrapeAllJunkyards(sessionID) {
         console.log(
           `Starting configured scrape: ${formatScrapeLogValue(junkyardKey)}`
         );
-        await universalWebScrape(options);
+        await scrapeWithHttp(options);
         console.log(
           `Completed configured scrape: ${formatScrapeLogValue(junkyardKey)}`
         );
@@ -108,7 +107,7 @@ async function ensureCurrentInventorySession(
 
 async function markJobFailedPreservingError(sessionID, originalError) {
   try {
-    await failScheduledJobRun(DAILY_NOTIFICATION_JOB, sessionID);
+    await failNotificationRun(sessionID);
   } catch (ledgerError) {
     console.error(
       'Failed to record scheduled notification failure:',
@@ -119,18 +118,12 @@ async function markJobFailedPreservingError(sessionID, originalError) {
 }
 
 async function runDailyNotificationJob(sessionID) {
-  const existing = await getScheduledJobRun(
-    DAILY_NOTIFICATION_JOB,
-    sessionID
-  );
-  if (isTerminalScheduledJobStatus(existing?.status)) {
+  const existing = await getNotificationRun(sessionID);
+  if (isTerminalNotificationStatus(existing?.status)) {
     return { status: 'already-completed', summary: existing.summary };
   }
 
-  const claimed = await claimScheduledJobRun(
-    DAILY_NOTIFICATION_JOB,
-    sessionID
-  );
+  const claimed = await claimNotificationRun(sessionID);
   if (!claimed) return { status: 'already-running', summary: null };
 
   try {
@@ -138,12 +131,7 @@ async function runDailyNotificationJob(sessionID) {
     const status = summary.savedSearchFailures > 0
       ? 'completed_with_errors'
       : 'completed';
-    await finishScheduledJobRun(
-      DAILY_NOTIFICATION_JOB,
-      sessionID,
-      status,
-      summary
-    );
+    await finishNotificationRun(sessionID, status, summary);
     return { status, summary };
   } catch (error) {
     return markJobFailedPreservingError(sessionID, error);
@@ -249,7 +237,6 @@ module.exports = {
   scrapeAllJunkyards,
   startScheduledTasks,
   __testables: {
-    DAILY_NOTIFICATION_JOB,
     DEFAULT_SCHEDULER_TIMEZONE,
     getSchedulerContext,
     resolveSchedulerTimezone,
