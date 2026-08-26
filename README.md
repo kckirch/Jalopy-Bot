@@ -193,6 +193,10 @@ API downloads are generated from a separate snapshot containing only the
     npm run register:commands
     ```
 6. Start the bot:
+    ```bash
+    npm start
+    ```
+
 ### Testing
 
 To run the tests, use:
