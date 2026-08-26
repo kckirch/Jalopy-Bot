@@ -205,63 +205,11 @@ test('unsave action redacts delete failures', async () => {
 
   assert.match(
     output,
-    /Error deleting saved search from quick action: RangeError/
+    /Error deleting saved search: RangeError/
   );
   assert.equal(output.includes(privateDetails), false);
   assert.deepEqual(interaction.replies, [
     { content: 'Error deleting saved search.', ephemeral: true },
-  ]);
-});
-
-test('saved-list action reports an empty list without attempting a DM', async () => {
-  const interaction = makeInteraction({
-    user: {
-      id: 'user-1',
-      async send() {
-        assert.fail('DM should not run');
-      },
-    },
-  });
-
-  await handleSearchAction(
-    interaction,
-    'savedlist',
-    'user-1',
-    makeSession(),
-    { getSavedSearches: async () => [] }
-  );
-
-  assert.deepEqual(interaction.replies, [
-    {
-      content: 'You currently have no saved searches.',
-      ephemeral: true,
-    },
-  ]);
-});
-
-test('saved-list action redacts retrieval failures', async () => {
-  const privateDetails = '/home/private/searches.db user=123';
-  const interaction = makeInteraction();
-
-  const consoleCalls = await captureConsole(() =>
-    handleSearchAction(
-      interaction,
-      'savedlist',
-      'user-1',
-      makeSession(),
-      {
-        getSavedSearches: async () => {
-          throw new TypeError(privateDetails);
-        },
-      }
-    )
-  );
-  const output = joinedConsoleText(consoleCalls);
-
-  assert.match(output, /Error listing saved searches from quick action: TypeError/);
-  assert.equal(output.includes(privateDetails), false);
-  assert.deepEqual(interaction.replies, [
-    { content: 'Error retrieving saved searches.', ephemeral: true },
   ]);
 });
 

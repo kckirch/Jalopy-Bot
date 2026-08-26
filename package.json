@@ -14,8 +14,7 @@
     "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.js",
     "test:coverage": "node scripts/run-tests.js --coverage",
-    "smoke:live": "node src/testing/liveScrapeSmokeTest.js",
-    "scan:model-aliases": "node src/testing/modelAliasScan.js"
+    "smoke:live": "node src/testing/liveScrapeSmokeTest.js"
   },
   "repository": {
     "type": "git",

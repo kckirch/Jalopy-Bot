@@ -70,11 +70,7 @@ function buildSearchComponents(searchState, criteria, userId) {
       new ButtonBuilder()
         .setCustomId(createCustomId('unsave'))
         .setLabel('Delete Saved')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(createCustomId('savedlist'))
-        .setLabel('My Saved Searches')
-        .setStyle(ButtonStyle.Secondary)
+        .setStyle(ButtonStyle.Danger)
     );
 
     const locationRow = new ActionRowBuilder().addComponents(
