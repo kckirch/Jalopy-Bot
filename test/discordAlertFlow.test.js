@@ -290,13 +290,14 @@ test('a slow search update cannot resurrect expired controls and repeated clicks
   const failedBusyReply = component('search:next', { async reply() { throw new Error('fixture reply failed'); } });
   await captureConsole(() => interaction.message.collector.emitCollect(failedBusyReply));
   await interaction.message.collector.emitEnd();
-  assert.equal(interaction.message.edits.length, 0);
+  assert.equal(interaction.replies.length, 1);
   release();
   await first;
   assert.equal(queriesRun, 2);
   assert.equal(action.updates.length, 1);
-  assert.deepEqual(interaction.message.edits.at(-1).components, []);
-  assert.match(interaction.message.edits.at(-1).content, /expired/);
+  assert.deepEqual(interaction.replies.at(-1).components, []);
+  assert.match(interaction.replies.at(-1).content, /expired/);
+  assert.deepEqual(interaction.message.edits, []);
 });
 
 test('failed UI update after a persisted pause advises reopening instead of claiming nothing changed', async () => {

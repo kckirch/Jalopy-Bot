@@ -58,7 +58,7 @@ async function handleSearchInteraction(interaction, session, dependencies, actio
 }
 
 function attachSearchInteractionCollector(
-  { message, ownerId, initialSearchState, criteria },
+  { message, editReply, ownerId, initialSearchState, criteria },
   dependencies
 ) {
   const session = {
@@ -89,7 +89,7 @@ function attachSearchInteractionCollector(
   }
   async function clearExpiredControls() {
     try {
-      await message.edit({
+      await editReply({
         content: 'These search controls have expired. Run `/search` again, or `/savedsearch` to manage alerts you saved.',
         components: [],
       });
@@ -129,7 +129,7 @@ function attachSearchInteractionCollector(
 
   collector.on('end', async () => {
     expired = true;
-    modalCollector?.stop('search-ended');
+    // An open modal keeps its own bounded timeout so it can acknowledge an expired submission.
     // An in-flight update must finish before expiry removes its buttons.
     if (!busy) await clearExpiredControls();
   });

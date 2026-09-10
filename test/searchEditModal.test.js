@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { setImmediate: tick } = require('node:timers/promises');
-const { Client, Events, InteractionType, Message } = require('discord.js');
+const { setImmediate: tick, setTimeout: delay } = require('node:timers/promises');
+const { once } = require('node:events');
+const { Client, Events, InteractionCollector, InteractionType, Message } = require('discord.js');
 const { attachSearchInteractionCollector } = require('../src/bot/handlers/searchInteractionCollector');
 const { createSearchState } = require('../src/bot/handlers/searchState');
 const { withInteractionResponses } = require('../test-support/interactionResponses');
@@ -38,7 +39,7 @@ async function createSession(t, criteria = initialCriteria) {
     async edit(payload) { this.edits.push(payload); },
   };
   const initialSearchState = await createSearchState('boise', criteria, dependencies);
-  const collector = attachSearchInteractionCollector({ message, ownerId: 'owner', initialSearchState, criteria }, dependencies);
+  const collector = attachSearchInteractionCollector({ message, editReply: message.edit.bind(message), ownerId: 'owner', initialSearchState, criteria }, dependencies);
   t.after(async () => { collector.stop(); await client.destroy(); });
   const send = async (input) => { client.emit(Events.InteractionCreate, input); await tick(); return input; };
   const click = (action, properties) => send(interaction(client, `search:${action}`, properties));
@@ -119,7 +120,7 @@ test('a dialog opened before a filter change cannot overwrite the newer search',
   assert.deepEqual(session.saves[0].slice(4, 8), ['TOYOTA', 'CAMRY', '2005', 'ACTIVE']);
 });
 
-test('reopening and expiry remove pending native modal collectors', async (t) => {
+test('reopening replaces the modal and search expiry still acknowledges its pending submission', async (t) => {
   const session = await createSession(t);
   const first = await session.click('edit');
   const second = await session.click('edit');
@@ -127,12 +128,44 @@ test('reopening and expiry remove pending native modal collectors', async (t) =>
   assert.equal(session.client.listenerCount(Events.InteractionCreate), 2);
   const old = await submit(session, first.modals[0], {});
   assert.deepEqual(old.responseMethods, []);
+  const queryCount = session.queryCalls.length;
   session.collector.stop('time');
   await tick();
-  assert.equal(session.client.listenerCount(Events.InteractionCreate), 0);
+  assert.equal(session.client.listenerCount(Events.InteractionCreate), 1);
   assert.deepEqual(session.message.edits.at(-1).components, []);
+  const outsider = await submit(session, second.modals[0], {}, { user: { id: 'other' } });
+  assert.deepEqual(outsider.responseMethods, []);
+  assert.equal(session.client.listenerCount(Events.InteractionCreate), 1);
   const expired = await submit(session, second.modals[0], {});
-  assert.deepEqual(expired.responseMethods, []);
+  assert.deepEqual(expired.responseMethods, ['reply']);
+  assert.equal(expired.replies[0].ephemeral, true);
+  assert.match(expired.replies[0].content, /expired.*\/search/);
+  assert.deepEqual(expired.updates, []);
+  assert.equal(session.client.listenerCount(Events.InteractionCreate), 0);
+  assert.equal(session.queryCalls.length, queryCount);
+  assert.deepEqual(session.saves, []);
+});
+
+test('an abandoned modal still removes its native listener at its own timeout', async (t) => {
+  const session = await createSession(t);
+  let pendingModal;
+  const originalOn = InteractionCollector.prototype.on;
+  t.mock.method(InteractionCollector.prototype, 'on', function (event, handler) {
+    if (event === 'collect' && this.options.interactionType === InteractionType.ModalSubmit) pendingModal = this;
+    return originalOn.call(this, event, handler);
+  });
+  t.after(() => pendingModal?.stop());
+  await session.click('edit');
+  assert.equal(pendingModal.options.time, 90_000);
+  assert.equal(pendingModal.options.max, 1);
+  session.collector.stop('time');
+  assert.equal(pendingModal.ended, false);
+  assert.equal(session.client.listenerCount(Events.InteractionCreate), 1);
+  const ended = once(pendingModal, 'end');
+  pendingModal.resetTimer({ time: 1 });
+  const [[, reason]] = await Promise.all([ended, delay(10)]);
+  assert.equal(reason, 'time');
+  assert.equal(session.client.listenerCount(Events.InteractionCreate), 0);
   assert.deepEqual(session.saves, []);
 });
 

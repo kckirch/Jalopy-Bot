@@ -27,6 +27,7 @@ async function handleSearchCommand(interaction, dependencies) {
 
     attachSearchInteractionCollector({
       message,
+      editReply: interaction.editReply.bind(interaction),
       ownerId: interaction.user.id,
       initialSearchState,
       criteria,

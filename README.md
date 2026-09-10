@@ -149,6 +149,8 @@ Search controls expire after two minutes and can only be used by the person
 who ran the command. Each search message has its own independent session.
 Expiration does not pause or delete an alert; rerun `/search` or `/savedsearch`
 to reopen controls.
+Edit dialogs wait up to 90 seconds for a submission. If the search expires first,
+submitting within that window shows a private expiry notice and changes nothing.
 
 ### Guided families and generation shortcuts
 

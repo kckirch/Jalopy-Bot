@@ -92,6 +92,7 @@ function makeActionInteraction(action, userId = 'user-1') {
 function attachTestCollector(message, initialSearchState) {
   return attachSearchInteractionCollector({
     message,
+    editReply: message.edit.bind(message),
     ownerId: 'user-1',
     initialSearchState,
     criteria,
