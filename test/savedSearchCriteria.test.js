@@ -4,7 +4,6 @@ const {
   canonicalizeYardIdForSavedSearch,
   matchesSavedSearchCriteria,
   normalizeSavedSearchValue,
-  serializeYardId,
 } = require('../src/bot/utils/savedSearchCriteria');
 
 test('saved-search yard IDs have one stable canonical representation', () => {
@@ -54,8 +53,6 @@ test('saved-search criteria match yard sets and normalized values', () => {
   );
 });
 
-test('saved-search helpers preserve paging serialization behavior', () => {
+test('saved-search values are trimmed and case normalized', () => {
   assert.equal(normalizeSavedSearchValue(' active '), 'ACTIVE');
-  assert.equal(serializeYardId([1020, 1021]), '1020,1021');
-  assert.equal(serializeYardId('ALL'), 'ALL');
 });

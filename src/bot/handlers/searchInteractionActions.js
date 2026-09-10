@@ -44,14 +44,13 @@ function createSearchState(
 async function handleSearchAction(
   interaction,
   action,
-  userId,
   session,
   dependencies = DEFAULT_DEPENDENCIES
 ) {
   switch (action) {
     case 'next':
     case 'previous':
-      await handlePagingAction(interaction, action, userId, session);
+      await handlePagingAction(interaction, action, session);
       return true;
     case 'save':
       await handleSaveAction(interaction, session, dependencies);
@@ -62,7 +61,6 @@ async function handleSearchAction(
     case 'relocate':
       await handleRelocateAction(
         interaction,
-        userId,
         session,
         dependencies
       );

@@ -64,11 +64,7 @@ async function handleSearchCommand(interaction, dependencies) {
   try {
     const initialSearchState = await createSearchState(location, criteria, dependencies);
     const message = await interaction.reply({
-      ...buildSearchViewPayload(
-        initialSearchState,
-        criteria,
-        interaction.user.id
-      ),
+      ...buildSearchViewPayload(initialSearchState, criteria),
       fetchReply: true,
     });
 

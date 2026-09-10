@@ -1,15 +1,14 @@
 const { buildSearchViewPayload } = require('../utils/searchInteractionView');
 const { createSearchState } = require('./searchState');
 
-function getSearchViewPayload(session, userId) {
+function getSearchViewPayload(session) {
   return buildSearchViewPayload(
     session.searchState,
-    session.criteria,
-    userId
+    session.criteria
   );
 }
 
-async function handlePagingAction(interaction, action, userId, session) {
+async function handlePagingAction(interaction, action, session) {
   if (
     action === 'next' &&
     session.searchState.currentPage < session.searchState.totalPages - 1
@@ -20,12 +19,11 @@ async function handlePagingAction(interaction, action, userId, session) {
     session.searchState.currentPage -= 1;
   }
 
-  await interaction.update(getSearchViewPayload(session, userId));
+  await interaction.update(getSearchViewPayload(session));
 }
 
 async function handleRelocateAction(
   interaction,
-  userId,
   session,
   dependencies
 ) {
@@ -45,7 +43,7 @@ async function handleRelocateAction(
     session.criteria,
     dependencies
   );
-  await interaction.update(getSearchViewPayload(session, userId));
+  await interaction.update(getSearchViewPayload(session));
 }
 
 module.exports = {

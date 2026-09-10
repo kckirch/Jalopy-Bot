@@ -124,6 +124,9 @@ checkout as described above.
 - **`/savedsearch`**: Open an in-channel carousel to run, pause, or delete saved
   searches.
 
+Search controls expire after two minutes and can only be used by the person
+who ran the command. Each search message has its own independent session.
+
 The following maintenance commands require elevated Discord permissions:
 
 - **`/scrape`**: Run an inventory scrape for a location and optional make/model.
