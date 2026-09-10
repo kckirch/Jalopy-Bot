@@ -64,7 +64,7 @@ test('empty search results show at most eight model suggestions', () => {
   assert.match(embed.data.title, /boise MAZDA RX7 \(ANY\) ACTIVE/);
   assert.match(embed.data.description, /RX0, RX1, RX2, RX3, RX4, RX5, RX6, RX7/);
   assert.equal(embed.data.description.includes('RX8'), false);
-  assert.equal(embed.data.footer.text, 'Page 0 of 0');
+  assert.equal(embed.data.footer.text, '0 matches');
 });
 
 test('search result pages contain twenty vehicles and preserve notes', () => {

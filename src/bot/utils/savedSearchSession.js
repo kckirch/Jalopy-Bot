@@ -1,9 +1,4 @@
-const {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder,
-} = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { YARDS } = require('../../config/yards');
 const { convertYardIdToLocation } = require('./locationUtils');
 const {
@@ -79,27 +74,30 @@ function buildSavedSearchComponents(currentIndex, totalCount, currentSearch) {
   return [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`prev:${currentIndex}`)
+        .setCustomId(`prev:${currentIndex}:${currentSearch.id}`)
         .setLabel('Prev Saved')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(currentIndex === 0),
       new ButtonBuilder()
-        .setCustomId(`next:${currentIndex}`)
+        .setCustomId(`next:${currentIndex}:${currentSearch.id}`)
         .setLabel('Next Saved')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(currentIndex === totalCount - 1),
       new ButtonBuilder()
-        .setCustomId(`run:${currentIndex}`)
+        .setCustomId(`run:${currentIndex}:${currentSearch.id}`)
         .setLabel('Run')
         .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
-        .setCustomId(`delete:${currentIndex}`)
+        .setCustomId(`delete:${currentIndex}:${currentSearch.id}`)
         .setLabel('Delete')
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
-        .setCustomId(`pause:${currentIndex}`)
+        .setCustomId(`pause:${currentIndex}:${currentSearch.id}`)
         .setLabel(isPaused ? 'Resume Alerts' : 'Pause Alerts')
         .setStyle(ButtonStyle.Secondary)
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('test-dm').setLabel('Test DMs').setStyle(ButtonStyle.Secondary)
     ),
   ];
 }
@@ -125,19 +123,25 @@ function buildSearchResultsComponents(
         .setStyle(ButtonStyle.Primary)
         .setDisabled(noResults || currentPage >= totalPages - 1),
       new ButtonBuilder()
-        .setCustomId(`back:${currentIndex}`)
+        .setCustomId(`back:${currentIndex}:${currentSearch.id}`)
         .setLabel('Back To Saved')
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
-        .setCustomId(`delete:${currentIndex}`)
+        .setCustomId(`delete:${currentIndex}:${currentSearch.id}`)
         .setLabel('Delete')
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
-        .setCustomId(`pause:${currentIndex}`)
+        .setCustomId(`pause:${currentIndex}:${currentSearch.id}`)
         .setLabel(isPaused ? 'Resume Alerts' : 'Pause Alerts')
         .setStyle(ButtonStyle.Secondary)
     ),
   ];
+}
+
+function describeAlertDelivery(status) {
+  if (status === 'NEW') return 'Daily DM with matching vehicles marked New.';
+  if (status === 'INACTIVE') return 'Daily DM with matching inactive vehicles.';
+  return 'Daily DM with all matching available vehicles, including new arrivals—not just newly arrived vehicles.';
 }
 
 function buildSavedSearchEmbed(search, currentIndex, totalCount) {
@@ -150,8 +154,9 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount) {
     )
     .setDescription(
       `Yard: ${search.yard_name}\n` +
-        `Status: ${search.status}\n` +
+        `Inventory filter: ${search.status}\n` +
         `Alerts: ${alertsState}\n` +
+        `${describeAlertDelivery(search.status)}\n` +
         `Created: ${formatSavedSearchDate(search.create_date)}\n` +
         `Last Updated: ${formatSavedSearchDate(search.update_date)}`
     )
@@ -245,9 +250,24 @@ class SavedSearchSession {
     this.#currentIndex = this.#clampIndex(index);
   }
 
+  buildDeleteConfirmationPayload(index) {
+    const search = this.getSearch(index);
+    return {
+      content: 'Remove this saved alert? This will not remove any inventory. Choose Keep Alert to cancel.',
+      embeds: [buildSavedSearchEmbed(search, index, this.#savedSearches.length)],
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`confirm-delete:${index}:${search.id}`)
+          .setLabel('Remove Alert').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`back:${index}:${search.id}`)
+          .setLabel('Keep Alert').setStyle(ButtonStyle.Secondary)
+      )],
+    };
+  }
+
   buildSavedViewPayload() {
     const currentSearch = this.getSearch();
     return {
+      content: '',
       embeds: [
         buildSavedSearchEmbed(
           currentSearch,
@@ -266,6 +286,7 @@ class SavedSearchSession {
   buildResultsViewPayload() {
     const currentSearch = this.getSearch();
     return {
+      content: '',
       embeds: [
         buildSearchResultsEmbed({
           location: this.#resultsState.location,
@@ -303,4 +324,4 @@ class SavedSearchSession {
   }
 }
 
-module.exports = { SavedSearchSession };
+module.exports = { SavedSearchSession, describeAlertDelivery };

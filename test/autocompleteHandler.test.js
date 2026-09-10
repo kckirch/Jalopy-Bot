@@ -113,6 +113,16 @@ test('model autocomplete uses selected make and focused value', async () => {
   );
 });
 
+test('make autocomplete recognizes common aliases while returning the canonical make', async () => {
+  await withAutocompleteMocks(async () => [], async ({ handleAutocompleteInteraction }) => {
+    for (const [typed, canonical] of [['vw', 'VOLKSWAGEN'], ['chevy', 'CHEVROLET']]) {
+      const interaction = makeAutocompleteInteraction({ focusedValue: typed });
+      await handleAutocompleteInteraction(interaction);
+      assert(interaction.responses[0].some((choice) => choice.value === canonical));
+    }
+  });
+});
+
 test('model autocomplete normalizes make aliases before querying suggestions', async () => {
   const calls = [];
   await withAutocompleteMocks(

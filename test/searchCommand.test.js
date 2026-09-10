@@ -62,7 +62,7 @@ test('make aliases are normalized before querying vehicles', async () => {
   assert.deepEqual(queryCalls, [[1020, 'CHEVROLET', 'ANY', 'ANY', 'ACTIVE']]);
 });
 
-test('location is required before the search session starts', async () => {
+test('location defaults to all yards', async () => {
   let queryCalled = false;
   const interaction = makeInteraction({
     make: 'TOYOTA',
@@ -73,21 +73,17 @@ test('location is required before the search session starts', async () => {
 
   await withSearchCommandMocks(
     {
-      queryVehicles: async () => {
+      queryVehicles: async (yardId) => {
         queryCalled = true;
+        assert.equal(yardId, 'ALL');
         return [];
       },
     },
     async ({ handleSearchCommand }) => handleSearchCommand(interaction)
   );
 
-  assert.equal(queryCalled, false);
-  assert.deepEqual(interaction.replies, [
-    {
-      content: 'Location is required for this search.',
-      ephemeral: true,
-    },
-  ]);
+  assert.equal(queryCalled, true);
+  assert.deepEqual(interaction.responseMethods, ['deferReply', 'editReply']);
 });
 
 test('no-result search responds with no-results embed and disabled pagination', async () => {
@@ -110,14 +106,14 @@ test('no-result search responds with no-results embed and disabled pagination', 
 
   assert.equal(interaction.replies.length, 1);
   const payload = interaction.replies[0];
-  assert.match(payload.embeds[0].data.description, /No Results Found/);
+  assert.match(payload.embeds[0].data.description, /No vehicles match/);
 
   const buttons = payload.components[0].components.map((component) => component.data);
   assert.equal(buttons[0].label, 'Previous');
   assert.equal(buttons[0].disabled, true);
   assert.equal(buttons[1].label, 'Next');
   assert.equal(buttons[1].disabled, true);
-  assert.equal(buttons[2].label, 'Save Search');
+  assert.equal(buttons[2].label, 'Save Alert');
 
   await interaction.message.collector.emitEnd();
   assert.equal(interaction.message.edits.length, 1);
@@ -145,7 +141,7 @@ test('no-result search with specific model includes DB-driven model suggestions'
 
   assert.equal(interaction.replies.length, 1);
   const payload = interaction.replies[0];
-  assert.match(payload.embeds[0].data.description, /Possible model names we have seen/i);
+  assert.match(payload.embeds[0].data.description, /Suggested model names/i);
   assert.match(payload.embeds[0].data.description, /RX-7/);
 });
 

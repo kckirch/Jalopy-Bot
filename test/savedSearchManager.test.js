@@ -255,8 +255,8 @@ test('setSavedSearchFrequency persists the selected frequency', async () => {
 
 test('checkExistingSearch rejects and redacts database lookup failures', async () => {
   const privateErrorDetails = 'private-user /home/kc/private-lookup';
-  const originalGet = db.get.bind(db);
-  db.get = function getWithFailure(_sql, _params, callback) {
+  const originalAll = db.all.bind(db);
+  db.all = function allWithFailure(_sql, _params, callback) {
     callback(new Error(privateErrorDetails));
     return this;
   };
@@ -277,10 +277,10 @@ test('checkExistingSearch rejects and redacts database lookup failures', async (
     });
 
     const logOutput = joinedConsoleText(consoleCalls);
-    assert.match(logOutput, /SQL error checking for an existing saved search: Error/);
+    assert.match(logOutput, /Failed to retrieve saved searches: Error/);
     assert.equal(logOutput.includes(privateErrorDetails), false);
   } finally {
-    db.get = originalGet;
+    db.all = originalAll;
   }
 });
 

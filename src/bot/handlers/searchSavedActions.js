@@ -2,13 +2,16 @@ const { summarizeError } = require('../../utils/errorSummary');
 const { convertYardIdToLocation } = require('../utils/locationUtils');
 const {
   canonicalizeYardIdForSavedSearch,
-  matchesSavedSearchCriteria,
-} = require('../utils/savedSearchCriteria');
+} = require('../../database/savedSearchCriteria');
+const { describeAlertDelivery } = require('../utils/savedSearchSession');
+const { handleSavedSearchCommand } = require('../commands/savedSearchCommand');
+const { startSavedSearchSession } = require('./savedSearchSessionHandler');
 
 async function handleSaveAction(interaction, session, dependencies) {
   const { criteria, searchState } = session;
 
   try {
+    await interaction.deferReply({ ephemeral: true });
     const cleanedYardId = canonicalizeYardIdForSavedSearch(
       searchState.yardId
     );
@@ -38,74 +41,31 @@ async function handleSaveAction(interaction, session, dependencies) {
       );
     }
 
-    await interaction.reply({
+    await interaction.editReply({
       content: exists
-        ? 'This search is already saved. Use `/savedsearch` to manage it.'
-        : 'Search saved. Use `/savedsearch` to run or manage it.',
-      ephemeral: true,
+        ? 'This alert is already saved. Its settings have not changed. Use Manage Alerts or `/savedsearch` to check whether it is paused.'
+        : `Alert saved: ${criteria.make} ${criteria.model}, years ${criteria.yearRange}, at ${cleanedYardName}.\n${describeAlertDelivery(criteria.status)}\nUse Manage Alerts or \`/savedsearch\` to pause, remove, or test DMs.`,
+      allowedMentions: { parse: [] },
     });
   } catch (error) {
     console.error(
       'Error checking for existing search:',
       summarizeError(error)
     );
-    await interaction.reply({
-      content: 'Error checking for existing searches.',
-      ephemeral: true,
+    await interaction.editReply({
+      content: 'Unable to confirm this save. Check `/savedsearch` before trying again.',
     });
   }
 }
 
-async function handleDeleteAction(interaction, session, dependencies) {
-  const { criteria, searchState } = session;
-
-  try {
-    const cleanedYardId = canonicalizeYardIdForSavedSearch(
-      searchState.yardId
-    );
-    const savedSearches = await dependencies.getSavedSearches(
-      interaction.user.id
-    );
-    const matchingSearches = savedSearches.filter((savedSearch) =>
-      matchesSavedSearchCriteria(savedSearch, {
-        yardId: cleanedYardId,
-        make: criteria.make,
-        model: criteria.model,
-        yearRange: criteria.yearRange,
-        status: criteria.status,
-      })
-    );
-
-    if (matchingSearches.length === 0) {
-      await interaction.reply({
-        content: 'This search is not currently saved.',
-        ephemeral: true,
-      });
-      return;
-    }
-
-    for (const savedSearch of matchingSearches) {
-      await dependencies.deleteSavedSearch(savedSearch.id);
-    }
-
-    const pluralSuffix = matchingSearches.length === 1 ? '' : 'es';
-    await interaction.reply({
-      content: `Removed ${matchingSearches.length} matching saved search${pluralSuffix}.`,
-      ephemeral: true,
-    });
-  } catch (error) {
-    console.error(
-      'Error deleting saved search:',
-      summarizeError(error)
-    );
-    await interaction.reply({
-      content: 'Error deleting saved search.',
-      ephemeral: true,
-    });
-  }
+async function handleManageAction(interaction, dependencies) {
+  await handleSavedSearchCommand(interaction, {
+    getSavedSearches: dependencies.getSavedSearches,
+    startSavedSearchSession: (reply, searches) => startSavedSearchSession(reply, searches, dependencies),
+  });
 }
 
 module.exports = {
-  handleDeleteAction,
+  handleManageAction,
   handleSaveAction,
 };

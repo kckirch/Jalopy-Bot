@@ -22,11 +22,19 @@ test('model normalization removes punctuation consistently in JavaScript and SQL
 });
 
 test('year parsing preserves valid ranges and individual years', () => {
-  assert.deepEqual(parseYearInput('2004-2005, 2010, invalid'), {
+  assert.deepEqual(parseYearInput('2004-2005, 2010'), {
     conditions: 'vehicle_year BETWEEN ? AND ? OR vehicle_year = ?',
     params: [2004, 2005, 2010],
   });
   assert.deepEqual(parseYearInput(''), { conditions: '', params: [] });
+  assert.deepEqual(parseYearInput('Any'), { conditions: '', params: [] });
+  for (const input of ['invalid', '2004-2005, invalid', '2011-2006', '2008oops', '2008,', '2008-2009-2010']) {
+    assert.throws(() => parseYearInput(input, { strict: true }), RangeError);
+  }
+  assert.deepEqual(parseYearInput('2004-2005, invalid, 2010oops'), {
+    conditions: 'vehicle_year BETWEEN ? AND ? OR vehicle_year = ?',
+    params: [2004, 2005, 2010],
+  });
   assert.deepEqual(parseYearInput('invalid'), { conditions: '', params: [] });
 });
 
@@ -50,7 +58,7 @@ test('make and model aliases produce wildcard query values', () => {
     '%chevy%',
     '%chev%',
   ]);
-  assert.deepEqual(getModelVariations('F150'), ['%f-150%', '%f%150%']);
+  assert.deepEqual(getModelVariations('F150'), ['%F150%']);
   assert.deepEqual(getModelVariations('RX7'), ['%RX7%']);
 });
 

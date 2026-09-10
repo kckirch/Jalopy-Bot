@@ -40,15 +40,15 @@ function buildSearchComponents(searchState) {
       ),
     new ButtonBuilder()
       .setCustomId('search:save')
-      .setLabel('Save Search')
+      .setLabel('Save Alert')
       .setStyle(ButtonStyle.Success)
   );
 
   const savedSearchActionsRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('search:unsave')
-      .setLabel('Delete Saved')
-      .setStyle(ButtonStyle.Danger)
+      .setCustomId('search:manage')
+      .setLabel('Manage Alerts')
+      .setStyle(ButtonStyle.Secondary)
   );
 
   const locationRow = new ActionRowBuilder().addComponents(
@@ -66,7 +66,16 @@ function buildSearchComponents(searchState) {
       )
   );
 
-  return [pagingRow, savedSearchActionsRow, locationRow];
+  const rows = [pagingRow, savedSearchActionsRow, locationRow];
+  if (searchState.suggestedModels?.length > 0) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('search:model')
+        .setPlaceholder('Did you mean another model?')
+        .addOptions(searchState.suggestedModels.map((model) => ({ label: model, value: model })))
+    ));
+  }
+  return rows;
 }
 
 function buildSearchViewPayload(searchState, criteria) {

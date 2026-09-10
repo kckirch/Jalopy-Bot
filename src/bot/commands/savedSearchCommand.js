@@ -36,7 +36,7 @@ async function handleSavedSearchCommand(
     startSavedSearchSession: startSession,
     convertLocationToYardId: resolveYardId = convertLocationToYardId,
   } = dependencies;
-  const location = interaction.options.getString('location');
+  const location = interaction.options?.getString('location');
   const yardId = location ? resolveYardId(location) : null;
 
   try {
@@ -44,7 +44,9 @@ async function handleSavedSearchCommand(
     const savedSearches = await loadSavedSearches(interaction.user.id, yardId);
     if (savedSearches.length === 0) {
       await interaction.editReply({
-        content: 'You have no saved searches matching the criteria.',
+        content: location && yardId !== 'ALL'
+          ? 'No saved alerts cover this location. Use `/savedsearch` without a location to see all your alerts.'
+          : 'You have no saved alerts yet. Use `/search`, choose your filters, then select Save Alert—even if there are no matches yet.',
       });
       return;
     }

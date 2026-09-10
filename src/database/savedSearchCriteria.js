@@ -1,4 +1,6 @@
-const { YARDS } = require('../../config/yards');
+const { YARDS } = require('../config/yards');
+const { reverseMakeAliases } = require('../config/vehicleMakes');
+const { normalizeModelForLooseComparison } = require('./vehicleSearchNormalization');
 
 const ALL_YARD_IDS = Object.freeze(
   YARDS.map((yard) => yard.id).sort((left, right) => left - right)
@@ -57,10 +59,10 @@ function matchesSavedSearchCriteria(
   return (
     normalizeSavedSearchValue(savedYardId) ===
       normalizeSavedSearchValue(criteriaYardId) &&
-    normalizeSavedSearchValue(savedSearch.make) ===
-      normalizeSavedSearchValue(make) &&
-    normalizeSavedSearchValue(savedSearch.model) ===
-      normalizeSavedSearchValue(model) &&
+    (reverseMakeAliases[normalizeSavedSearchValue(savedSearch.make)] || normalizeSavedSearchValue(savedSearch.make)) ===
+      (reverseMakeAliases[normalizeSavedSearchValue(make)] || normalizeSavedSearchValue(make)) &&
+    normalizeModelForLooseComparison(savedSearch.model) ===
+      normalizeModelForLooseComparison(model) &&
     normalizeSavedSearchValue(savedSearch.year_range) ===
       normalizeSavedSearchValue(yearRange) &&
     normalizeSavedSearchValue(savedSearch.status) ===

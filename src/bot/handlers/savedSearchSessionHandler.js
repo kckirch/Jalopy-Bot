@@ -30,7 +30,7 @@ async function runSavedSearch(interaction, session, index, dependencies) {
       : [];
 
   session.activateResults(index, sortedVehicles, suggestedModels);
-  await interaction.update(session.buildResultsViewPayload());
+  await interaction.editReply(session.buildResultsViewPayload());
 }
 
 async function deleteSearch(interaction, collector, session, index, dependencies) {
@@ -39,8 +39,8 @@ async function deleteSearch(interaction, collector, session, index, dependencies
   session.remove(index);
 
   if (session.isEmpty()) {
-    await interaction.update({
-      content: 'All saved searches have been deleted.',
+    await interaction.editReply({
+      content: 'Alert removed. You have no saved alerts left. Use `/search` to create one.',
       embeds: [],
       components: [],
     });
@@ -48,7 +48,7 @@ async function deleteSearch(interaction, collector, session, index, dependencies
     return;
   }
 
-  await interaction.update(session.buildActiveViewPayload());
+  await interaction.editReply({ ...session.buildActiveViewPayload(), content: 'Alert removed.' });
 }
 
 async function toggleSearchFrequency(interaction, session, index, dependencies) {
@@ -56,26 +56,29 @@ async function toggleSearchFrequency(interaction, session, index, dependencies) 
   const nextFrequency = session.getNextFrequency(index);
   await dependencies.setSavedSearchFrequency(currentSearch.id, nextFrequency);
   session.updateFrequency(index, nextFrequency, new Date().toISOString());
-  await interaction.update(session.buildActiveViewPayload());
+  await interaction.editReply({
+    ...session.buildActiveViewPayload(),
+    content: nextFrequency === 'paused' ? 'Alerts paused. Your saved filters are unchanged.' : 'Daily alerts resumed.',
+  });
 }
 
 async function handleSessionAction(
   interaction,
   collector,
   session,
-  dependencies
+  dependencies,
+  action,
+  index
 ) {
-  const [action, rawIndex] = String(interaction.customId || '').split(':');
-  const index = session.resolveIndex(rawIndex);
 
   switch (action) {
     case 'next':
       session.moveSaved(index, 1);
-      await interaction.update(session.buildSavedViewPayload());
+      await interaction.editReply(session.buildSavedViewPayload());
       return;
     case 'prev':
       session.moveSaved(index, -1);
-      await interaction.update(session.buildSavedViewPayload());
+      await interaction.editReply(session.buildSavedViewPayload());
       return;
     case 'run':
       await runSavedSearch(interaction, session, index, dependencies);
@@ -83,20 +86,23 @@ async function handleSessionAction(
     case 'rnext':
     case 'rprev':
       if (!session.hasResults()) {
-        await interaction.reply({
+        await interaction.followUp({
           content: 'No search results are currently active.',
           ephemeral: true,
         });
         return;
       }
       session.moveResultsPage(action === 'rnext' ? 1 : -1);
-      await interaction.update(session.buildResultsViewPayload());
+      await interaction.editReply(session.buildResultsViewPayload());
       return;
     case 'back':
       session.showSaved(index);
-      await interaction.update(session.buildSavedViewPayload());
+      await interaction.editReply(session.buildSavedViewPayload());
       return;
     case 'delete':
+      await interaction.editReply(session.buildDeleteConfirmationPayload(index));
+      return;
+    case 'confirm-delete':
       await deleteSearch(
         interaction,
         collector,
@@ -108,8 +114,18 @@ async function handleSessionAction(
     case 'pause':
       await toggleSearchFrequency(interaction, session, index, dependencies);
       return;
+    case 'test-dm':
+      try {
+        await interaction.user.send('JalopyBot DM test: messages can reach you right now. Your saved alerts and their settings have not changed.');
+      } catch (error) {
+        console.error('Saved alert DM test failed:', summarizeError(error));
+        await interaction.followUp({ content: 'I could not send the test DM. Allow direct messages from server members and check that Jalopy Bot is not blocked, then try again. Your saved alerts are unchanged.', ephemeral: true });
+        return;
+      }
+      await interaction.followUp({ content: 'Test DM sent. This checks delivery right now; it does not change your alerts.', ephemeral: true });
+      return;
     default:
-      await interaction.reply({ content: 'Unknown action.', ephemeral: true });
+      await interaction.followUp({ content: 'Unknown action.', ephemeral: true });
   }
 }
 
@@ -128,33 +144,64 @@ async function startSavedSearchSession(
     time: SAVED_SEARCH_SESSION_MS,
   });
 
-  collector.on('collect', async (componentInteraction) => {
+  let busy = false;
+  let expired = false;
+  async function clearExpiredControls() {
     try {
+      await interaction.editReply({
+        content: 'These controls have expired. Use `/savedsearch` to reopen. Your alerts keep their current settings.',
+        components: [],
+      });
+    } catch (error) {
+      console.error('Unable to disable saved-search carousel buttons:', summarizeError(error));
+    }
+  }
+  let pendingDeleteId = null;
+  collector.on('collect', async (componentInteraction) => {
+    if (busy) {
+      await componentInteraction.reply({ content: 'Still processing your previous action. Please wait a moment.', ephemeral: true })
+        .catch((error) => console.error('Unable to reply to repeated saved-search action:', summarizeError(error)));
+      return;
+    }
+    busy = true;
+    try {
+      await componentInteraction.deferUpdate();
+      const [action, rawIndex, searchId] = String(componentInteraction.customId || '').split(':');
+      const index = session.resolveIndex(rawIndex);
+      if (session.isEmpty() || (rawIndex !== undefined && String(session.getSearch(index).id) !== searchId)) {
+        await componentInteraction.followUp({ content: 'This alert view has changed. Reopen `/savedsearch` before making changes.', ephemeral: true });
+        return;
+      }
+      if (action === 'confirm-delete' && pendingDeleteId !== searchId) {
+        await componentInteraction.followUp({ content: 'Removal was cancelled or has expired. Select Delete again to confirm this alert.', ephemeral: true });
+        return;
+      }
+      pendingDeleteId = action === 'delete' ? searchId : null;
       await handleSessionAction(
         componentInteraction,
         collector,
         session,
-        dependencies
+        dependencies,
+        action,
+        index
       );
     } catch (error) {
       console.error('Saved search interaction failed:', summarizeError(error));
-      await componentInteraction.reply({
-        content: 'Unable to process that saved-search action right now.',
+      const reply = componentInteraction.deferred || componentInteraction.replied ? 'followUp' : 'reply';
+      await componentInteraction[reply]({
+        content: 'Unable to confirm that action. Reopen `/savedsearch` to check its current state before trying again.',
         ephemeral: true,
-      });
+      }).catch((replyError) => console.error('Unable to report saved-search interaction failure:', summarizeError(replyError)));
+    } finally {
+      busy = false;
+      if (expired) await clearExpiredControls();
     }
   });
 
   collector.on('end', async (_collected, reason) => {
     if (reason === 'all_deleted') return;
-    try {
-      await interaction.editReply({ components: [] });
-    } catch (error) {
-      console.error(
-        'Unable to disable saved-search carousel buttons:',
-        summarizeError(error)
-      );
-    }
+    expired = true;
+    if (!busy) await clearExpiredControls();
   });
 
   return collector;

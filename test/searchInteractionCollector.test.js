@@ -251,7 +251,8 @@ test('real Discord collector expiry disables controls and rejects later clicks',
   const [[, reason]] = await Promise.all([ended, delay(10)]);
 
   assert.equal(reason, 'time');
-  assert.deepEqual(message.edits, [{ components: [] }]);
+  assert.deepEqual(message.edits[0].components, []);
+  assert.match(message.edits[0].content, /expired.*\/search/);
   assert.equal(client.listenerCount(Events.InteractionCreate), 0);
   const click = makeRealInteraction('message-1');
   client.emit(Events.InteractionCreate, click);
@@ -276,7 +277,7 @@ test('search controls contain only short action IDs, never serialized search cri
 
   assert.deepEqual(
     payload.components.flatMap((row) => row.components.map((component) => component.data.custom_id)),
-    ['search:previous', 'search:next', 'search:save', 'search:unsave', 'search:relocate']
+    ['search:previous', 'search:next', 'search:save', 'search:manage', 'search:relocate']
   );
 });
 
@@ -292,7 +293,8 @@ test('collector clears components on end and redacts cleanup failures', async ()
   const message = makeMessage();
   const collector = attachTestCollector(message, initialSearchState);
   await collector.emitEnd();
-  assert.deepEqual(message.edits, [{ components: [] }]);
+  assert.deepEqual(message.edits[0].components, []);
+  assert.match(message.edits[0].content, /expired/);
 
   const privateErrorDetails = 'private Discord message 123456';
   const failingCollector = attachTestCollector(

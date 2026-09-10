@@ -3,6 +3,8 @@ const { summarizeError } = require('../utils/errorSummary');
 const {
   buildNormalizedSqlExpression,
   getMakeVariations,
+  getModelFamilyMakes,
+  getModelFamilyNames,
   getModelVariations,
   normalizeModelForLooseComparison,
   parseYardIds,
@@ -24,11 +26,12 @@ function queryAll(sql, params, failureMessage) {
   });
 }
 
-function queryVehicles(yardId, make, model, yearInput, status) {
+async function queryVehicles(yardId, make, model, yearInput, status) {
+  make = String(make || 'ANY').trim().toUpperCase();
+  model = String(model || 'ANY').trim().toUpperCase();
   const yardIds = parseYardIds(yardId);
   const params = [];
   const conditions = [];
-  let sql = 'SELECT * FROM vehicles';
 
   switch (status) {
     case 'NEW':
@@ -59,34 +62,29 @@ function queryVehicles(yardId, make, model, yearInput, status) {
       conditions.push('vehicle_model LIKE ? AND vehicle_model NOT LIKE ?');
       params.push('%CHEROKEE%', '%GRAND CHEROKEE%');
     } else {
-      const models = getModelVariations(model);
-      const normalizedModel = normalizeModelForLooseComparison(model);
+      const models = getModelVariations(model, make);
       const normalizedSql = buildNormalizedSqlExpression('vehicle_model');
-      const modelPredicates = models.map(() => 'vehicle_model LIKE ?');
-      const modelParams = [...models];
-
-      if (normalizedModel !== '') {
-        modelPredicates.push(`${normalizedSql} = ?`);
-        modelParams.push(normalizedModel);
+      const modelConditions = models.map(() => `${normalizedSql} LIKE ?`);
+      params.push(...models);
+      // With no make selected, retain literal matches and expand each family only within its make.
+      if (make === 'ANY') {
+        for (const familyMake of getModelFamilyMakes(model)) {
+          const familyMakes = getMakeVariations(familyMake);
+          const familyModels = getModelVariations(model, familyMake);
+          modelConditions.push(`((${familyMakes.map(() => 'vehicle_make LIKE ?').join(' OR ')}) AND (${familyModels.map(() => `${normalizedSql} LIKE ?`).join(' OR ')}))`);
+          params.push(...familyMakes, ...familyModels);
+        }
       }
-
-      conditions.push(`(${modelPredicates.join(' OR ')})`);
-      params.push(...modelParams);
+      conditions.push(`(${modelConditions.join(' OR ')})`);
     }
   }
 
-  if (yearInput !== 'ANY') {
-    const yearData = parseYearInput(yearInput);
-    if (yearData.conditions) {
-      conditions.push(`(${yearData.conditions})`);
-      params.push(...yearData.params);
-    }
+  const yearData = parseYearInput(yearInput);
+  if (yearData.conditions) {
+    conditions.push(`(${yearData.conditions})`);
+    params.push(...yearData.params);
   }
-
-  if (conditions.length > 0) {
-    sql += ` WHERE ${conditions.join(' AND ')}`;
-  }
-
+  const sql = `SELECT * FROM vehicles WHERE ${conditions.join(' AND ')}`;
   return queryAll(sql, params, 'Failed to query vehicles:');
 }
 
@@ -100,7 +98,7 @@ function getModelSuggestionsForNoResults(
   const normalizedInput = normalizeModelForLooseComparison(modelInput);
   const upperInput = String(modelInput || '').trim().toUpperCase();
   const normalizedLimit =
-    Number.isInteger(limit) && limit > 0 ? Math.min(limit, 20) : 8;
+    Number.isInteger(limit) && limit > 0 ? Math.min(limit, 25) : 8;
   const yardIds = parseYardIds(yardId);
 
   let sql = `
@@ -111,8 +109,9 @@ function getModelSuggestionsForNoResults(
   const params = [];
 
   if (normalizedMake !== 'ANY' && normalizedMake !== '') {
-    sql += ' AND UPPER(vehicle_make) = ?';
-    params.push(normalizedMake);
+    const makes = getMakeVariations(normalizedMake);
+    sql += ` AND (${makes.map(() => 'vehicle_make LIKE ?').join(' OR ')})`;
+    params.push(...makes);
   }
 
   if (yardId !== 'ALL' && Array.isArray(yardIds) && yardIds.length > 0) {
@@ -123,7 +122,6 @@ function getModelSuggestionsForNoResults(
   sql += `
     GROUP BY vehicle_model
     ORDER BY count DESC, vehicle_model ASC
-    LIMIT 250
   `;
 
   return queryAll(
@@ -131,7 +129,13 @@ function getModelSuggestionsForNoResults(
     params,
     'Failed to query no-result model suggestions:'
   ).then((rows) => {
-    const rankedRows = (rows || [])
+    const rankedRows = [
+      ...(rows || []),
+      ...getModelFamilyNames(normalizedMake).map((model) => ({ model, count: 0 })),
+    ]
+      // Discord choice labels/values cannot exceed 100 characters. Never truncate a filter.
+      .filter((row) => typeof row.model === 'string' && row.model.length <= 100 &&
+        normalizeModelForLooseComparison(row.model) !== '')
       .map((row) => {
         const normalizedModel = normalizeModelForLooseComparison(row.model);
         return {
@@ -156,7 +160,7 @@ function getModelSuggestionsForNoResults(
     const uniqueModels = [];
     const seen = new Set();
     for (const row of rankedRows) {
-      const key = String(row.model).toUpperCase();
+      const key = normalizeModelForLooseComparison(row.model);
       if (seen.has(key)) {
         continue;
       }
@@ -173,40 +177,9 @@ function getModelSuggestionsForNoResults(
 }
 
 function getModelSuggestions(make = 'ANY', partialModel = '', limit = 25) {
-  const normalizedMake = String(make || 'ANY').trim().toUpperCase();
-  const normalizedPartialModel = String(partialModel || '')
-    .trim()
-    .toUpperCase();
-  const normalizedLimit =
-    Number.isInteger(limit) && limit > 0 ? Math.min(limit, 25) : 25;
-
-  let sql = `
-    SELECT vehicle_model AS model, COUNT(*) AS count
-    FROM vehicles
-    WHERE vehicle_status != 'INACTIVE'
-  `;
-  const params = [];
-
-  if (normalizedMake !== 'ANY' && normalizedMake !== '') {
-    sql += ' AND UPPER(vehicle_make) = ?';
-    params.push(normalizedMake);
-  }
-
-  if (normalizedPartialModel !== '') {
-    sql += ' AND UPPER(vehicle_model) LIKE ?';
-    params.push(`%${normalizedPartialModel}%`);
-  }
-
-  sql += `
-    GROUP BY vehicle_model
-    ORDER BY count DESC, vehicle_model ASC
-    LIMIT ?
-  `;
-  params.push(normalizedLimit);
-
-  return queryAll(sql, params, 'Failed to query model suggestions:').then(
-    (rows) => rows || []
-  );
+  // Historical models remain selectable even when no matching vehicle is active.
+  return getModelSuggestionsForNoResults(make, partialModel, 'ALL', limit)
+    .then((models) => models.map((model) => ({ model })));
 }
 
 module.exports = {

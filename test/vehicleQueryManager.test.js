@@ -171,8 +171,8 @@ test('model query is punctuation-insensitive (RX7 matches RX-7 and RX 7)', async
 
 test('no-result model suggestions include normalized variants and close matches', async () => {
   const suggestions = await getModelSuggestionsForNoResults('MAZDA', 'RX7', 1020, 5);
-  assert.ok(suggestions.includes('RX-7'));
-  assert.ok(suggestions.includes('RX 7'));
+  assert.equal(suggestions.length, 1);
+  assert.match(suggestions[0], /^RX[- ]7$/);
 });
 
 test('no-result model suggestions can surface partial model variants (300 -> 300 ZX)', async () => {
@@ -204,7 +204,6 @@ test('vehicle query failures reject without logging SQL error details', async ()
     const logOutput = joinedConsoleText(consoleCalls);
     assert.match(logOutput, /Failed to query vehicles: Error/);
     assert.match(logOutput, /Failed to query no-result model suggestions: Error/);
-    assert.match(logOutput, /Failed to query model suggestions: Error/);
     assert.equal(logOutput.includes(privateErrorDetails), false);
   } finally {
     queryDb.all = originalAll;

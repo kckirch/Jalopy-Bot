@@ -34,8 +34,8 @@ function buildSearchCommand() {
     .setDescription('Search for vehicles in the database')
     .addStringOption((option) => option
       .setName('location')
-      .setDescription('The yard location to search')
-      .setRequired(true)
+      .setDescription('The yard location to search (defaults to All)')
+      .setRequired(false)
       .addChoices(...SEARCH_LOCATION_CHOICES))
     .addStringOption((option) => option
       .setName('make')
@@ -65,10 +65,10 @@ function buildSearchCommand() {
 function buildSavedSearchCommand() {
   return new SlashCommandBuilder()
     .setName('savedsearch')
-    .setDescription('Send Your Saved Searches to Your DMs!')
+    .setDescription('Privately view, pause, remove, or test your saved vehicle alerts')
     .addStringOption((option) => option
       .setName('location')
-      .setDescription('The yard location to search')
+      .setDescription('Show alerts covering this location (All shows every saved alert)')
       .setRequired(false)
       .addChoices(...SEARCH_LOCATION_CHOICES));
 }
