@@ -1,6 +1,7 @@
 const {
   handleSavedSearchCommand,
 } = require('../src/bot/commands/savedSearchCommand');
+const { withInteractionResponses } = require('./interactionResponses');
 const {
   startSavedSearchSession,
 } = require('../src/bot/handlers/savedSearchSessionHandler');
@@ -18,7 +19,7 @@ class FakeCollector {
 
   async emitCollect(interaction) {
     if (this.handlers.collect) {
-      await this.handlers.collect(interaction);
+      await this.handlers.collect(withInteractionResponses(interaction));
     }
   }
 
@@ -75,7 +76,7 @@ function createSavedSearchCommand(mocks = {}) {
 }
 
 function getButtonByLabel(payload, label) {
-  return payload.components[0].components.find(
+  return payload.components.flatMap((row) => row.components).find(
     (button) => button.data.label === label
   );
 }

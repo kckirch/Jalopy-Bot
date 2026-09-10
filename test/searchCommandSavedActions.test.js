@@ -43,10 +43,10 @@ test('save-search button flow calls checkExistingSearch and addSavedSearch', asy
       assert.equal(addSavedSearchCalls[0][5], 'CAMRY');
       assert.equal(addSavedSearchCalls[0][6], '2005');
       assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.deepEqual(buttonInteraction.replyCalls[0], {
-        content: 'Search saved. Use `/savedsearch` to run or manage it.',
-        ephemeral: true,
-      });
+      assert.match(buttonInteraction.replyCalls[0].content, /Alert saved: TOYOTA CAMRY/);
+      assert.match(buttonInteraction.replyCalls[0].content, /Daily DM.*not just newly arrived/);
+      assert.deepEqual(buttonInteraction.deferOptions, { ephemeral: true });
+      assert.deepEqual(buttonInteraction.responseMethods, ['deferReply', 'editReply']);
     }
   );
 });
@@ -124,13 +124,10 @@ test('duplicate saved search does not call addSavedSearch', async () => {
   );
 
   assert.equal(addCalls, 0);
-  assert.deepEqual(duplicateReply, {
-    content: 'This search is already saved. Use `/savedsearch` to manage it.',
-    ephemeral: true,
-  });
+  assert.match(duplicateReply.content, /already saved.*settings have not changed/);
 });
 
-test('delete-saved result action removes matching saved search criteria', async () => {
+test('manage-alerts result action opens the existing private manager without deleting', async () => {
   const interaction = makeSearchInteraction();
   const deletedSearchIds = [];
 
@@ -160,13 +157,17 @@ test('delete-saved result action removes matching saved search criteria', async 
           this.replyCalls.push(payload);
         },
         async update() {},
+        async fetchReply() {
+          return { createMessageComponentCollector: () => ({ on() {} }) };
+        },
       };
 
       await interaction.message.collector.emitCollect(buttonInteraction);
 
-      assert.deepEqual(deletedSearchIds, [123]);
+      assert.deepEqual(deletedSearchIds, []);
       assert.equal(buttonInteraction.replyCalls.length, 1);
-      assert.match(buttonInteraction.replyCalls[0].content, /Removed 1 matching saved search/i);
+      assert.match(buttonInteraction.replyCalls[0].embeds[0].data.title, /Saved Search: TOYOTA CAMRY/);
+      assert.deepEqual(buttonInteraction.deferOptions, { ephemeral: true });
     }
   );
 });

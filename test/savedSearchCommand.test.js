@@ -18,7 +18,7 @@ test('savedsearch command replies when the user has no saved searches', async ()
   assert.equal(interaction.deferReplyCalls.length, 1);
   assert.equal(interaction.deferReplyCalls[0].ephemeral, true);
   assert.equal(interaction.editReplyCalls.length, 1);
-  assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
+  assert.match(interaction.editReplyCalls[0].content, /no saved alerts/i);
   assert.equal(joinedConsoleText(consoleCalls).includes('user-empty'), false);
 });
 
@@ -42,7 +42,7 @@ test('savedsearch command resolves an optional location before loading', async (
     ['location', 'boise'],
     ['load', 'user-filtered', 1020],
   ]);
-  assert.match(interaction.editReplyCalls[0].content, /no saved searches/i);
+  assert.match(interaction.editReplyCalls[0].content, /no saved alerts/i);
 });
 
 test('savedsearch command renders an in-channel carousel', async () => {

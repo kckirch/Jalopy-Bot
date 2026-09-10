@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { withInteractionResponses } = require('../test-support/interactionResponses');
 const {
   handleSearchAction,
 } = require('../src/bot/handlers/searchInteractionActions');
@@ -30,7 +31,7 @@ function makeSession() {
 }
 
 function makeInteraction(overrides = {}) {
-  return {
+  return withInteractionResponses({
     user: {
       id: 'user-1',
       tag: 'user-1#0001',
@@ -45,7 +46,7 @@ function makeInteraction(overrides = {}) {
       this.updates.push(payload);
     },
     ...overrides,
-  };
+  });
 }
 
 test('relocate action rejects an empty location without querying', async () => {
@@ -101,12 +102,40 @@ test('previous action moves back one page and updates the shared session', async
   );
 });
 
-test('unsave action reports when no saved search matches', async () => {
+test('model suggestion rejects stale values without querying or changing the filter', async () => {
+  const session = makeSession();
+  session.searchState.suggestedModels = ['CAMRY SOLARA'];
+  const interaction = makeInteraction({ values: ['COROLLA'] });
+  await handleSearchAction(interaction, 'model', session, {
+    queryVehicles: async () => assert.fail('unexpected query'),
+  });
+  assert.match(interaction.replies[0].content, /suggestion has expired/);
+  assert.deepEqual(session.criteria, criteria);
+});
+
+test('failed model suggestion rendering cannot silently change the filter that gets saved', async () => {
+  const session = makeSession();
+  session.searchState.suggestedModels = ['CAMRY SOLARA'];
+  const originalState = session.searchState;
+  const interaction = makeInteraction({
+    values: ['CAMRY SOLARA'],
+    async update() { throw new Error('fixture failed update'); },
+  });
+  await assert.rejects(handleSearchAction(interaction, 'model', session, {
+    queryVehicles: async () => [],
+    getModelSuggestionsForNoResults: async () => [],
+  }), /fixture failed update/);
+  assert.deepEqual(interaction.responseMethods, ['deferUpdate', 'editReply']);
+  assert.equal(session.searchState, originalState);
+  assert.deepEqual(session.criteria, criteria);
+});
+
+test('manage action explains how to create the first alert', async () => {
   const interaction = makeInteraction();
 
   await handleSearchAction(
     interaction,
-    'unsave',
+    'manage',
     makeSession(),
     {
       getSavedSearches: async () => [],
@@ -114,15 +143,11 @@ test('unsave action reports when no saved search matches', async () => {
     }
   );
 
-  assert.deepEqual(interaction.replies, [
-    {
-      content: 'This search is not currently saved.',
-      ephemeral: true,
-    },
-  ]);
+  assert.match(interaction.replies[0].content, /no saved alerts.*Save Alert/);
+  assert.deepEqual(interaction.responseMethods, ['deferReply', 'editReply']);
 });
 
-test('unsave action deletes every matching duplicate and keeps unrelated rows', async () => {
+test('removed unsave action cannot silently delete saved records', async () => {
   const interaction = makeInteraction();
   const deletedIds = [];
 
@@ -161,36 +186,21 @@ test('unsave action deletes every matching duplicate and keeps unrelated rows', 
     }
   );
 
-  assert.deepEqual(deletedIds, [1, 2]);
-  assert.deepEqual(interaction.replies, [
-    {
-      content: 'Removed 2 matching saved searches.',
-      ephemeral: true,
-    },
-  ]);
+  assert.deepEqual(deletedIds, []);
+  assert.deepEqual(interaction.replies, []);
 });
 
-test('unsave action redacts delete failures', async () => {
+test('manage action redacts lookup failures', async () => {
   const privateDetails = '/home/private/searches.db row=91';
   const interaction = makeInteraction();
 
   const consoleCalls = await captureConsole(() =>
     handleSearchAction(
       interaction,
-      'unsave',
+      'manage',
       makeSession(),
       {
-        getSavedSearches: async () => [
-          {
-            id: 91,
-            yard_id: '1020',
-            make: 'TOYOTA',
-            model: 'CAMRY',
-            year_range: '2005',
-            status: 'ACTIVE',
-          },
-        ],
-        deleteSavedSearch: async () => {
+        getSavedSearches: async () => {
           throw new RangeError(privateDetails);
         },
       }
@@ -200,11 +210,11 @@ test('unsave action redacts delete failures', async () => {
 
   assert.match(
     output,
-    /Error deleting saved search: RangeError/
+    /Error retrieving saved searches: RangeError/
   );
   assert.equal(output.includes(privateDetails), false);
   assert.deepEqual(interaction.replies, [
-    { content: 'Error deleting saved search.', ephemeral: true },
+    { content: 'Failed to retrieve saved searches.' },
   ]);
 });
 

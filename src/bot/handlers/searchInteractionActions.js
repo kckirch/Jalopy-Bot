@@ -7,13 +7,15 @@ const {
   checkExistingSearch,
   deleteSavedSearch,
   getSavedSearches,
+  setSavedSearchFrequency,
 } = require('../../database/savedSearchManager');
 const {
   handlePagingAction,
   handleRelocateAction,
+  handleModelSuggestionAction,
 } = require('./searchNavigationActions');
 const {
-  handleDeleteAction,
+  handleManageAction,
   handleSaveAction,
 } = require('./searchSavedActions');
 const {
@@ -26,6 +28,7 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
   deleteSavedSearch,
   getModelSuggestionsForNoResults,
   getSavedSearches,
+  setSavedSearchFrequency,
   queryVehicles,
 });
 
@@ -55,8 +58,11 @@ async function handleSearchAction(
     case 'save':
       await handleSaveAction(interaction, session, dependencies);
       return true;
-    case 'unsave':
-      await handleDeleteAction(interaction, session, dependencies);
+    case 'manage':
+      await handleManageAction(interaction, dependencies);
+      return true;
+    case 'model':
+      await handleModelSuggestionAction(interaction, session, dependencies);
       return true;
     case 'relocate':
       await handleRelocateAction(

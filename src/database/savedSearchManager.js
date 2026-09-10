@@ -1,5 +1,6 @@
 const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
+const { canonicalizeYardIdForSavedSearch, matchesSavedSearchCriteria } = require('./savedSearchCriteria');
 
 function addSavedSearch(
   userId,
@@ -32,29 +33,11 @@ function addSavedSearch(
   });
 }
 
-function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
-  const sql = `
-    SELECT 1 FROM saved_searches
-    WHERE user_id = TRIM(?)
-      AND yard_id = TRIM(?)
-      AND UPPER(make) = UPPER(TRIM(?))
-      AND UPPER(model) = UPPER(TRIM(?))
-      AND year_range = TRIM(?)
-      AND status = TRIM(?);
-  `;
-  const params = [userId, yardId, make, model, yearRange, status];
-
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        console.error('SQL error checking for an existing saved search:', summarizeError(err));
-        reject(err);
-        return;
-      }
-
-      resolve(Boolean(row));
-    });
-  });
+async function checkExistingSearch(userId, yardId, make, model, yearRange, status) {
+  const searches = await getSavedSearches(String(userId).trim());
+  return searches.some((search) => matchesSavedSearchCriteria(search, {
+    yardId, make, model, yearRange, status,
+  }));
 }
 
 function setSavedSearchFrequency(searchId, frequency) {
@@ -94,13 +77,8 @@ function deleteSavedSearch(searchId) {
 }
 
 function getSavedSearches(userId, yardId = null) {
-  let query = 'SELECT * FROM saved_searches WHERE user_id = ?';
+  const query = 'SELECT * FROM saved_searches WHERE user_id = ? ORDER BY id';
   const params = [userId];
-
-  if (yardId) {
-    query += ' AND yard_id = ?';
-    params.push(yardId);
-  }
 
   return new Promise((resolve, reject) => {
     db.all(query, params, (err, rows) => {
@@ -110,7 +88,15 @@ function getSavedSearches(userId, yardId = null) {
         return;
       }
 
-      resolve(rows);
+      if (!yardId || String(yardId).trim().toUpperCase() === 'ALL') {
+        resolve(rows);
+        return;
+      }
+      const requestedYards = canonicalizeYardIdForSavedSearch(yardId).split(',');
+      resolve(rows.filter((row) => {
+        const savedYards = canonicalizeYardIdForSavedSearch(row.yard_id).split(',');
+        return requestedYards.some((id) => savedYards.includes(id));
+      }));
     });
   });
 }

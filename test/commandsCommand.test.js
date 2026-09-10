@@ -23,8 +23,8 @@ test('commands command replies with the public command guide', async () => {
     embed.fields.map((field) => field.name),
     [
       '1) Search Inventory',
-      '2) Use Result Buttons',
-      '3) Manage Saved Searches',
+      '2) Save an Alert',
+      '3) Manage Alerts Privately',
       'Tip',
     ]
   );

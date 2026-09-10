@@ -26,7 +26,6 @@ test('search command redacts initial query errors', async () => {
   assert.deepEqual(interaction.replies, [
     {
       content: 'Error fetching data from the database.',
-      ephemeral: true,
     },
   ]);
   assert.match(joinedConsoleText(consoleCalls), /Error querying vehicles: TypeError/);
@@ -63,8 +62,7 @@ test('search command redacts save-check errors', async () => {
 
       assert.deepEqual(buttonInteraction.replyCalls, [
         {
-          content: 'Error checking for existing searches.',
-          ephemeral: true,
+          content: 'Unable to confirm this save. Check `/savedsearch` before trying again.',
         },
       ]);
       assert.match(

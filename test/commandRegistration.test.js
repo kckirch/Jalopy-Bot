@@ -85,7 +85,7 @@ test('location choices stay consistent across command definitions', () => {
 test('search definition preserves autocomplete and status options', () => {
   const searchCommand = getCommand(buildCommandDefinitions(), 'search');
 
-  assert.equal(getOption(searchCommand, 'location').required, true);
+  assert.equal(getOption(searchCommand, 'location').required, false);
   assert.equal(getOption(searchCommand, 'make').autocomplete, true);
   assert.equal(getOption(searchCommand, 'model').autocomplete, true);
   assert.deepEqual(simplifyChoices(getOption(searchCommand, 'status').choices), [

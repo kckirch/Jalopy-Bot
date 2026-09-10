@@ -38,15 +38,32 @@ async function handleRelocateAction(
     return;
   }
 
-  session.searchState = await createSearchState(
+  await interaction.deferUpdate();
+  const nextState = await createSearchState(
     selectedLocation,
     session.criteria,
     dependencies
   );
-  await interaction.update(getSearchViewPayload(session));
+  await interaction.editReply(buildSearchViewPayload(nextState, session.criteria));
+  session.searchState = nextState;
+}
+
+async function handleModelSuggestionAction(interaction, session, dependencies) {
+  const selectedModel = interaction.values?.[0];
+  if (!session.searchState.suggestedModels.includes(selectedModel)) {
+    await interaction.reply({ content: 'That model suggestion has expired. Run `/search` again.', ephemeral: true });
+    return;
+  }
+  await interaction.deferUpdate();
+  const nextCriteria = { ...session.criteria, model: selectedModel.toUpperCase() };
+  const nextState = await createSearchState(session.searchState.location, nextCriteria, dependencies);
+  await interaction.editReply(buildSearchViewPayload(nextState, nextCriteria));
+  session.criteria = nextCriteria;
+  session.searchState = nextState;
 }
 
 module.exports = {
   handlePagingAction,
   handleRelocateAction,
+  handleModelSuggestionAction,
 };

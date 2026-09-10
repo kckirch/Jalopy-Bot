@@ -4,7 +4,7 @@ const {
   canonicalizeYardIdForSavedSearch,
   matchesSavedSearchCriteria,
   normalizeSavedSearchValue,
-} = require('../src/bot/utils/savedSearchCriteria');
+} = require('../src/database/savedSearchCriteria');
 
 test('saved-search yard IDs have one stable canonical representation', () => {
   assert.equal(

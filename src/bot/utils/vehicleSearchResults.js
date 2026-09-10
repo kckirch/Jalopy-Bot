@@ -39,13 +39,13 @@ function buildSearchResultsEmbed({
 
   if (vehicles.length === 0) {
     let description =
-      'No Results Found.\n\nPlease double check your Model naming if you are certain it should be in the yard.\nRemember simpler is usually better :)';
+      'No vehicles match these filters right now.\nCheck the model, year, and location, or save an alert for future matches.';
     if (Array.isArray(suggestedModels) && suggestedModels.length > 0) {
-      description += `\n\nPossible model names we have seen: ${suggestedModels
+      description += `\n\nSuggested model names: ${suggestedModels
         .slice(0, 8)
         .join(', ')}`;
     }
-    embed.setDescription(description).setFooter({ text: 'Page 0 of 0' });
+    embed.setDescription(description).setFooter({ text: '0 matches' });
     return embed;
   }
 
@@ -58,8 +58,8 @@ function buildSearchResultsEmbed({
   for (const vehicle of pageItems) {
     const firstSeen = new Date(vehicle.first_seen);
     const lastUpdated = new Date(vehicle.last_updated);
-    const firstSeenFormatted = `${firstSeen.getMonth() + 1}/${firstSeen.getDate()}`;
-    const lastUpdatedFormatted = `${lastUpdated.getMonth() + 1}/${lastUpdated.getDate()}`;
+    const firstSeenFormatted = firstSeen.toLocaleDateString('en-US');
+    const lastUpdatedFormatted = lastUpdated.toLocaleDateString('en-US');
 
     let value = `Yard: ${vehicle.yard_name}, Row: ${vehicle.row_number}, First Seen: ${firstSeenFormatted}, Last Updated: ${lastUpdatedFormatted}`;
     if (vehicle.notes) {

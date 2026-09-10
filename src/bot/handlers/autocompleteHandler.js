@@ -1,5 +1,6 @@
 const {
   vehicleMakes,
+  makeAliases,
   reverseMakeAliases,
 } = require('../../config/vehicleMakes');
 const { getModelSuggestions } = require('../../database/vehicleQueryManager');
@@ -23,7 +24,8 @@ function buildChoice(name, value = name) {
 function getMakeChoices(focusedValue) {
   const focused = normalizeOptionValue(focusedValue);
   const filtered = vehicleMakes
-    .filter((make) => focused === '' || make.includes(focused))
+    .filter((make) => focused === '' || make.includes(focused) ||
+      (makeAliases[make] || []).some((alias) => alias.includes(focused)))
     .slice(0, AUTOCOMPLETE_LIMIT);
   return filtered.map((make) => buildChoice(make, make));
 }

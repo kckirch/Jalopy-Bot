@@ -62,8 +62,15 @@ test('delete removes the final saved search and clears the message', async () =>
     },
   });
 
+  assert.deepEqual(deleteCalls, []);
+  assert.match(updatedPayload.content, /Remove this saved alert/);
+  await emitCollectorAction(interaction, {
+    customId: getButtonByLabel(updatedPayload, 'Remove Alert').data.custom_id,
+    userId: 'user-delete-test',
+    async onUpdate(payload) { updatedPayload = payload; },
+  });
   assert.deepEqual(deleteCalls, [42]);
-  assert.match(updatedPayload.content, /all saved searches have been deleted/i);
+  assert.match(updatedPayload.content, /no saved alerts left/i);
   assert.deepEqual(updatedPayload.components, []);
   assert.deepEqual(interaction.__collector.stopCalls, ['all_deleted']);
 });
@@ -93,10 +100,13 @@ test('collector action failures are redacted and receive a bounded reply', async
   });
 
   await runCommand(interaction);
+  await emitCollectorAction(interaction, {
+    customId: 'delete:0:81',
+    userId: 'user-collector-error',
+  });
   const consoleCalls = await captureConsole(() =>
     emitCollectorAction(interaction, {
-      customId: getButtonByLabel(interaction.editReplyCalls[0], 'Delete').data
-        .custom_id,
+      customId: 'confirm-delete:0:81',
       userId: 'user-collector-error',
       async onReply(payload) {
         buttonReplies.push(payload);
@@ -106,7 +116,7 @@ test('collector action failures are redacted and receive a bounded reply', async
 
   assert.deepEqual(buttonReplies, [
     {
-      content: 'Unable to process that saved-search action right now.',
+      content: 'Unable to confirm that action. Reopen `/savedsearch` to check its current state before trying again.',
       ephemeral: true,
     },
   ]);

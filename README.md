@@ -120,12 +120,33 @@ checkout as described above.
 
 - **`/commands`**: Show the in-Discord command guide.
 - **`/search`**: Search by location, make, model, year, and status. Result
-  controls provide pagination, location switching, and saved-search actions.
-- **`/savedsearch`**: Open an in-channel carousel to run, pause, or delete saved
-  searches.
+  controls provide pagination, location switching, **Save Alert**, and
+  **Manage Alerts**. Location defaults to All. Make aliases such as `VW` and
+  model spellings such as `4runner` / `4 runner` work consistently. With BMW
+  selected, `3series` / `3 SERIES` includes the supported 3 Series variants.
+  Autocomplete includes historical models; no-result searches offer a model
+  selector for close spellings. Suggestions never silently change your filters.
+- **`/savedsearch`**: Privately view, run, pause/resume, or remove your saved
+  alerts. **Test DMs** sends one test message only when clicked; it does not
+  change alert settings. Removal requires confirmation. All (or no location)
+  shows every alert; a yard or yard group shows alerts covering any of its yards.
+
+To create an alert, run `/search make:BMW model:3series year:2006-2011`, review
+the results and filters, then select **Save Alert**. Saving also works with zero
+matches. New commands reject invalid years; use a four-digit year, an ascending
+range, or comma-separated years/ranges. Existing saved filters are not migrated.
+
+Alerts run on the daily schedule, not immediately after saving. The default
+Active filter sends **all matching available vehicles**, including new arrivals;
+it is not a new-arrivals-only subscription. Select status New for vehicles marked
+NEW by the scrape lifecycle. DMs are sent when matches exist and delivery is
+allowed. Pausing keeps the filters; resuming re-enables daily delivery. Test DMs
+checks current DM permissions, not future delivery or scheduler health.
 
 Search controls expire after two minutes and can only be used by the person
 who ran the command. Each search message has its own independent session.
+Expiration does not pause or delete an alert; rerun `/search` or `/savedsearch`
+to reopen controls.
 
 The following maintenance commands require elevated Discord permissions:
 

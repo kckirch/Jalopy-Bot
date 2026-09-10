@@ -1,4 +1,5 @@
 const { handleSearchCommand } = require('../src/bot/commands/searchCommand');
+const { withInteractionResponses } = require('./interactionResponses');
 
 class FakeCollector {
   constructor() {
@@ -12,7 +13,7 @@ class FakeCollector {
 
   async emitCollect(interaction) {
     if (this.handlers.collect) {
-      await this.handlers.collect(interaction);
+      await this.handlers.collect(withInteractionResponses(interaction));
     }
   }
 
@@ -41,7 +42,7 @@ function makeInteraction(options, userId = 'user-1') {
   const message = makeMessage();
   const replies = [];
 
-  return {
+  return withInteractionResponses({
     options: {
       getString(name) {
         return options[name] ?? null;
@@ -53,14 +54,11 @@ function makeInteraction(options, userId = 'user-1') {
     },
     async reply(payload) {
       replies.push(payload);
-      if (payload && payload.fetchReply) {
-        return message;
-      }
-      return payload;
+      return message;
     },
     replies,
     message,
-  };
+  });
 }
 
 function makeSearchInteraction(overrides = {}) {
