@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const { promisify } = require('node:util');
 const sqlite3 = require('sqlite3').verbose();
 
 const environmentPath = path.resolve(__dirname, '../.env');
@@ -49,15 +50,7 @@ function openReadOnlyDatabase(databasePath) {
 }
 
 function closeDatabase(database) {
-  return new Promise((resolve, reject) => {
-    database.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
+  return promisify(database.close).call(database);
 }
 
 function createSnapshotProvider(options, db, vehicleDbPath, snapshotPath) {

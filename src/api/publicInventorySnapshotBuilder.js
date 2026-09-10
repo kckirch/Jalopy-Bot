@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { promisify } = require('node:util');
 const sqlite3 = require('sqlite3').verbose();
 
 function openDatabase(databasePath, mode) {
@@ -17,15 +18,7 @@ function openDatabase(databasePath, mode) {
 }
 
 function closeDatabase(database) {
-  return new Promise((resolve, reject) => {
-    database.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
+  return promisify(database.close).call(database);
 }
 
 function run(database, sql, params = []) {
@@ -41,39 +34,15 @@ function run(database, sql, params = []) {
 }
 
 function exec(database, sql) {
-  return new Promise((resolve, reject) => {
-    database.exec(sql, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
+  return promisify(database.exec).call(database, sql);
 }
 
 function get(database, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    database.get(sql, params, (error, row) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(row);
-    });
-  });
+  return promisify(database.get).call(database, sql, params);
 }
 
 function all(database, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    database.all(sql, params, (error, rows) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(rows);
-    });
-  });
+  return promisify(database.all).call(database, sql, params);
 }
 
 function resolveSnapshotPaths(sourcePath, destinationPath) {

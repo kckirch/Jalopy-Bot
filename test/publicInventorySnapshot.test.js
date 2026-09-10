@@ -24,6 +24,8 @@ test('public inventory snapshot contains vehicles and no private saved-search da
   let snapshotDatabase;
 
   try {
+    const sourceVehicles = await all(sourceDatabase, 'SELECT * FROM vehicles ORDER BY id;');
+    const savedSearches = await all(sourceDatabase, 'SELECT * FROM saved_searches ORDER BY id;');
     const result = await buildPublicInventorySnapshot(sourcePath, snapshotPath);
     assert.equal(result.vehicleCount, 1);
     assert.equal(fs.existsSync(snapshotPath), true);
@@ -32,6 +34,9 @@ test('public inventory snapshot contains vehicles and no private saved-search da
     }
 
     snapshotDatabase = await openDatabase(snapshotPath, sqlite3.OPEN_READONLY);
+    assert.deepEqual(await all(snapshotDatabase, 'SELECT * FROM vehicles ORDER BY id;'), sourceVehicles);
+    assert.deepEqual(await all(sourceDatabase, 'SELECT * FROM vehicles ORDER BY id;'), sourceVehicles);
+    assert.deepEqual(await all(sourceDatabase, 'SELECT * FROM saved_searches ORDER BY id;'), savedSearches);
     const tables = await all(
       snapshotDatabase,
       `SELECT name
@@ -72,6 +77,45 @@ test('public inventory snapshot contains vehicles and no private saved-search da
     if (snapshotDatabase) {
       await closeDatabase(snapshotDatabase);
     }
+    await closeDatabase(sourceDatabase);
+    fs.rmSync(tempDirectory, { recursive: true, force: true });
+  }
+});
+
+test('failed snapshot SQL rolls back without changing the source or last good snapshot', async (t) => {
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'jalopy-snapshot-rollback-'));
+  const sourcePath = path.join(tempDirectory, 'private.db');
+  const snapshotDirectory = path.join(tempDirectory, 'public');
+  const snapshotPath = path.join(snapshotDirectory, 'inventory.db');
+  const sourceDatabase = await createPrivateRuntimeDatabase(sourcePath);
+  const originalExec = sqlite3.Database.prototype.exec;
+  const failure = new Error('simulated index-copy failure');
+  const lastGoodSnapshot = Buffer.from('last-good-public-snapshot');
+  fs.mkdirSync(snapshotDirectory);
+  fs.writeFileSync(snapshotPath, lastGoodSnapshot);
+  let rollbackCount = 0;
+
+  try {
+    const sourceVehicles = await all(sourceDatabase, 'SELECT * FROM vehicles;');
+    const savedSearches = await all(sourceDatabase, 'SELECT * FROM saved_searches;');
+    t.mock.method(sqlite3.Database.prototype, 'exec', function (sql, callback) {
+      assert.ok(this instanceof sqlite3.Database);
+      if (sql.startsWith('CREATE INDEX')) {
+        callback(failure);
+        return this;
+      }
+      if (sql === 'ROLLBACK;') rollbackCount += 1;
+      return originalExec.call(this, sql, callback);
+    });
+
+    await assert.rejects(buildPublicInventorySnapshot(sourcePath, snapshotPath), (error) => error === failure);
+
+    assert.equal(rollbackCount, 1);
+    assert.deepEqual(fs.readFileSync(snapshotPath), lastGoodSnapshot);
+    assert.deepEqual(fs.readdirSync(snapshotDirectory), ['inventory.db']);
+    assert.deepEqual(await all(sourceDatabase, 'SELECT * FROM vehicles;'), sourceVehicles);
+    assert.deepEqual(await all(sourceDatabase, 'SELECT * FROM saved_searches;'), savedSearches);
+  } finally {
     await closeDatabase(sourceDatabase);
     fs.rmSync(tempDirectory, { recursive: true, force: true });
   }
