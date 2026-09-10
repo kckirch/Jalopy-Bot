@@ -102,10 +102,12 @@ test('family expansion cannot escape a saved alert’s yard, year, or inventory 
 test('invalid years stop before search or save and never turn into all-year queries', async () => {
   for (const year of ['banana', '2011-2006', '2008oops', '2008,invalid']) {
     const interaction = makeSearch({ make: 'TOYOTA', model: '4RUNNER', year });
-    await handleSearchCommand(interaction);
-    assert.deepEqual(interaction.responseMethods, ['reply']);
-    assert.match(interaction.replies[0].content, /four-digit year/);
-    assert.equal(interaction.message.collector, null);
+    await handleSearchCommand(interaction, { queryVehicles: async () => assert.fail('invalid years queried inventory') });
+    assert.deepEqual(interaction.responseMethods, ['deferReply', 'editReply']);
+    assert.match(interaction.replies[0].embeds[0].data.description, /four-digit year/);
+    const save = component('search:save', { user: interaction.user });
+    await interaction.message.collector.emitCollect(save);
+    assert.match(save.replies[0].content, /Fix.*before saving/);
   }
   assert.deepEqual(await searches.getSavedSearches('user-1'), []);
 });
@@ -118,10 +120,9 @@ test('legacy saved year filters retain their previous query behavior', async () 
 test('blank or punctuation-only model input stops before querying or saving', async () => {
   for (const model of ['   ', '---', '%_%']) {
     const interaction = makeSearch({ make: 'TOYOTA', model });
-    await handleSearchCommand(interaction);
-    assert.deepEqual(interaction.responseMethods, ['reply']);
-    assert.match(interaction.replies[0].content, /Enter a model name/);
-    assert.equal(interaction.message.collector, null);
+    await handleSearchCommand(interaction, { queryVehicles: async () => assert.fail('invalid model queried inventory') });
+    assert.deepEqual(interaction.responseMethods, ['deferReply', 'editReply']);
+    assert.match(interaction.replies[0].embeds[0].data.description, /Enter a model name/);
   }
   assert.deepEqual(await searches.getSavedSearches('user-1'), []);
 });
@@ -150,7 +151,8 @@ test('choosing a typo suggestion reruns the search and saves exactly the selecte
   await interaction.message.collector.emitCollect(select);
   assert.deepEqual(select.responseMethods, ['deferUpdate', 'editReply']);
   assert.equal(select.updates[0].embeds[0].data.fields.length, 2);
-  assert.equal(select.updates[0].components.length, 3);
+  assert(!select.updates[0].components.some((row) => row.components[0].data.custom_id === 'search:model'));
+  assert(select.updates[0].components.some((row) => row.components[0].data.custom_id === 'search:group'));
   await interaction.message.collector.emitCollect(component('search:save'));
   const [saved] = await searches.getSavedSearches('flow-user');
   assert.equal(saved.model, model.toUpperCase());

@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { MessageFlags } = require('discord.js');
 
 const { SEARCH_LOCATION_CHOICES } = require('../src/bot/locationChoices');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
@@ -34,8 +35,9 @@ test('invalid make returns ephemeral validation embed and stops query', async ()
 
   assert.equal(queryCalled, false);
   assert.equal(interaction.replies.length, 1);
-  assert.equal(interaction.replies[0].ephemeral, true);
-  assert.equal(interaction.replies[0].embeds[0].data.title, 'Available Vehicle Makes');
+  assert.equal(interaction.deferOptions.flags, MessageFlags.Ephemeral);
+  assert.equal(interaction.replies[0].embeds[0].data.title, 'Let’s fix this search');
+  assert.equal(interaction.replies[0].components[0].components[0].data.label, 'Edit Search');
   assert.equal(joinedConsoleText(consoleCalls).toLowerCase().includes('not-a-real-make'), false);
 });
 
@@ -120,7 +122,7 @@ test('no-result search responds with no-results embed and disabled pagination', 
   assert.deepEqual(interaction.message.edits[0].components, []);
 });
 
-test('no-result search with specific model includes DB-driven model suggestions', async () => {
+test('a recognized formatting variant does not suggest the same model back', async () => {
   const interaction = makeInteraction({
     location: 'boise',
     make: 'MAZDA',
@@ -141,8 +143,9 @@ test('no-result search with specific model includes DB-driven model suggestions'
 
   assert.equal(interaction.replies.length, 1);
   const payload = interaction.replies[0];
-  assert.match(payload.embeds[0].data.description, /Suggested model names/i);
-  assert.match(payload.embeds[0].data.description, /RX-7/);
+  assert.match(payload.embeds[0].data.description, /recognized/i);
+  assert.doesNotMatch(payload.embeds[0].data.description, /Suggested model names/i);
+  assert(!payload.components.some((row) => row.components[0].data.custom_id === 'search:model'));
 });
 
 test('location dropdown reruns search with same filters in selected location', async () => {
@@ -199,7 +202,7 @@ test('location dropdown reruns search with same filters in selected location', a
 
       assert.deepEqual(queriedYardIds, [1020, 1021]);
       assert.equal(selectInteraction.updates.length, 1);
-      assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
+      assert.match(selectInteraction.updates[0].embeds[0].data.description, /Location: caldwell/i);
     }
   );
 });

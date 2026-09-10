@@ -5,6 +5,7 @@ function withInteractionResponses(interaction) {
   if (interaction.responseMethods) return interaction;
   const recordReply = interaction.reply?.bind(interaction) || (async () => {});
   const recordUpdate = interaction.update?.bind(interaction) || (async () => {});
+  const recordModal = interaction.showModal?.bind(interaction) || (async () => {});
   interaction.responseMethods = [];
   interaction.deferred = false;
   interaction.replied = false;
@@ -32,6 +33,11 @@ function withInteractionResponses(interaction) {
     acknowledge('update');
     interaction.replied = true;
     return recordUpdate(payload);
+  };
+  interaction.showModal = async (payload) => {
+    acknowledge('showModal');
+    interaction.replied = true;
+    return recordModal(payload);
   };
   interaction.editReply = async (payload) => {
     assert(interaction.deferred || interaction.replied, 'edit requires acknowledgement');

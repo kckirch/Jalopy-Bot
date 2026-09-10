@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { describeSearchGroup } = require('../../database/vehicleSearchGroups');
 
 const SEARCH_RESULTS_PER_PAGE = 20;
 
@@ -29,17 +30,21 @@ function buildSearchResultsEmbed({
   currentPage,
   totalPages,
   suggestedModels = [],
+  knownModel = false,
 }) {
+  const groupNote = describeSearchGroup(make, model);
+  const filters = [`Years: ${yearRange} · Location: ${location} · Status: ${status}`, groupNote].filter(Boolean).join('\n\n');
   const embed = new EmbedBuilder()
     .setColor(0x0099ff)
-    .setTitle(
-      `Database search results for ${location} ${make || 'Any'} ${model} (${yearRange}) ${status}`
-    )
+    .setTitle(`${make || 'Any'} ${model}`.slice(0, 256))
+    .setDescription(filters)
     .setTimestamp();
 
   if (vehicles.length === 0) {
     let description =
-      'No vehicles match these filters right now.\nCheck the model, year, and location, or save an alert for future matches.';
+      `${filters}\n\nNo vehicles match these filters right now.\n` + (knownModel || groupNote
+        ? 'This model or group is recognized. Try another location or year.'
+        : 'Check the model spelling, year, and location.');
     if (Array.isArray(suggestedModels) && suggestedModels.length > 0) {
       description += `\n\nSuggested model names: ${suggestedModels
         .slice(0, 8)

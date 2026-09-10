@@ -132,6 +132,27 @@ test('processDailySavedSearches sends matching user notifications and new-vehicl
   assertDailySavedSearchNotifications(scenario, consoleCalls);
 });
 
+test('daily notifications preserve explicit family and generation filters without changing channel delivery', async () => {
+  const scenario = createNotificationScenario();
+  const [existing] = await scenario.getAllSavedSearches();
+  const grouped = [
+    { ...existing, make: 'BMW', model: 'FAMILY: 3 SERIES', year_range: '2006-2011' },
+    { ...existing, make: 'BMW', model: 'GENERATION: F3X (APPROX)', year_range: '2012-2019' },
+  ];
+  scenario.getAllSavedSearches = async () => [existing, ...grouped];
+  await runDailySavedSearchScenario(scenario);
+  assert.equal(scenario.dmSends.length, 3);
+  for (const [index, search] of grouped.entries()) {
+    assert.deepEqual(scenario.queryCalls[index + 2], {
+      yardId: '1020', make: 'BMW', model: search.model, yearRange: search.year_range, status: 'ACTIVE',
+    });
+    assert.ok(scenario.dmSends[index + 1].payload.embeds[0].toJSON().title.includes(search.model));
+  }
+  assert.deepEqual(scenario.queryCalls[0], { yardId: 'ALL', make: 'ANY', model: 'ANY', yearRange: 'ANY', status: 'NEW' });
+  assert.equal(scenario.channelSends.length, 1);
+  assert.equal(scenario.channelSends[0].payload.embeds[0].toJSON().title, 'New Vehicles Added Today');
+});
+
 test('notifyNewVehicles creates a new embed after every 25 vehicle fields', async () => {
   const channelSends = [];
   const timestamp = '2026-08-02T06:00:00.000Z';

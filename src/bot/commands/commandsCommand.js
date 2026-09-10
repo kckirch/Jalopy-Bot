@@ -9,11 +9,11 @@ async function handleCommandsCommand(interaction) {
     .addFields(
       {
         name: '1) Search Inventory',
-        value: '`/search make:<make> model:<model> year:<optional> location:<optional>`\nLocation defaults to All. Use make/model autocomplete; choose a make to include its model-family variants.',
+        value: '`/search make:<make> model:<model> year:<optional> location:<optional>`\nLocation defaults to All. Use autocomplete, then Edit Search or a suggested spelling to fix input without retyping the command. The family/generation dropdown groups related models; BMW E9x/F3x presets are approximate model/year filters, not verified chassis.',
       },
       {
         name: '2) Save an Alert',
-        value: '`Save Alert` keeps these filters, even with no current matches. By default, you receive a daily DM with all matching available vehicles—not only new arrivals. Choose `status:New` for vehicles marked New. Use the model suggestion dropdown to correct a typo before saving.',
+        value: '`Save Alert` keeps the filters shown in the response, including a selected family, even with no current matches. By default, you receive a daily DM with all matching available vehicles—not only new arrivals. Choose `status:New` for vehicles marked New. With no matches, try Any Year or All Locations before saving.',
       },
       {
         name: '3) Manage Alerts Privately',

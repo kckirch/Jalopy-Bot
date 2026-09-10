@@ -64,7 +64,7 @@ test('relocate action rejects an empty location without querying', async () => {
 
   assert.equal(handled, true);
   assert.deepEqual(interaction.replies, [
-    { content: 'No location selected.', ephemeral: true },
+    { content: 'No valid location selected.', ephemeral: true },
   ]);
   assert.equal(session.searchState.location, 'boise');
 });
