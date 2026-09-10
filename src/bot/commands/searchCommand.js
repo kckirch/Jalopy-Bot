@@ -46,7 +46,7 @@ async function validateMake(interaction, criteria) {
   return false;
 }
 
-async function handleSearchCommand(interaction) {
+async function handleSearchCommand(interaction, dependencies) {
   const location = interaction.options.getString('location');
   const criteria = normalizeSearchCriteria(interaction);
 
@@ -62,7 +62,7 @@ async function handleSearchCommand(interaction) {
   }
 
   try {
-    const initialSearchState = await createSearchState(location, criteria);
+    const initialSearchState = await createSearchState(location, criteria, dependencies);
     const message = await interaction.reply({
       ...buildSearchViewPayload(
         initialSearchState,
@@ -77,7 +77,7 @@ async function handleSearchCommand(interaction) {
       ownerId: interaction.user.id,
       initialSearchState,
       criteria,
-    });
+    }, dependencies);
   } catch (error) {
     console.error('Error querying vehicles:', summarizeError(error));
     await interaction.reply({
