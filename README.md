@@ -120,12 +120,14 @@ checkout as described above.
 
 - **`/commands`**: Show the in-Discord command guide.
 - **`/search`**: Search by location, make, model, year, and status. Result
-  controls provide pagination, location switching, **Save Alert**, and
-  **Manage Alerts**. Location defaults to All. Make aliases such as `VW` and
+  controls provide pagination, location switching, **Edit Search**, **Save Alert**,
+  and **Manage Alerts**. Location defaults to All. Make aliases such as `VW` and
   model spellings such as `4runner` / `4 runner` work consistently. With BMW
   selected, `3series` / `3 SERIES` includes the supported 3 Series variants.
-  Autocomplete includes historical models; no-result searches offer a model
-  selector for close spellings. Suggestions never silently change your filters.
+  Autocomplete includes historical models. Invalid makes and no-result searches
+  offer close-spelling choices; **Edit Search** opens a prefilled dialog. Suggestions
+  never silently change your filters. Known models with no matches get guidance
+  to relax years or location instead of being presented as spelling errors.
 - **`/savedsearch`**: Privately view, run, pause/resume, or remove your saved
   alerts. **Test DMs** sends one test message only when clicked; it does not
   change alert settings. Removal requires confirmation. All (or no location)
@@ -147,8 +149,44 @@ Search controls expire after two minutes and can only be used by the person
 who ran the command. Each search message has its own independent session.
 Expiration does not pause or delete an alert; rerun `/search` or `/savedsearch`
 to reopen controls.
+Edit dialogs wait up to 90 seconds for a submission. If the search expires first,
+submitting within that window shows a private expiry notice and changes nothing.
 
-The following maintenance commands require elevated Discord permissions:
+### Guided families and generation shortcuts
+
+After choosing a make, the response's **Search a family or generation** menu
+offers the website's explicit model families, even when the original search has
+results. For example, a BMW `328I` search can become **3 SERIES**, or a Volkswagen
+`GOLF` search can include the **GOLF / GTI FAMILY**. Family selection keeps the
+current years, location, and status. These are browsing groups, not assurances
+of shared chassis or interchangeable parts.
+
+BMW also has two **approximate US model-year shortcuts**: **E9x 3 Series
+(2006–2013)** and **F3x 3 Series (2012–2019)**. Typing `E90`, `E9x`, `F30`, or
+`F3x` puts the relevant choice first; it is applied only after you select it.
+Generation selection replaces both the model and displayed year range, keeping
+location and status. Inventory does not record chassis/VIN/body style, so
+transition-year cars can overlap generations. F3x excludes M3/F80, M4, and
+4 Series; E9x includes M3. Use the ordinary model family to search outside a
+generation's window. A modal-edited year range further narrows that window.
+
+Year-window references: BMW's [2006 sedan/wagon press kit](https://www.press.bmwgroup.com/usa/article/detail/T0019100EN_US/press-kit%3A-2006-bmw-3-series-sedans-and-sports-wagon?language=en_US),
+[2012 3 Series launch](https://www.press.bmwgroup.com/usa/article/detail/T0124925EN_US/bmw-at-the-82nd-geneva-motor-show-2012?language=en_US),
+and [2014 model-year changes](https://www.press.bmwgroup.com/usa/article/detail/T0151024EN_US/2014-model-year-changes?language=en_US);
+the [2019 US model list](https://www.nhtsa.gov/sites/nhtsa.gov/files/documents/2019_aala_alpha_06042019.pdf)
+includes the outgoing wagon/GT alongside the [new 2019 sedan](https://www.press.bmwgroup.com/usa/article/detail/T0285572EN_US/the-all-new-2019-bmw-3-series).
+
+**Save Alert** stores exactly the successfully displayed filters. Explicit groups
+use namespaced values such as `FAMILY: 3 SERIES` or `GENERATION: E9X (APPROX)` in
+the existing model field; daily notifications and **Run Search** resolve the
+same catalog. No schema migration or changes to existing saved alerts are
+required. The catalog lives in `src/database/vehicleSearchGroups.js`; tests pin
+the website family rules and generation boundaries. No website deployment or
+slash-command registration change is required for these response controls.
+
+### Maintenance commands
+
+The following commands require elevated Discord permissions:
 
 - **`/scrape`**: Run an inventory scrape for a location and optional make/model.
 - **`/runtestscheduler`**: Recover the missed morning scrape and alert workflow.

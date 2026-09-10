@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { setImmediate: tick } = require('node:timers/promises');
+const { ChatInputCommandInteraction, Client, InteractionWebhook, Message, MessageFlags } = require('discord.js');
 
 const { SEARCH_LOCATION_CHOICES } = require('../src/bot/locationChoices');
 const { captureConsole, joinedConsoleText } = require('../test-support/consoleCapture');
@@ -34,9 +36,61 @@ test('invalid make returns ephemeral validation embed and stops query', async ()
 
   assert.equal(queryCalled, false);
   assert.equal(interaction.replies.length, 1);
-  assert.equal(interaction.replies[0].ephemeral, true);
-  assert.equal(interaction.replies[0].embeds[0].data.title, 'Available Vehicle Makes');
+  assert.equal(interaction.deferOptions.flags, MessageFlags.Ephemeral);
+  assert.equal(interaction.replies[0].embeds[0].data.title, 'Let’s fix this search');
+  assert.equal(interaction.replies[0].components[0].components[0].data.label, 'Edit Search');
   assert.equal(joinedConsoleText(consoleCalls).toLowerCase().includes('not-a-real-make'), false);
+  await interaction.message.collector.emitEnd();
+  assert.equal(interaction.replies.length, 2);
+  assert.deepEqual(interaction.replies[1].components, []);
+  assert.match(interaction.replies[1].content, /expired/);
+  assert.deepEqual(interaction.message.edits, []);
+});
+
+test('private search expiry uses the native interaction webhook, never the channel-message endpoint', async (t) => {
+  const client = new Client({ intents: [] });
+  let collector;
+  t.after(async () => { collector?.stop(); await client.destroy(); });
+  const originalCreate = Message.prototype.createMessageComponentCollector;
+  t.mock.method(Message.prototype, 'createMessageComponentCollector', function (options) {
+    collector = originalCreate.call(this, options);
+    return collector;
+  });
+  const appId = '100000000000000001';
+  const requests = [];
+  client.rest.patch = async (route, { body }) => {
+    requests.push({ route, body });
+    return {
+      id: '100000000000000003', channel_id: '100000000000000002', type: 0,
+      author: { id: appId, username: 'fixture-bot', discriminator: '0', avatar: null },
+      flags: MessageFlags.Ephemeral, timestamp: '2026-09-10T00:00:00.000Z',
+      content: body.content || '', components: body.components || [], embeds: body.embeds || [],
+      mentions: [], mention_roles: [], attachments: [],
+    };
+  };
+  const interaction = {
+    user: { id: 'fixture-owner' },
+    options: { getString: (key) => ({ make: 'TOYTA', model: 'CAMRY' })[key] },
+    webhook: new InteractionWebhook(client, appId, 'fixture-token'),
+    async deferReply(options) {
+      assert.equal(options.flags, MessageFlags.Ephemeral);
+      this.deferred = true;
+    },
+    editReply: ChatInputCommandInteraction.prototype.editReply,
+  };
+  const logs = await captureConsole(async () => {
+    await withSearchCommandMocks({ queryVehicles: async () => assert.fail('invalid input must not query inventory') },
+      async ({ handleSearchCommand }) => handleSearchCommand(interaction));
+    assert.equal(requests.length, 1);
+    assert(requests[0].body.components.length > 0);
+    collector.stop('time');
+    await tick();
+  });
+  assert.equal(requests.length, 2);
+  assert(requests.every(({ route }) => route === `/webhooks/${appId}/fixture-token/messages/%40original`));
+  assert.deepEqual(requests[1].body.components, []);
+  assert.match(requests[1].body.content, /expired.*\/search/);
+  assert.deepEqual(logs.filter(({ method }) => method === 'error'), []);
 });
 
 test('make aliases are normalized before querying vehicles', async () => {
@@ -116,11 +170,12 @@ test('no-result search responds with no-results embed and disabled pagination', 
   assert.equal(buttons[2].label, 'Save Alert');
 
   await interaction.message.collector.emitEnd();
-  assert.equal(interaction.message.edits.length, 1);
-  assert.deepEqual(interaction.message.edits[0].components, []);
+  assert.equal(interaction.replies.length, 2);
+  assert.deepEqual(interaction.replies[1].components, []);
+  assert.deepEqual(interaction.message.edits, []);
 });
 
-test('no-result search with specific model includes DB-driven model suggestions', async () => {
+test('a recognized formatting variant does not suggest the same model back', async () => {
   const interaction = makeInteraction({
     location: 'boise',
     make: 'MAZDA',
@@ -141,8 +196,9 @@ test('no-result search with specific model includes DB-driven model suggestions'
 
   assert.equal(interaction.replies.length, 1);
   const payload = interaction.replies[0];
-  assert.match(payload.embeds[0].data.description, /Suggested model names/i);
-  assert.match(payload.embeds[0].data.description, /RX-7/);
+  assert.match(payload.embeds[0].data.description, /recognized/i);
+  assert.doesNotMatch(payload.embeds[0].data.description, /Suggested model names/i);
+  assert(!payload.components.some((row) => row.components[0].data.custom_id === 'search:model'));
 });
 
 test('location dropdown reruns search with same filters in selected location', async () => {
@@ -199,7 +255,7 @@ test('location dropdown reruns search with same filters in selected location', a
 
       assert.deepEqual(queriedYardIds, [1020, 1021]);
       assert.equal(selectInteraction.updates.length, 1);
-      assert.match(selectInteraction.updates[0].embeds[0].data.title, /caldwell/i);
+      assert.match(selectInteraction.updates[0].embeds[0].data.description, /Location: caldwell/i);
     }
   );
 });

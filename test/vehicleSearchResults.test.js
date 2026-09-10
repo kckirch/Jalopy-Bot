@@ -61,7 +61,8 @@ test('empty search results show at most eight model suggestions', () => {
     suggestedModels: Array.from({ length: 10 }, (_, index) => `RX${index}`),
   });
 
-  assert.match(embed.data.title, /boise MAZDA RX7 \(ANY\) ACTIVE/);
+  assert.equal(embed.data.title, 'MAZDA RX7');
+  assert.match(embed.data.description, /Years: ANY.*Location: boise.*Status: ACTIVE/);
   assert.match(embed.data.description, /RX0, RX1, RX2, RX3, RX4, RX5, RX6, RX7/);
   assert.equal(embed.data.description.includes('RX8'), false);
   assert.equal(embed.data.footer.text, '0 matches');

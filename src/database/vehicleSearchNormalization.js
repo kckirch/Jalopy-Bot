@@ -1,6 +1,7 @@
 const {
   makeAliases,
   reverseMakeAliases,
+  vehicleMakes,
 } = require('../config/vehicleMakes');
 
 const MODEL_FAMILIES = {
@@ -156,6 +157,30 @@ function isOneEditApart(left, right) {
       left.slice(index + 2) === right.slice(index + 2));
 }
 
+function isTwoEditsApart(left, right) {
+  if (Math.abs(left.length - right.length) > 2 || Math.max(left.length, right.length) > 100) return false;
+  const rows = Array.from({ length: left.length + 1 }, (_, index) => [index]);
+  rows[0] = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    for (let j = 1; j <= right.length; j += 1) {
+      rows[i][j] = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + Number(left[i - 1] !== right[j - 1]));
+      if (i > 1 && j > 1 && left[i - 1] === right[j - 2] && left[i - 2] === right[j - 1]) {
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return rows[left.length][right.length] <= 2;
+}
+
+function scoreSpellingSuggestion(input, model) {
+  // Suggestions only: never change a valid model number (328i vs 330i).
+  if (String(input.match(/\d+/g)) !== String(model.match(/\d+/g))) return 0;
+  const shortest = Math.min(input.length, model.length);
+  if (shortest >= 4 && isOneEditApart(input, model)) return 20;
+  return shortest >= 6 && isTwoEditsApart(input, model) ? 10 : 0;
+}
+
 function scoreModelSuggestion(
   model,
   normalizedModel,
@@ -177,16 +202,24 @@ function scoreModelSuggestion(
   if (normalizedModel.includes(normalizedInput)) {
     score += 40;
   }
-  // ponytail: one edit only, suggestions never alter a saved filter automatically.
-  if (score === 0 && Math.min(normalizedInput.length, normalizedModel.length) >= 4 &&
-      isOneEditApart(normalizedInput, normalizedModel)) score = 20;
+  return score || scoreSpellingSuggestion(normalizedInput, normalizedModel);
+}
 
-  return score;
+function getMakeSuggestions(input, limit = 5) {
+  const normalized = normalizeModelForLooseComparison(input);
+  return vehicleMakes.map((make) => ({
+    make,
+    score: Math.max(...(makeAliases[make] || [make]).map((alias) =>
+      scoreModelSuggestion(alias, normalizeModelForLooseComparison(alias), input, normalized))),
+  })).filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score || left.make.localeCompare(right.make))
+    .slice(0, limit).map(({ make }) => make);
 }
 
 module.exports = {
   buildNormalizedSqlExpression,
   getMakeVariations,
+  getMakeSuggestions,
   getModelFamilyMakes,
   getModelFamilyNames,
   getModelVariations,

@@ -13,6 +13,7 @@ const {
   handlePagingAction,
   handleRelocateAction,
   handleModelSuggestionAction,
+  handleRefineAction,
 } = require('./searchNavigationActions');
 const {
   handleManageAction,
@@ -56,6 +57,10 @@ async function handleSearchAction(
       await handlePagingAction(interaction, action, session);
       return true;
     case 'save':
+      if (session.searchState.validationError) {
+        await interaction.reply({ content: 'Fix the highlighted search field before saving an alert.', ephemeral: true });
+        return true;
+      }
       await handleSaveAction(interaction, session, dependencies);
       return true;
     case 'manage':
@@ -63,6 +68,13 @@ async function handleSearchAction(
       return true;
     case 'model':
       await handleModelSuggestionAction(interaction, session, dependencies);
+      return true;
+    case 'make':
+    case 'group':
+    case 'any-year':
+    case 'all-locations':
+    case 'edit-submit':
+      await handleRefineAction(interaction, action, session, dependencies);
       return true;
     case 'relocate':
       await handleRelocateAction(

@@ -172,8 +172,8 @@ test('result views infer canonical aggregate, single, and fallback locations', (
     ]);
     session.activateResults(0, [], ['CAMRY']);
     assert.match(
-      getEmbedData(session.buildResultsViewPayload()).title,
-      new RegExp(`results for ${expectedLocation} `, 'i')
+      getEmbedData(session.buildResultsViewPayload()).description,
+      new RegExp(`Location: ${expectedLocation} `, 'i')
     );
   }
 });

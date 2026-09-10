@@ -11,6 +11,7 @@ const {
   createSearchState,
 } = require('../src/bot/handlers/searchInteractionActions');
 const { buildSearchViewPayload } = require('../src/bot/utils/searchInteractionView');
+const { getSearchGroups } = require('../src/database/vehicleSearchGroups');
 const {
   captureConsole,
   joinedConsoleText,
@@ -91,6 +92,7 @@ function makeActionInteraction(action, userId = 'user-1') {
 function attachTestCollector(message, initialSearchState) {
   return attachSearchInteractionCollector({
     message,
+    editReply: message.edit.bind(message),
     ownerId: 'user-1',
     initialSearchState,
     criteria,
@@ -115,13 +117,15 @@ test('createSearchState queries normalized criteria and loads model suggestions'
     [1020, 'TOYOTA', 'CAMRY', '2005', 'ACTIVE'],
   ]);
   assert.deepEqual(suggestionCalls, [
-    ['TOYOTA', 'CAMRY', 1020, 8],
+    ['TOYOTA', 'CAMRY', 'ALL', 8],
   ]);
   assert.deepEqual(state, {
     location: 'boise',
     yardId: 1020,
     vehicles: [],
     suggestedModels: ['CAMRY SOLARA'],
+    knownModel: false,
+    groups: getSearchGroups('TOYOTA', 'CAMRY'),
     currentPage: 0,
     totalPages: 0,
   });
@@ -277,7 +281,7 @@ test('search controls contain only short action IDs, never serialized search cri
 
   assert.deepEqual(
     payload.components.flatMap((row) => row.components.map((component) => component.data.custom_id)),
-    ['search:previous', 'search:next', 'search:save', 'search:manage', 'search:relocate']
+    ['search:previous', 'search:next', 'search:save', 'search:manage', 'search:edit', 'search:any-year', 'search:all-locations', 'search:relocate']
   );
 });
 

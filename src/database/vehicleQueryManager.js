@@ -1,5 +1,6 @@
 const { db } = require('./database');
 const { summarizeError } = require('../utils/errorSummary');
+const { getSearchGroup, isSearchGroupFilter } = require('./vehicleSearchGroups');
 const {
   buildNormalizedSqlExpression,
   getMakeVariations,
@@ -11,6 +12,11 @@ const {
   parseYearInput,
   scoreModelSuggestion,
 } = require('./vehicleSearchNormalization');
+
+const STATUS_CONDITIONS = new Map([
+  ['NEW', "vehicle_status = 'NEW'"],
+  ['INACTIVE', "vehicle_status = 'INACTIVE'"],
+]);
 
 function queryAll(sql, params, failureMessage) {
   return new Promise((resolve, reject) => {
@@ -26,25 +32,35 @@ function queryAll(sql, params, failureMessage) {
   });
 }
 
+function buildModelFilter(make, model) {
+  if (make === 'JEEP' && model === 'CHEROKEE') {
+    return { condition: 'vehicle_model LIKE ? AND vehicle_model NOT LIKE ?', params: ['%CHEROKEE%', '%GRAND CHEROKEE%'] };
+  }
+  const models = getModelVariations(model, make);
+  const normalizedSql = buildNormalizedSqlExpression('vehicle_model');
+  const modelConditions = models.map(() => `${normalizedSql} LIKE ?`);
+  const params = [...models];
+  // With no make selected, retain literal matches and expand each family only within its make.
+  if (make === 'ANY') {
+    for (const familyMake of getModelFamilyMakes(model)) {
+      const familyMakes = getMakeVariations(familyMake);
+      const familyModels = getModelVariations(model, familyMake);
+      modelConditions.push(`((${familyMakes.map(() => 'vehicle_make LIKE ?').join(' OR ')}) AND (${familyModels.map(() => `${normalizedSql} LIKE ?`).join(' OR ')}))`);
+      params.push(...familyMakes, ...familyModels);
+    }
+  }
+  return { condition: `(${modelConditions.join(' OR ')})`, params };
+}
+
 async function queryVehicles(yardId, make, model, yearInput, status) {
   make = String(make || 'ANY').trim().toUpperCase();
   model = String(model || 'ANY').trim().toUpperCase();
+  const group = getSearchGroup(make, model);
+  // Unknown/cross-make group tokens must never fall back to an unrestricted query.
+  if (isSearchGroupFilter(model) && !group) return [];
   const yardIds = parseYardIds(yardId);
   const params = [];
-  const conditions = [];
-
-  switch (status) {
-    case 'NEW':
-      conditions.push("vehicle_status = 'NEW'");
-      break;
-    case 'INACTIVE':
-      conditions.push("vehicle_status = 'INACTIVE'");
-      break;
-    case 'ACTIVE':
-    default:
-      conditions.push("vehicle_status != 'INACTIVE'");
-      break;
-  }
+  const conditions = [STATUS_CONDITIONS.get(status) || "vehicle_status != 'INACTIVE'"];
 
   if (Array.isArray(yardIds) && yardIds.length > 0) {
     conditions.push(`yard_id IN (${yardIds.map(() => '?').join(', ')})`);
@@ -57,26 +73,15 @@ async function queryVehicles(yardId, make, model, yearInput, status) {
     params.push(...makes);
   }
 
-  if (model !== 'ANY') {
-    if (make.toUpperCase() === 'JEEP' && model.toUpperCase() === 'CHEROKEE') {
-      conditions.push('vehicle_model LIKE ? AND vehicle_model NOT LIKE ?');
-      params.push('%CHEROKEE%', '%GRAND CHEROKEE%');
-    } else {
-      const models = getModelVariations(model, make);
-      const normalizedSql = buildNormalizedSqlExpression('vehicle_model');
-      const modelConditions = models.map(() => `${normalizedSql} LIKE ?`);
-      params.push(...models);
-      // With no make selected, retain literal matches and expand each family only within its make.
-      if (make === 'ANY') {
-        for (const familyMake of getModelFamilyMakes(model)) {
-          const familyMakes = getMakeVariations(familyMake);
-          const familyModels = getModelVariations(model, familyMake);
-          modelConditions.push(`((${familyMakes.map(() => 'vehicle_make LIKE ?').join(' OR ')}) AND (${familyModels.map(() => `${normalizedSql} LIKE ?`).join(' OR ')}))`);
-          params.push(...familyMakes, ...familyModels);
-        }
-      }
-      conditions.push(`(${modelConditions.join(' OR ')})`);
-    }
+  if (group?.years) {
+    conditions.push('vehicle_year BETWEEN ? AND ?');
+    params.push(...group.years);
+  }
+
+  if (model !== 'ANY' && !group) {
+    const filter = buildModelFilter(make, model);
+    conditions.push(filter.condition);
+    params.push(...filter.params);
   }
 
   const yearData = parseYearInput(yearInput);
@@ -85,7 +90,12 @@ async function queryVehicles(yardId, make, model, yearInput, status) {
     params.push(...yearData.params);
   }
   const sql = `SELECT * FROM vehicles WHERE ${conditions.join(' AND ')}`;
-  return queryAll(sql, params, 'Failed to query vehicles:');
+  const rows = await queryAll(sql, params, 'Failed to query vehicles:');
+  // ponytail: opt-in groups filter the make/year/yard/status subset in JS;
+  // index materialized family IDs if this bounded scan ever becomes expensive.
+  return group
+    ? rows.filter((row) => group.pattern.test(normalizeModelForLooseComparison(row.vehicle_model)))
+    : rows;
 }
 
 function getModelSuggestionsForNoResults(

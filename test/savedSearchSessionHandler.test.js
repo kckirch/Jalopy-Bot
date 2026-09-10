@@ -28,7 +28,8 @@ test('run switches to search-style results with pagination controls', async () =
   });
 
   const embedData = updatedPayload.embeds[0].data;
-  assert.match(embedData.title, /Database search results for/i);
+  assert.equal(embedData.title, 'TOYOTA CAMRY');
+  assert.match(embedData.description, /Years: ANY.*Location: boise.*Status: ACTIVE/);
   assert.ok(embedData.fields.some((field) => /TOYOTA CAMRY/i.test(field.name)));
   assert.deepEqual(
     updatedPayload.components[0].components.map(
@@ -130,7 +131,7 @@ test('back returns from results to the saved-search carousel', async () => {
     onUpdate,
   });
 
-  assert.match(updates[0].embeds[0].data.title, /Database search results/i);
+  assert.equal(updates[0].embeds[0].data.title, 'TOYOTA CAMRY');
   assert.match(updates[1].embeds[0].data.title, /Saved Search:/i);
   assert.deepEqual(
     updates[1].components[0].components.map(

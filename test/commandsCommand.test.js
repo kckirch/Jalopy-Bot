@@ -19,6 +19,9 @@ test('commands command replies with the public command guide', async () => {
 
   const embed = replies[0].embeds[0].toJSON();
   assert.equal(embed.title, 'Jalopy Bot Command Guide');
+  assert.match(embed.fields[0].value, /Edit Search.*suggested spelling/);
+  assert.match(embed.fields[0].value, /E9x\/F3x.*approximate.*not verified chassis/);
+  assert.match(embed.fields[1].value, /filters shown.*selected family/);
   assert.deepEqual(
     embed.fields.map((field) => field.name),
     [

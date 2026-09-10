@@ -1,6 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { YARDS } = require('../../config/yards');
 const { convertYardIdToLocation } = require('./locationUtils');
+const { describeSearchGroup } = require('../../database/vehicleSearchGroups');
 const {
   buildSearchResultsEmbed,
   getSearchResultPageCount,
@@ -145,8 +146,8 @@ function describeAlertDelivery(status) {
 }
 
 function buildSavedSearchEmbed(search, currentIndex, totalCount) {
-  const alertsState =
-    normalizeFrequency(search.frequency) === 'paused' ? 'Paused' : 'Active';
+  const alertsState = normalizeFrequency(search.frequency) === 'paused' ? 'Paused' : 'Active';
+  const groupNote = describeSearchGroup(search.make, search.model);
   return new EmbedBuilder()
     .setColor(0x0099ff)
     .setTitle(
@@ -157,6 +158,7 @@ function buildSavedSearchEmbed(search, currentIndex, totalCount) {
         `Inventory filter: ${search.status}\n` +
         `Alerts: ${alertsState}\n` +
         `${describeAlertDelivery(search.status)}\n` +
+        (groupNote ? `${groupNote}\n` : '') +
         `Created: ${formatSavedSearchDate(search.create_date)}\n` +
         `Last Updated: ${formatSavedSearchDate(search.update_date)}`
     )
