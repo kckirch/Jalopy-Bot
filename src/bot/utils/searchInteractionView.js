@@ -4,11 +4,6 @@ const {
   ButtonStyle,
   StringSelectMenuBuilder,
 } = require('discord.js');
-const { summarizeError } = require('../../utils/errorSummary');
-const {
-  storeInteractionParameters,
-} = require('./interactionParameters');
-const { serializeYardId } = require('./savedSearchCriteria');
 const { buildSearchResultsEmbed } = require('./vehicleSearchResults');
 const { SEARCH_LOCATION_CHOICES } = require('../locationChoices');
 
@@ -26,79 +21,58 @@ function buildSearchPage(searchState, criteria) {
   });
 }
 
-function buildSearchComponents(searchState, criteria, userId) {
-  try {
-    const createCustomId = (action) => {
-      const serializedYardId = serializeYardId(searchState.yardId);
-      const parameters = [
-        `pg:${searchState.currentPage}`,
-        `act:${action}`,
-        `uid:${userId}`,
-        `lc:${searchState.location}`,
-        `yd:${serializedYardId}`,
-        `mk:${criteria.make}`,
-        `md:${criteria.model}`,
-        `yr:${criteria.yearRange}`,
-        `st:${criteria.status}`,
-      ].join('|');
-      return storeInteractionParameters(parameters);
-    };
+function buildSearchComponents(searchState) {
+  const pagingRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('search:previous')
+      .setLabel('Previous')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(
+        searchState.currentPage === 0 || searchState.vehicles.length === 0
+      ),
+    new ButtonBuilder()
+      .setCustomId('search:next')
+      .setLabel('Next')
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(
+        searchState.vehicles.length === 0 ||
+          searchState.currentPage >= searchState.totalPages - 1
+      ),
+    new ButtonBuilder()
+      .setCustomId('search:save')
+      .setLabel('Save Search')
+      .setStyle(ButtonStyle.Success)
+  );
 
-    const pagingRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(createCustomId('previous'))
-        .setLabel('Previous')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(
-          searchState.currentPage === 0 || searchState.vehicles.length === 0
-        ),
-      new ButtonBuilder()
-        .setCustomId(createCustomId('next'))
-        .setLabel('Next')
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(
-          searchState.vehicles.length === 0 ||
-            searchState.currentPage >= searchState.totalPages - 1
-        ),
-      new ButtonBuilder()
-        .setCustomId(createCustomId('save'))
-        .setLabel('Save Search')
-        .setStyle(ButtonStyle.Success)
-    );
+  const savedSearchActionsRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('search:unsave')
+      .setLabel('Delete Saved')
+      .setStyle(ButtonStyle.Danger)
+  );
 
-    const savedSearchActionsRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(createCustomId('unsave'))
-        .setLabel('Delete Saved')
-        .setStyle(ButtonStyle.Danger)
-    );
+  const locationRow = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('search:relocate')
+      .setPlaceholder('Run this search in another location')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        SEARCH_LOCATION_CHOICES.map((option) => ({
+          label: option.name,
+          value: option.value,
+          default: option.value === searchState.location,
+        }))
+      )
+  );
 
-    const locationRow = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(createCustomId('relocate'))
-        .setPlaceholder('Run this search in another location')
-        .setMinValues(1)
-        .setMaxValues(1)
-        .addOptions(
-          SEARCH_LOCATION_CHOICES.map((option) => ({
-            label: option.name,
-            value: option.value,
-            default: option.value === searchState.location,
-          }))
-        )
-    );
-
-    return [pagingRow, savedSearchActionsRow, locationRow];
-  } catch (error) {
-    console.error('Error creating custom ID:', summarizeError(error));
-    throw error;
-  }
+  return [pagingRow, savedSearchActionsRow, locationRow];
 }
 
-function buildSearchViewPayload(searchState, criteria, userId) {
+function buildSearchViewPayload(searchState, criteria) {
   return {
     embeds: [buildSearchPage(searchState, criteria)],
-    components: buildSearchComponents(searchState, criteria, userId),
+    components: buildSearchComponents(searchState),
   };
 }
 

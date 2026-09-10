@@ -55,7 +55,6 @@ test('relocate action rejects an empty location without querying', async () => {
   const handled = await handleSearchAction(
     interaction,
     'relocate',
-    'user-1',
     session,
     {
       queryVehicles: async () => assert.fail('query should not run'),
@@ -90,7 +89,6 @@ test('previous action moves back one page and updates the shared session', async
   await handleSearchAction(
     interaction,
     'previous',
-    'user-1',
     session,
     {}
   );
@@ -109,7 +107,6 @@ test('unsave action reports when no saved search matches', async () => {
   await handleSearchAction(
     interaction,
     'unsave',
-    'user-1',
     makeSession(),
     {
       getSavedSearches: async () => [],
@@ -132,7 +129,6 @@ test('unsave action deletes every matching duplicate and keeps unrelated rows', 
   await handleSearchAction(
     interaction,
     'unsave',
-    'user-1',
     makeSession(),
     {
       getSavedSearches: async () => [
@@ -182,7 +178,6 @@ test('unsave action redacts delete failures', async () => {
     handleSearchAction(
       interaction,
       'unsave',
-      'user-1',
       makeSession(),
       {
         getSavedSearches: async () => [
@@ -219,7 +214,6 @@ test('unknown actions leave the interaction untouched', async () => {
   const handled = await handleSearchAction(
     interaction,
     'unknown',
-    'user-1',
     makeSession(),
     {}
   );

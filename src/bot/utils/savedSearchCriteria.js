@@ -68,16 +68,8 @@ function matchesSavedSearchCriteria(
   );
 }
 
-function serializeYardId(yardId) {
-  if (Array.isArray(yardId)) {
-    return yardId.join(',');
-  }
-  return String(yardId);
-}
-
 module.exports = {
   canonicalizeYardIdForSavedSearch,
   matchesSavedSearchCriteria,
   normalizeSavedSearchValue,
-  serializeYardId,
 };

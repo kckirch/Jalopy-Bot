@@ -1,18 +1,11 @@
 const fs = require('node:fs');
+const { promisify } = require('node:util');
 const {
   buildPublicInventorySnapshot,
 } = require('./publicInventorySnapshotBuilder');
 
 function get(database, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    database.get(sql, params, (error, row) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(row);
-    });
-  });
+  return promisify(database.get).call(database, sql, params);
 }
 
 function reportRefreshError(onRefreshError, error) {

@@ -7,7 +7,6 @@
     "src/bot/discordBotMain.js!",
     "src/bot/register-commands.js!",
     "src/testing/liveScrapeSmokeTest.js!",
-    "src/testing/modelAliasScan.js!",
     "scripts/run-tests.js",
     "test/**/*.test.js"
   ],

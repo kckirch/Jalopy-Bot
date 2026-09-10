@@ -1,5 +1,4 @@
 const { handleAutocompleteInteraction } = require('./autocompleteHandler');
-const { handleButtonClick } = require('./buttonClickHandler');
 const { handleCommandsCommand } = require('../commands/commandsCommand');
 const { handleRunTestSchedulerCommand } = require('../commands/runTestSchedulerCommand');
 const { handleSavedSearchCommand } = require('../commands/savedSearchCommand');
@@ -19,7 +18,6 @@ function createInteractionHandler({
   commandHandlers = DEFAULT_COMMAND_HANDLERS,
   ensureCommandAccess = ensureElevatedCommandAccess,
   handleAutocomplete = handleAutocompleteInteraction,
-  handleButton = handleButtonClick,
   logger = console,
 } = {}) {
   return async function handleInteraction(interaction) {
@@ -40,11 +38,6 @@ function createInteractionHandler({
           await commandHandler(interaction);
         }
         return;
-      }
-
-      if (interaction.isButton()) {
-        const buttonId = interaction.customId;
-        await handleButton(interaction, buttonId);
       }
     } catch (error) {
       logger.error('Error processing interaction:', error?.name || 'Error');

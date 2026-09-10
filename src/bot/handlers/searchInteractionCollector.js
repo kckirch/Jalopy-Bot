@@ -1,29 +1,10 @@
 const { summarizeError } = require('../../utils/errorSummary');
-const {
-  resolveInteractionParameters,
-} = require('../utils/interactionParameters');
 const { handleSearchAction } = require('./searchInteractionActions');
 
 const SEARCH_SESSION_MS = 2 * 60 * 1000;
 
-function parseInteractionParameters(customId) {
-  const parameters = resolveInteractionParameters(customId);
-  if (!parameters) {
-    return null;
-  }
-
-  return parameters.split('|').reduce((parsed, part) => {
-    const separatorIndex = part.indexOf(':');
-    const key = separatorIndex === -1 ? part : part.slice(0, separatorIndex);
-    const value = separatorIndex === -1 ? '' : part.slice(separatorIndex + 1);
-    parsed[key] = value;
-    return parsed;
-  }, {});
-}
-
 async function handleSearchInteraction(interaction, session, dependencies) {
-  const parts = parseInteractionParameters(interaction.customId);
-  if (!parts) {
+  if (typeof interaction.customId !== 'string' || !interaction.customId.startsWith('search:')) {
     await interaction.reply({
       content: 'Invalid or expired interaction.',
       ephemeral: true,
@@ -31,8 +12,7 @@ async function handleSearchInteraction(interaction, session, dependencies) {
     return;
   }
 
-  const userId = parts.uid;
-  if (userId !== interaction.user.id) {
+  if (session.ownerId !== interaction.user.id) {
     await interaction.reply({
       content: 'You do not have permission to perform this action.',
       ephemeral: true,
@@ -42,8 +22,7 @@ async function handleSearchInteraction(interaction, session, dependencies) {
 
   const handled = await handleSearchAction(
     interaction,
-    parts.act,
-    userId,
+    interaction.customId.slice('search:'.length),
     session,
     dependencies
   );
@@ -60,6 +39,7 @@ function attachSearchInteractionCollector(
   dependencies
 ) {
   const session = {
+    ownerId,
     searchState: initialSearchState,
     criteria,
   };

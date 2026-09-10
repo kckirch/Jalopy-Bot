@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { once } = require('node:events');
+const { setImmediate, setTimeout: delay } = require('node:timers/promises');
+const { Client, Events, InteractionType, Message } = require('discord.js');
 
 const {
   attachSearchInteractionCollector,
@@ -7,9 +10,7 @@ const {
 const {
   createSearchState,
 } = require('../src/bot/handlers/searchInteractionActions');
-const {
-  storeInteractionParameters,
-} = require('../src/bot/utils/interactionParameters');
+const { buildSearchViewPayload } = require('../src/bot/utils/searchInteractionView');
 const {
   captureConsole,
   joinedConsoleText,
@@ -74,7 +75,7 @@ function makeMessage({ editError } = {}) {
 
 function makeActionInteraction(action, userId = 'user-1') {
   return {
-    customId: storeInteractionParameters(`act:${action}|uid:user-1`),
+    customId: `search:${action}`,
     user: { id: userId },
     replies: [],
     updates: [],
@@ -162,18 +163,121 @@ test('collector rejects expired, cross-user, and unsupported actions', async () 
     totalPages: 0,
   });
 
-  const expired = makeActionInteraction('next');
-  expired.customId = 'missing-hash';
-  await collector.emitCollect(expired);
-  assert.match(expired.replies[0].content, /expired/i);
+  for (const customId of ['missing-hash', '', null, undefined, 12, 'act:save|uid:user-1']) {
+    const expired = { ...makeActionInteraction('next'), customId };
+    await collector.emitCollect(expired);
+    assert.match(expired.replies[0].content, /expired/i);
+    assert.deepEqual(expired.updates, []);
+  }
 
   const crossUser = makeActionInteraction('next', 'user-2');
   await collector.emitCollect(crossUser);
   assert.match(crossUser.replies[0].content, /permission/i);
 
-  const unsupported = makeActionInteraction('unknown');
-  await collector.emitCollect(unsupported);
-  assert.match(unsupported.replies[0].content, /unsupported/i);
+  for (const action of ['unknown', 'save|uid:user-1', 'next:extra', '']) {
+    const unsupported = makeActionInteraction(action);
+    await collector.emitCollect(unsupported);
+    assert.match(unsupported.replies[0].content, /unsupported/i);
+    assert.deepEqual(unsupported.updates, []);
+  }
+});
+
+function makeRealSearchSession(client, messageId) {
+  const message = {
+    client,
+    id: messageId,
+    channelId: 'channel-1',
+    guildId: null,
+    edits: [],
+    createMessageComponentCollector: Message.prototype.createMessageComponentCollector,
+    async edit(payload) { this.edits.push(payload); },
+  };
+  const state = {
+    location: 'boise',
+    yardId: 1020,
+    vehicles: Array.from({ length: 41 }, (_, index) => makeVehicle(index)),
+    suggestedModels: [],
+    currentPage: 0,
+    totalPages: 3,
+  };
+  return { message, state, collector: attachTestCollector(message, state) };
+}
+
+function makeRealInteraction(messageId, userId = 'user-1') {
+  return {
+    ...makeActionInteraction('next', userId),
+    id: `${messageId}:${userId}`,
+    type: InteractionType.MessageComponent,
+    message: { id: messageId },
+    channelId: 'channel-1',
+    guildId: null,
+  };
+}
+
+test('real Discord collectors isolate simultaneous searches and reject other users', async (t) => {
+  const client = new Client({ intents: [] });
+  const first = makeRealSearchSession(client, 'message-1');
+  const second = makeRealSearchSession(client, 'message-2');
+  t.after(async () => {
+    first.collector.stop();
+    second.collector.stop();
+    await client.destroy();
+  });
+
+  for (const [messageId, userId, expectedPages] of [
+    ['message-1', 'user-2', [0, 0]],
+    ['message-1', 'user-1', [1, 0]],
+    ['message-2', 'user-1', [1, 1]],
+    ['unrelated-message', 'user-1', [1, 1]],
+  ]) {
+    client.emit(Events.InteractionCreate, makeRealInteraction(messageId, userId));
+    await setImmediate();
+    assert.deepEqual([first.state.currentPage, second.state.currentPage], expectedPages);
+  }
+  assert.equal(first.collector.total, 1);
+  assert.equal(second.collector.total, 1);
+});
+
+test('real Discord collector expiry disables controls and rejects later clicks', async (t) => {
+  const client = new Client({ intents: [] });
+  const { message, state, collector } = makeRealSearchSession(client, 'message-1');
+  t.after(async () => {
+    collector.stop();
+    await client.destroy();
+  });
+  assert.equal(collector.options.time, 120000);
+  const ended = once(collector, 'end');
+  collector.resetTimer({ time: 1 });
+  const [[, reason]] = await Promise.all([ended, delay(10)]);
+
+  assert.equal(reason, 'time');
+  assert.deepEqual(message.edits, [{ components: [] }]);
+  assert.equal(client.listenerCount(Events.InteractionCreate), 0);
+  const click = makeRealInteraction('message-1');
+  client.emit(Events.InteractionCreate, click);
+  await setImmediate();
+  assert.equal(state.currentPage, 0);
+  assert.deepEqual(click.updates, []);
+  assert.deepEqual(click.replies, []);
+});
+
+test('search controls contain only short action IDs, never serialized search criteria', () => {
+  const searchState = {
+    location: 'boise',
+    yardId: '1020,1021',
+    vehicles: [],
+    currentPage: 0,
+    totalPages: 0,
+  };
+  const payload = buildSearchViewPayload(searchState, {
+    ...criteria,
+    model: '318|uid:someone:else; ' + 'X'.repeat(40),
+  });
+
+  assert.deepEqual(
+    payload.components.flatMap((row) => row.components.map((component) => component.data.custom_id)),
+    ['search:previous', 'search:next', 'search:save', 'search:unsave', 'search:relocate']
+  );
 });
 
 test('collector clears components on end and redacts cleanup failures', async () => {

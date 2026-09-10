@@ -37,7 +37,7 @@ function createInteraction(overrides = {}) {
   };
 }
 
-test('autocomplete interactions short-circuit command and button routing', async () => {
+test('autocomplete interactions short-circuit command routing', async () => {
   const calls = [];
   const handler = createInteractionHandler({
     commandHandlers: { search: async () => calls.push('command') },
@@ -46,7 +46,6 @@ test('autocomplete interactions short-circuit command and button routing', async
       return true;
     },
     handleAutocomplete: async () => calls.push('autocomplete'),
-    handleButton: async () => calls.push('button'),
     logger: createLogger(),
   });
 
@@ -95,18 +94,19 @@ test('denied commands do not reach their command handler', async () => {
   assert.equal(commandCalls, 0);
 });
 
-test('button interactions pass the custom ID to the button handler', async () => {
-  const calls = [];
+test('global routing leaves component interactions to their message collectors', async () => {
   const logger = createLogger();
-  const interaction = createInteraction({ customId: 'quit', isButton: () => true });
-  const handler = createInteractionHandler({
-    handleButton: async (...values) => calls.push(values),
-    logger,
-  });
+  const handler = createInteractionHandler({ logger });
 
-  await handler(interaction);
-
-  assert.deepEqual(calls, [[interaction, 'quit']]);
+  for (const customId of ['quit', 'next', 'search:next', 'relocate']) {
+    await handler(createInteraction({
+      customId,
+      isButton: () => true,
+      reply: async () => assert.fail('global handler must not reply'),
+      update: async () => assert.fail('global handler must not update'),
+    }));
+  }
+  assert.deepEqual(logger.errors, []);
   assert.deepEqual(logger.messages, []);
 });
 
@@ -139,12 +139,13 @@ test('interaction errors follow up after a response has started', async () => {
   const interaction = createInteraction({
     deferred: true,
     followUp: async (payload) => followUps.push(payload),
-    isButton: () => true,
+    isCommand: () => true,
   });
   const handler = createInteractionHandler({
-    handleButton: async () => {
-      throw new Error('forced failure');
+    commandHandlers: {
+      search: async () => { throw new Error('forced failure'); },
     },
+    ensureCommandAccess: async () => true,
     logger: createLogger(),
   });
 

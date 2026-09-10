@@ -198,3 +198,16 @@ test('snapshot provider rejects an invalid SQLite data version', async () => {
 
   await assert.rejects(provider.getSnapshot(), /Unable to read SQLite data_version/);
 });
+
+test('snapshot provider propagates SQLite read errors without starting a build', async () => {
+  const database = await openDatabase(':memory:');
+  await closeDatabase(database);
+  const provider = createPublicInventorySnapshotProvider({
+    sourceDatabase: database,
+    buildSnapshot: async () => assert.fail('a failed read must not start a build'),
+  });
+
+  await assert.rejects(provider.getSnapshot(), { code: 'SQLITE_MISUSE' });
+  await assert.rejects(provider.refreshSnapshot(), { code: 'SQLITE_MISUSE' });
+  await assert.rejects(closeDatabase(database), { code: 'SQLITE_MISUSE' });
+});

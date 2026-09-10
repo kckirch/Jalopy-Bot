@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { promisify } = require('node:util');
 
 const { YARDS } = require('../config/yards');
 const { summarizeError } = require('../utils/errorSummary');
@@ -33,9 +34,7 @@ function getVehicleCount(db, yardId) {
 }
 
 function closeDatabase(db) {
-  return new Promise((resolve, reject) => {
-    db.close((error) => error ? reject(error) : resolve());
-  });
+  return promisify(db.close).call(db);
 }
 
 async function runLiveScrapeSmokeTest(argv = process.argv.slice(2)) {
