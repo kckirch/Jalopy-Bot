@@ -14,6 +14,15 @@ function response(status, body, cookies = []) {
   };
 }
 
+test('HTTP transport defaults to the installed parser and native fetch', () => {
+  const state = createHttpClientState();
+
+  assert.equal(state.cheerio, require('cheerio'));
+  assert.equal(state.fetch, globalThis.fetch);
+  assert.equal(state.cheerio.load('<p>inventory</p>')('p').text(), 'inventory');
+  assert.equal(state.cookieHeader, '');
+});
+
 test('HTTP transport uses an injected native fetch', () => {
   const fetch = async () => response(200, '');
   const cheerio = { load() {} };

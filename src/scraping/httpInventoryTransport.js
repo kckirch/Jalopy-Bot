@@ -32,21 +32,9 @@ function mergeCookieHeaders(existingCookieHeader, setCookieHeaders) {
   return [...jar].map(([name, value]) => `${name}=${value}`).join('; ');
 }
 
-function loadCheerio(dependencies) {
-  if (dependencies.cheerio) return dependencies.cheerio;
-  try {
-    return (dependencies.loadCheerio || (() => require('cheerio')))();
-  } catch (error) {
-    throw new Error(
-      'HTTP scraper requires cheerio. Install it with: npm install cheerio',
-      { cause: error }
-    );
-  }
-}
-
 function createHttpClientState(dependencies = {}) {
   return {
-    cheerio: loadCheerio(dependencies),
+    cheerio: dependencies.cheerio || require('cheerio'),
     fetch: dependencies.fetch || globalThis.fetch,
     cookieHeader: '',
   };
