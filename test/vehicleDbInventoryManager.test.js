@@ -211,6 +211,60 @@ test('insertOrUpdateVehicle keeps an existing first-seen session NEW', async () 
   assert.equal(row.session_id, '20260101');
 });
 
+test('late-night catch-up retries keep arrivals NEW in their original session', async () => {
+  const inserted = await run(db, `INSERT INTO vehicles (
+    yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+    first_seen, date_added, vehicle_status, notes, session_id
+  ) VALUES (1020, 'BOISE', 'MAZDA', 'MIATA', 2004, 12,
+    '2026-10-09 01:29:41', '2026-10-09 01:29:41', 'NEW', 'keep me', '20261008');`);
+
+  // The UTC timestamp is already October 9, but this is the October 8 catch-up.
+  for (let retry = 0; retry < 2; retry += 1) {
+    const result = await insertOrUpdateVehicle(
+      1020, 'MAZDA', 'MIATA', 2004, 12, '', '20261008'
+    );
+    assert.deepEqual(result, { action: 'updated', id: inserted.lastID, status: 'NEW' });
+  }
+
+  const row = await get(db, 'SELECT first_seen, date_added, notes, session_id FROM vehicles WHERE id = ?;', [inserted.lastID]);
+  assert.equal(row.first_seen, '2026-10-09 01:29:41');
+  assert.equal(row.date_added, '2026-10-09 01:29:41');
+  assert.equal(row.notes, 'keep me');
+  assert.equal(row.session_id, '20261008');
+  assert.equal((await get(db, 'SELECT COUNT(*) AS count FROM vehicles;')).count, 1);
+});
+
+test('next-morning scrape and retries do not repost or duplicate catch-up arrivals', async () => {
+  const inserted = await run(db, `INSERT INTO vehicles (
+    yard_id, yard_name, vehicle_make, vehicle_model, vehicle_year, row_number,
+    first_seen, date_added, vehicle_status, notes, session_id
+  ) VALUES (1020, 'BOISE', 'MAZDA', 'MIATA', 2004, 12,
+    '2026-10-09 01:29:41', '2026-10-09 01:29:41', 'NEW', 'keep me', '20261008');`);
+
+  for (let retry = 0; retry < 2; retry += 1) {
+    const result = await insertOrUpdateVehicle(
+      1020, 'MAZDA', 'MIATA', 2004, 12, '', '20261009'
+    );
+    assert.deepEqual(result, { action: 'updated', id: inserted.lastID, status: 'ACTIVE' });
+  }
+  const newArrival = await insertOrUpdateVehicle(
+    1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '20261009'
+  );
+  const arrivalRetry = await insertOrUpdateVehicle(
+    1020, 'TOYOTA', 'CAMRY', 2005, 11, '', '20261009'
+  );
+  assert.deepEqual(arrivalRetry, { action: 'updated', id: newArrival.id, status: 'NEW' });
+
+  const row = await get(db, 'SELECT first_seen, date_added, notes, session_id FROM vehicles WHERE id = ?;', [inserted.lastID]);
+  assert.equal(row.first_seen, '2026-10-09 01:29:41');
+  assert.equal(row.date_added, '2026-10-09 01:29:41');
+  assert.equal(row.notes, 'keep me');
+  assert.equal(row.session_id, '20261009');
+  assert.equal((await get(db, 'SELECT COUNT(*) AS count FROM vehicles;')).count, 2);
+  const notificationRows = await get(db, "SELECT COUNT(*) AS count, MIN(id) AS id FROM vehicles WHERE vehicle_status = 'NEW';");
+  assert.deepEqual(notificationRows, { count: 1, id: newArrival.id });
+});
+
 test('insertOrUpdateVehicle stores an unknown yard without logging the unchecked yard value', async () => {
   const privateYardValue = 'private-yard /home/kc/private-file';
   const previousLogMode = process.env.SCRAPE_LOG_MODE;
@@ -396,7 +450,7 @@ test('insertOrUpdateVehicle rejects without logging lookup or write error detail
     await withDbMethodOverrides(
       {
         get(_sql, _params, callback) {
-          callback(null, { id: 42, first_seen_date: '20260101' });
+          callback(null, { id: 42, vehicle_status: 'NEW', session_id: '20260101' });
           return this;
         },
         run(_sql, _params, callback) {

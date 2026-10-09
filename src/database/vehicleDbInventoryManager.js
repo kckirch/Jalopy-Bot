@@ -9,7 +9,7 @@ const YARD_NAMES = Object.freeze(
 );
 
 const FIND_VEHICLE_SQL = `
-  SELECT id, strftime('%Y%m%d', first_seen) AS first_seen_date
+  SELECT id, vehicle_status, session_id
   FROM vehicles
   WHERE yard_id = ?
     AND vehicle_make = ?
@@ -192,7 +192,10 @@ function findExistingVehicle({ yardId, make, model, year, rowNumber }) {
 }
 
 function updateExistingVehicle(row, sessionID) {
-  const finalStatus = row.first_seen_date === sessionID ? 'NEW' : 'ACTIVE';
+  // Catch-up runs can discover vehicles after the UTC date has rolled over.
+  const finalStatus = row.vehicle_status === 'NEW' && row.session_id === sessionID
+    ? 'NEW'
+    : 'ACTIVE';
   return new Promise((resolve, reject) => {
     db.run(
       UPDATE_VEHICLE_SQL,
